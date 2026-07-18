@@ -1276,7 +1276,14 @@ body {
 .date-schedule-picker {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 8px;
+}
+
+.dsp-collapsible-content {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  animation: fadeIn 0.3s ease;
 }
 
 .dsp-calendar-header {
@@ -1338,7 +1345,7 @@ body {
 }
 
 .dsp-day {
-  aspect-ratio: 1;
+  height: 28px;
   display: flex;
   align-items: center;
   justify-content: center;

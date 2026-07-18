@@ -348,6 +348,7 @@ export default function HomePage() {
               <EventsPanel
                 onAddPlace={handleAddPlace}
                 onHighlightPlace={setHighlightPlace}
+                coursePlaces={coursePlaces}
               />
             </div>
           </div>

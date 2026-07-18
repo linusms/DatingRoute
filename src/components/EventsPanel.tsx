@@ -2,15 +2,16 @@
 
 import React, { useState, useCallback } from 'react';
 import { DateSchedule, FestivalEvent, TrendPlace, Place } from '@/lib/types';
-import { stripHtml, tourDateToISO } from '@/lib/utils';
+import { getStraightLineDistance, katechToWgs84, stripHtml, tourDateToISO } from '@/lib/utils';
 import DateSchedulePicker from './DateSchedulePicker';
 
 interface EventsPanelProps {
   onAddPlace: (place: Place) => void;
   onHighlightPlace?: (place: Place | null) => void;
+  coursePlaces?: Place[];
 }
 
-export default function EventsPanel({ onAddPlace, onHighlightPlace }: EventsPanelProps) {
+export default function EventsPanel({ onAddPlace, onHighlightPlace, coursePlaces = [] }: EventsPanelProps) {
   const [schedule, setSchedule] = useState<DateSchedule | null>(null);
   const [events, setEvents] = useState<FestivalEvent[]>([]);
   const [trendPlaces, setTrendPlaces] = useState<TrendPlace[]>([]);
@@ -18,6 +19,7 @@ export default function EventsPanel({ onAddPlace, onHighlightPlace }: EventsPane
   const [error, setError] = useState<string | null>(null);
   const [hasSearched, setHasSearched] = useState(false);
   const [activeSection, setActiveSection] = useState<'events' | 'trends'>('trends');
+  const [selectedTrend, setSelectedTrend] = useState<TrendPlace | null>(null);
 
   const handleSearch = useCallback(async () => {
     if (!schedule) return;
@@ -34,13 +36,50 @@ export default function EventsPanel({ onAddPlace, onHighlightPlace }: EventsPane
       if (!res.ok) throw new Error('이벤트 검색에 실패했습니다.');
 
       const data = await res.json();
-      setEvents(data.events || []);
-      setTrendPlaces(data.trendPlaces || []);
+      
+      let filteredEvents = data.events || [];
+      let filteredTrends = data.trendPlaces || [];
+
+      // 1. Date overlap filtering (Events only, trends don't have start/end dates from backend)
+      if (schedule.startDate) {
+        const schedStart = schedule.startDate.replace(/-/g, '');
+        const schedEnd = schedule.endDate ? schedule.endDate.replace(/-/g, '') : schedStart;
+        filteredEvents = filteredEvents.filter((e: FestivalEvent) => {
+          if (!e.eventstartdate || !e.eventenddate) return true;
+          return e.eventstartdate <= schedEnd && e.eventenddate >= schedStart;
+        });
+      }
+
+      // 2. Location filtering (1km radius from any course place)
+      if (coursePlaces && coursePlaces.length > 0) {
+        filteredEvents = filteredEvents.filter((e: FestivalEvent) => {
+          if (!e.mapx || !e.mapy) return false;
+          const eCoords = katechToWgs84(e.mapx, e.mapy);
+          return coursePlaces.some(p => {
+            const pCoords = katechToWgs84(p.mapx, p.mapy);
+            const dist = getStraightLineDistance(eCoords.lat, eCoords.lng, pCoords.lat, pCoords.lng);
+            return dist <= 1000;
+          });
+        });
+
+        filteredTrends = filteredTrends.filter((t: TrendPlace) => {
+          if (!t.mapx || !t.mapy) return false;
+          const tCoords = katechToWgs84(t.mapx, t.mapy);
+          return coursePlaces.some(p => {
+            const pCoords = katechToWgs84(p.mapx, p.mapy);
+            const dist = getStraightLineDistance(tCoords.lat, tCoords.lng, pCoords.lat, pCoords.lng);
+            return dist <= 1000;
+          });
+        });
+      }
+
+      setEvents(filteredEvents);
+      setTrendPlaces(filteredTrends);
 
       // Auto-switch to section with results
-      if (data.events?.length > 0) {
+      if (filteredEvents.length > 0) {
         setActiveSection('events');
-      } else if (data.trendPlaces?.length > 0) {
+      } else if (filteredTrends.length > 0) {
         setActiveSection('trends');
       }
     } catch (err: any) {
@@ -125,7 +164,7 @@ export default function EventsPanel({ onAddPlace, onHighlightPlace }: EventsPane
 
               {/* Events Section */}
               {activeSection === 'events' && (
-                <div className="events-list stagger-children">
+                <div className="events-list stagger-children" style={{ maxHeight: 'calc(100vh - 300px)', overflowY: 'auto', paddingRight: '8px' }}>
                   {events.length === 0 ? (
                     <div className="events-empty">
                       <div className="events-empty-icon">🎪</div>
@@ -182,7 +221,7 @@ export default function EventsPanel({ onAddPlace, onHighlightPlace }: EventsPane
 
               {/* Trends Section */}
               {activeSection === 'trends' && (
-                <div className="events-list stagger-children">
+                <div className="events-list stagger-children" style={{ maxHeight: 'calc(100vh - 300px)', overflowY: 'auto', paddingRight: '8px' }}>
                   {trendPlaces.length === 0 ? (
                     <div className="events-empty">
                       <div className="events-empty-icon">🔥</div>
@@ -199,6 +238,8 @@ export default function EventsPanel({ onAddPlace, onHighlightPlace }: EventsPane
                           }
                         }}
                         onMouseLeave={() => onHighlightPlace?.(null)}
+                        onClick={() => setSelectedTrend(trend)}
+                        style={{ cursor: 'pointer' }}
                       >
                         <div className="event-card-content">
                           <div className="event-card-header">
@@ -208,20 +249,6 @@ export default function EventsPanel({ onAddPlace, onHighlightPlace }: EventsPane
                             </h3>
                             <span className="event-card-badge trend-badge">핫플</span>
                           </div>
-                          <div className="event-card-reason">
-                            ✨ {trend.reason}
-                          </div>
-                          <div className="event-card-address">
-                            📍 {trend.roadAddress || trend.address || '주소 정보 없음'}
-                          </div>
-                          <div className="event-card-actions">
-                            <button
-                              className="btn btn-primary btn-sm"
-                              onClick={() => onAddPlace(trendToPlace(trend))}
-                            >
-                              + 코스 추가
-                            </button>
-                          </div>
                         </div>
                       </div>
                     ))
@@ -230,6 +257,49 @@ export default function EventsPanel({ onAddPlace, onHighlightPlace }: EventsPane
               )}
             </>
           )}
+        </div>
+      )}
+
+      {selectedTrend && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 100,
+          display: 'flex', alignItems: 'center', justifyContent: 'center'
+        }} onClick={() => setSelectedTrend(null)}>
+          <div className="review-panel animate-slide-up" style={{
+            width: '90%', maxWidth: '400px',
+            background: 'rgba(26,21,32,0.95)', backdropFilter: 'blur(20px)',
+            border: '1px solid rgba(244,114,182,0.3)', borderRadius: '16px',
+            padding: '20px', display: 'flex', flexDirection: 'column',
+          }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
+              <h2 style={{ fontSize: '18px', fontWeight: 700, color: '#f5f0ff' }}>
+                <span style={{ color: '#fb923c', marginRight: '6px' }}>★</span>
+                {stripHtml(selectedTrend.title)}
+              </h2>
+              <button onClick={() => setSelectedTrend(null)} style={{
+                background: 'transparent', border: 'none', color: '#8b7fa8', fontSize: '20px', cursor: 'pointer'
+              }}>✕</button>
+            </div>
+            
+            <div style={{ fontSize: '14px', color: '#e0d8f0', lineHeight: 1.6, marginBottom: '20px', background: 'rgba(244,114,182,0.1)', padding: '16px', borderRadius: '12px' }}>
+              ✨ {selectedTrend.reason}
+            </div>
+            
+            <div style={{ fontSize: '13px', color: '#8b7fa8', marginBottom: '20px' }}>
+              📍 {selectedTrend.roadAddress || selectedTrend.address || '주소 정보 없음'}
+            </div>
+            
+            <button
+              className="btn btn-primary"
+              style={{ width: '100%' }}
+              onClick={() => {
+                onAddPlace(trendToPlace(selectedTrend));
+                setSelectedTrend(null);
+              }}
+            >
+              + 코스 추가
+            </button>
+          </div>
         </div>
       )}
     </div>

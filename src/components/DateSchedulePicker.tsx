@@ -25,6 +25,8 @@ export default function DateSchedulePicker({
   const [endDate, setEndDate] = useState(schedule?.endDate || '');
   const [startTime, setStartTime] = useState(schedule?.startTime || '10:00');
   const [endTime, setEndTime] = useState(schedule?.endTime || '22:00');
+  
+  const [isCollapsed, setIsCollapsed] = useState(!!schedule?.startDate);
 
   const daysInMonth = useMemo(() => {
     return new Date(viewYear, viewMonth + 1, 0).getDate();
@@ -98,6 +100,7 @@ export default function DateSchedulePicker({
       endTime,
     };
     onScheduleChange(sched);
+    setIsCollapsed(true);
     onSearch();
   };
 
@@ -115,86 +118,99 @@ export default function DateSchedulePicker({
 
   return (
     <div className="date-schedule-picker">
-      {/* Calendar Header */}
-      <div className="dsp-calendar-header">
-        <button className="dsp-nav-btn" onClick={handlePrevMonth}>‹</button>
-        <span className="dsp-month-label">{viewYear}년 {MONTH_NAMES[viewMonth]}</span>
-        <button className="dsp-nav-btn" onClick={handleNextMonth}>›</button>
-      </div>
-
-      {/* Weekday Labels */}
-      <div className="dsp-weekdays">
-        {WEEKDAYS.map((d) => (
-          <div key={d} className={`dsp-weekday ${d === '일' ? 'sunday' : d === '토' ? 'saturday' : ''}`}>{d}</div>
-        ))}
-      </div>
-
-      {/* Days Grid */}
-      <div className="dsp-days-grid">
-        {Array.from({ length: firstDayOfWeek }, (_, i) => (
-          <div key={`empty-${i}`} className="dsp-day empty" />
-        ))}
-        {Array.from({ length: daysInMonth }, (_, i) => {
-          const day = i + 1;
-          const dateStr = `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-          const isPast = dateStr < todayStr;
-          const dayOfWeek = (firstDayOfWeek + i) % 7;
-
-          return (
-            <button
-              key={day}
-              className={`dsp-day ${
-                isStart(day) ? 'start' : ''
-              } ${
-                isEnd(day) ? 'end' : ''
-              } ${
-                isInRange(day) ? 'in-range' : ''
-              } ${
-                isPast ? 'past' : ''
-              } ${
-                dayOfWeek === 0 ? 'sunday' : dayOfWeek === 6 ? 'saturday' : ''
-              } ${
-                dateStr === todayStr ? 'today' : ''
-              }`}
-              onClick={() => !isPast && handleDayClick(day)}
-              disabled={isPast}
-            >
-              {day}
-            </button>
-          );
-        })}
-      </div>
-
-      {/* Selected Range Info */}
-      <div className="dsp-selection-info">
+      {/* Selected Range Info (Always Visible, Acts as Toggle) */}
+      <div 
+        className="dsp-selection-info" 
+        onClick={() => setIsCollapsed(!isCollapsed)}
+        style={{ cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+      >
         <div className="dsp-date-display">
-          <span className="dsp-date-label">📅 선택 날짜</span>
-          <span className="dsp-date-value">{formatSelectedRange()}</span>
+          <span className="dsp-date-label">📅 일정</span>
+          <span className="dsp-date-value">
+            {formatSelectedRange()} {startTime} ~ {endTime}
+          </span>
+        </div>
+        <div style={{ color: 'var(--color-text-muted)' }}>
+          {isCollapsed ? '▼' : '▲'}
         </div>
       </div>
 
-      {/* Time Inputs */}
-      <div className="dsp-time-row">
-        <div className="dsp-time-input">
-          <label>시작 시간</label>
-          <input
-            type="time"
-            value={startTime}
-            onChange={(e) => setStartTime(e.target.value)}
-            className="input dsp-time-field"
-          />
+      {!isCollapsed && (
+        <div className="dsp-collapsible-content">
+          {/* Calendar Header */}
+          <div className="dsp-calendar-header">
+            <button className="dsp-nav-btn" onClick={handlePrevMonth}>‹</button>
+            <span className="dsp-month-label">{viewYear}년 {MONTH_NAMES[viewMonth]}</span>
+            <button className="dsp-nav-btn" onClick={handleNextMonth}>›</button>
+          </div>
+
+          {/* Weekday Labels */}
+          <div className="dsp-weekdays">
+            {WEEKDAYS.map((d) => (
+              <div key={d} className={`dsp-weekday ${d === '일' ? 'sunday' : d === '토' ? 'saturday' : ''}`}>{d}</div>
+            ))}
+          </div>
+
+          {/* Days Grid */}
+          <div className="dsp-days-grid">
+            {Array.from({ length: firstDayOfWeek }, (_, i) => (
+              <div key={`empty-${i}`} className="dsp-day empty" />
+            ))}
+            {Array.from({ length: daysInMonth }, (_, i) => {
+              const day = i + 1;
+              const dateStr = `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+              const isPast = dateStr < todayStr;
+              const dayOfWeek = (firstDayOfWeek + i) % 7;
+
+              return (
+                <button
+                  key={day}
+                  className={`dsp-day ${
+                    isStart(day) ? 'start' : ''
+                  } ${
+                    isEnd(day) ? 'end' : ''
+                  } ${
+                    isInRange(day) ? 'in-range' : ''
+                  } ${
+                    isPast ? 'past' : ''
+                  } ${
+                    dayOfWeek === 0 ? 'sunday' : dayOfWeek === 6 ? 'saturday' : ''
+                  } ${
+                    dateStr === todayStr ? 'today' : ''
+                  }`}
+                  onClick={() => !isPast && handleDayClick(day)}
+                  disabled={isPast}
+                >
+                  {day}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Time Inputs */}
+          <div className="dsp-time-row">
+            <div className="dsp-time-input">
+              <label>시작 시간</label>
+              <input
+                type="time"
+                value={startTime}
+                onChange={(e) => setStartTime(e.target.value)}
+                className="input dsp-time-field"
+              />
+            </div>
+            <div className="dsp-time-divider">~</div>
+            <div className="dsp-time-input">
+              <label>종료 시간</label>
+              <input
+                type="time"
+                value={endTime}
+                onChange={(e) => setEndTime(e.target.value)}
+                className="input dsp-time-field"
+              />
+            </div>
+          </div>
         </div>
-        <div className="dsp-time-divider">~</div>
-        <div className="dsp-time-input">
-          <label>종료 시간</label>
-          <input
-            type="time"
-            value={endTime}
-            onChange={(e) => setEndTime(e.target.value)}
-            className="input dsp-time-field"
-          />
-        </div>
-      </div>
+      )}
 
       {/* Search Button */}
       <button

@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    let url = `https://naveropenapi.apigw.ntruss.com/map-direction/v1/driving?start=${start}&goal=${goal}`;
+    let url = `https://maps.apigw.ntruss.com/map-direction-15/v1/driving?start=${start}&goal=${goal}`;
     if (waypoints) {
       url += `&waypoints=${waypoints}`;
     }
@@ -48,14 +48,27 @@ export async function GET(request: NextRequest) {
     // Parse section-level leg data for per-waypoint distance/duration
     if (data.route?.traoptimal?.[0]) {
       const route = data.route.traoptimal[0];
-      const sections = route.section || [];
-
-      const legs = sections.map((section: any, idx: number) => ({
-        index: idx,
-        distance: section.distance || 0,   // meters
-        duration: section.duration || 0,    // milliseconds
-        name: section.name || '',
-      }));
+      const summary = route.summary;
+      const waypoints = summary.waypoints || [];
+      const goal = summary.goal;
+      
+      const legs = [];
+      waypoints.forEach((wp: any, idx: number) => {
+        legs.push({
+          index: idx,
+          distance: wp.distance || 0,
+          duration: wp.duration || 0,
+          name: '',
+        });
+      });
+      if (goal) {
+        legs.push({
+          index: legs.length,
+          distance: goal.distance || 0,
+          duration: goal.duration || 0,
+          name: '',
+        });
+      }
 
       // Attach parsed legs to the response for easy frontend consumption
       data._parsedLegs = legs;

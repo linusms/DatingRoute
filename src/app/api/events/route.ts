@@ -19,17 +19,16 @@ export async function GET(request: NextRequest) {
   // 1. Try TourAPI (한국관광공사) if key is available
   if (tourApiKey && tourApiKey !== 'your_tour_api_key') {
     try {
-      const url = new URL('https://apis.data.go.kr/B551011/KorService1/searchFestival1');
+      const url = new URL('http://apis.data.go.kr/B551011/KorService2/searchFestival2');
       url.searchParams.set('serviceKey', tourApiKey);
-      url.searchParams.set('MobileOS', 'ETC');
-      url.searchParams.set('MobileApp', 'DatingRoute');
+      url.searchParams.set('MobileOS', 'AND'); // 스크린샷 예시에 맞춰 AND로 변경
+      url.searchParams.set('MobileApp', 'appName'); // 스크린샷 예시에 맞춰 appName으로 변경
       url.searchParams.set('_type', 'json');
       url.searchParams.set('eventStartDate', startDate);
       url.searchParams.set('eventEndDate', endDate);
       url.searchParams.set('numOfRows', '20');
       url.searchParams.set('pageNo', '1');
-      url.searchParams.set('listYN', 'Y');
-      url.searchParams.set('arrange', 'A'); // Sort by title
+      url.searchParams.set('arrange', 'C'); // 가이드 매뉴얼에 맞춰 수정일순(C) 또는 최신순으로 정렬
 
       const res = await fetch(url.toString());
       if (res.ok) {
