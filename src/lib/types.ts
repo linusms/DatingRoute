@@ -192,3 +192,35 @@ export interface YoutubeVideo {
   publishedAt: string;
   url: string;
 }
+
+/* ---- AI Recommend Tab types ---- */
+export interface RecommendedPlace {
+  name: string;
+  reason: string;
+  keywords: string[];
+  category: string;
+  address: string;
+  roadAddress: string;
+  mapx: number;
+  mapy: number;
+  link: string;
+}
+
+export interface RegionEvent {
+  contentId: string;
+  title: string;
+  address: string;
+  imageUrl: string;
+  startDate: string;
+  endDate: string;
+  tel: string;
+  mapx: number;
+  mapy: number;
+  category: string;
+}
+
+export interface AIRecommendResult {
+  recommendations: RecommendedPlace[];
+  events: RegionEvent[];
+  summary: string;
+}

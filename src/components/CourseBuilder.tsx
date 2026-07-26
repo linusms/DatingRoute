@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { CoursePlace, DirectionResult, TransitMode, FACILITY_ICONS, FACILITY_LABELS } from '@/lib/types';
 import { formatDuration, formatDistance, getWalkingTimeMs, stripHtml, parseCategoryToFacility } from '@/lib/utils';
 import { useDragAndDrop } from '@/lib/useDragAndDrop';
+import ShareCard from './ShareCard';
 
 interface CourseBuilderProps {
   places: CoursePlace[];
@@ -14,6 +15,8 @@ interface CourseBuilderProps {
   isRouteCreated: boolean;
   transitMode: TransitMode;
   onChangeTransitMode: (mode: TransitMode) => void;
+  onShareCourseUrl: () => void;
+  onShareKakao: () => void;
 }
 
 export default function CourseBuilder({
@@ -27,7 +30,11 @@ export default function CourseBuilder({
   isRouteCreated,
   transitMode,
   onChangeTransitMode,
+  onShareCourseUrl,
+  onShareKakao,
 }: CourseBuilderProps) {
+  const [showShareCard, setShowShareCard] = useState(false);
+  
   const {
     list: draggablePlaces,
     updateList,
@@ -47,11 +54,11 @@ export default function CourseBuilder({
     return (
       <div className="course-empty">
         <div className="course-empty-icon">🗺️</div>
-        <h4>코스가 비어있어요</h4>
+        <h4>경로가 비어있어요</h4>
         <p>
-          검색 탭에서 장소를 찾고
+          장소검색 탭에서 장소를 찾고
           <br />
-          &ldquo;코스 추가&rdquo; 버튼을 눌러보세요!
+          &ldquo;경로 추가&rdquo; 버튼을 눌러보세요!
         </p>
       </div>
     );
@@ -153,18 +160,26 @@ export default function CourseBuilder({
                   {idx + 1}
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                    <div style={{ cursor: 'pointer', fontSize: '15px', fontWeight: 600, color: '#f5f0ff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-                         onClick={() => onShowReview(stripHtml(place.title))}>
-                      {stripHtml(place.title)}
+                  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '8px', marginBottom: '4px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', overflow: 'hidden' }}>
+                      <div style={{ cursor: 'pointer', fontSize: '15px', fontWeight: 600, color: '#f5f0ff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                           onClick={() => onShowReview(stripHtml(place.title))}>
+                        {stripHtml(place.title)}
+                      </div>
+                      {/* Facility Type Badge */}
+                      <span className="facility-badge" title={facilityLabel} style={{ flexShrink: 0 }}>
+                        {facilityIcon}
+                      </span>
                     </div>
-                    {/* Facility Type Badge */}
-                    <span className="facility-badge" title={facilityLabel}>
-                      {facilityIcon} {facilityLabel}
-                    </span>
+                    {/* Naver Category Text */}
+                    {place.category && (
+                      <span style={{ fontSize: '11px', color: '#f472b6', flexShrink: 0, textAlign: 'right' }}>
+                        {place.category}
+                      </span>
+                    )}
                   </div>
                   <div style={{ fontSize: '12px', color: '#8b7fa8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {place.roadAddress || place.address || place.category}
+                    {place.roadAddress || place.address}
                   </div>
                 </div>
                 {!isRouteCreated && (
@@ -223,13 +238,50 @@ export default function CourseBuilder({
       )}
       
       {isRouteCreated && (
-        <button
-          className="btn btn-ghost"
-          style={{ width: '100%', marginTop: '10px' }}
-          onClick={() => onReorderPlaces([...places])}
-        >
-          ✏️ 장소 순서 수정하기
-        </button>
+        <>
+          <button
+            className="btn btn-ghost"
+            style={{ width: '100%', marginTop: '10px' }}
+            onClick={() => onReorderPlaces([...places])}
+          >
+            ✏️ 장소 순서 수정하기
+          </button>
+
+          {/* Share section */}
+          <div className="route-share-section">
+            <div className="route-share-label">📤 코스 공유하기</div>
+            <div className="route-share-buttons">
+              <button
+                className="route-share-btn kakao"
+                onClick={onShareKakao}
+              >
+                💬 카카오톡
+              </button>
+              <button
+                className="route-share-btn link"
+                onClick={onShareCourseUrl}
+              >
+                🔗 링크 복사
+              </button>
+              <button
+                className="route-share-btn image"
+                onClick={() => setShowShareCard(!showShareCard)}
+              >
+                📷 이미지 저장
+              </button>
+            </div>
+          </div>
+
+          {/* Share Card Preview */}
+          {showShareCard && (
+            <div className="animate-slide-up">
+              <ShareCard
+                places={places}
+                directions={directions}
+              />
+            </div>
+          )}
+        </>
       )}
     </div>
   );

@@ -224,7 +224,7 @@ export default function DateSchedulePicker({
             검색 중...
           </>
         ) : (
-          <>🔍 이벤트 & 트렌드 검색</>
+          <>🔍 검색</>
         )}
       </button>
     </div>

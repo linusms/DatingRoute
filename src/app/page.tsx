@@ -3,11 +3,11 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import Header from '@/components/Header';
 import SearchPanel from '@/components/SearchPanel';
+import AIRecommendPanel from '@/components/AIRecommendPanel';
 import CourseBuilder from '@/components/CourseBuilder';
 import NaverMap from '@/components/NaverMap';
 import ReviewPanel from '@/components/ReviewPanel';
 import CourseManager from '@/components/CourseManager';
-import EventsPanel from '@/components/EventsPanel';
 import {
   Place,
   CoursePlace,
@@ -24,7 +24,7 @@ import {
 import { katechToWgs84, getStraightLineDistance } from '@/lib/utils';
 
 export default function HomePage() {
-  const [activeTab, setActiveTab] = useState<'search' | 'course' | 'events'>('search');
+  const [activeTab, setActiveTab] = useState<'search' | 'ai' | 'route'>('search');
   const [coursePlaces, setCoursePlaces] = useState<CoursePlace[]>([]);
   
   // Directions state
@@ -64,7 +64,7 @@ export default function HomePage() {
       const decoded = decodeCourseFromUrl(shared);
       if (decoded) {
         setCoursePlaces(decoded.places);
-        setActiveTab('course');
+        setActiveTab('route');
         showToast(`"${decoded.name}" 공유 코스를 불러왔습니다!`);
         window.history.replaceState({}, '', window.location.pathname);
       }
@@ -181,7 +181,6 @@ export default function HomePage() {
 
       const updated = [...coursePlaces, coursePlace];
       setCoursePlaces(updated);
-      setActiveTab('course');
       setIsRouteCreated(false); // Reset route when adding
       showToast(`"${place.title.replace(/<[^>]+>/g, '')}" 추가됨`);
     },
@@ -230,7 +229,7 @@ export default function HomePage() {
   const handleLoadCourse = useCallback(
     (course: Course) => {
       setCoursePlaces(course.places);
-      setActiveTab('course');
+      setActiveTab('route');
       const hasRoute = course.places.length >= 2;
       setIsRouteCreated(hasRoute);
       if (hasRoute) {
@@ -291,8 +290,6 @@ export default function HomePage() {
     <div className="app-layout">
       <Header
         onOpenManager={() => setShowManager(true)}
-        onShareCourseUrl={handleShareCourseUrl}
-        onShareKakao={handleShareKakao}
         courseCount={coursePlaces.length}
       />
 
@@ -303,22 +300,22 @@ export default function HomePage() {
               className={`sidebar-tab ${activeTab === 'search' ? 'active' : ''}`}
               onClick={() => setActiveTab('search')}
             >
-              🔍 검색
+              🔍 장소검색
             </button>
             <button
-              className={`sidebar-tab ${activeTab === 'course' ? 'active' : ''}`}
-              onClick={() => setActiveTab('course')}
+              className={`sidebar-tab ${activeTab === 'ai' ? 'active' : ''}`}
+              onClick={() => setActiveTab('ai')}
             >
-              📋 코스
+              ✨ AI 추천
+            </button>
+            <button
+              className={`sidebar-tab ${activeTab === 'route' ? 'active' : ''}`}
+              onClick={() => setActiveTab('route')}
+            >
+              🗺️ 경로 생성
               {coursePlaces.length > 0 && (
                 <span className="sidebar-tab-badge">{coursePlaces.length}</span>
               )}
-            </button>
-            <button
-              className={`sidebar-tab ${activeTab === 'events' ? 'active' : ''}`}
-              onClick={() => setActiveTab('events')}
-            >
-              📅 이벤트
             </button>
           </div>
 
@@ -330,7 +327,14 @@ export default function HomePage() {
                 onHighlightPlace={setHighlightPlace}
               />
             </div>
-            <div style={{ display: activeTab === 'course' ? 'block' : 'none', height: '100%' }}>
+            <div style={{ display: activeTab === 'ai' ? 'block' : 'none', height: '100%' }}>
+              <AIRecommendPanel
+                coursePlaces={coursePlaces}
+                onAddPlace={handleAddPlace}
+                onHighlightPlace={setHighlightPlace}
+              />
+            </div>
+            <div style={{ display: activeTab === 'route' ? 'block' : 'none', height: '100%' }}>
               <CourseBuilder
                 places={coursePlaces}
                 directions={directions}
@@ -342,13 +346,8 @@ export default function HomePage() {
                 isRouteCreated={isRouteCreated}
                 transitMode={transitMode}
                 onChangeTransitMode={setTransitMode}
-              />
-            </div>
-            <div style={{ display: activeTab === 'events' ? 'block' : 'none', height: '100%' }}>
-              <EventsPanel
-                onAddPlace={handleAddPlace}
-                onHighlightPlace={setHighlightPlace}
-                coursePlaces={coursePlaces}
+                onShareCourseUrl={handleShareCourseUrl}
+                onShareKakao={handleShareKakao}
               />
             </div>
           </div>
