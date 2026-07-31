@@ -146,7 +146,7 @@ export default function NaverMap({
     });
 
     // Draw route polyline
-    if (transitMode === 'driving' && routePath && routePath.length > 1) {
+    if (routePath && routePath.length > 1) {
       const path = routePath.map(
         ([lng, lat]: [number, number]) => new window.naver.maps.LatLng(lat, lng)
       );
@@ -155,13 +155,13 @@ export default function NaverMap({
         map,
         path,
         strokeColor: '#f472b6',
-        strokeOpacity: 0.8,
-        strokeWeight: 4,
+        strokeOpacity: 0.95,
+        strokeWeight: 6,
         strokeStyle: 'solid',
         strokeLineCap: 'round',
         strokeLineJoin: 'round',
       });
-    } else if (transitMode === 'walking' && coursePlaces.length > 1) {
+    } else if (coursePlaces.length > 1) {
       const path = coursePlaces.map((place) => {
         const { lng, lat } = katechToWgs84(place.mapx, place.mapy);
         return new window.naver.maps.LatLng(lat, lng);
@@ -170,9 +170,9 @@ export default function NaverMap({
       polylineRef.current = new window.naver.maps.Polyline({
         map,
         path,
-        strokeColor: '#c084fc',
+        strokeColor: '#f472b6',
         strokeOpacity: 0.8,
-        strokeWeight: 4,
+        strokeWeight: 5,
         strokeStyle: 'dash',
         strokeLineCap: 'round',
         strokeLineJoin: 'round',

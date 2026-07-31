@@ -18,7 +18,7 @@ export async function POST(request: NextRequest) {
     const genAI = new GoogleGenerativeAI(apiKey);
 
     const model = genAI.getGenerativeModel({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-3.5-flash',
       systemInstruction: '너는 데이트 코스를 계획하는 커플들에게 맛집이나 명소의 핵심 정보를 친절하고 직관적으로 요약해 주는 데이트 플래너야.',
     });
 

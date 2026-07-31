@@ -20,23 +20,34 @@ export default function AIRecommendPanel({
   const [recommendations, setRecommendations] = useState<RecommendedPlace[]>([]);
   const [events, setEvents] = useState<RegionEvent[]>([]);
   const [summary, setSummary] = useState<string>('');
+  
+  // Real-time status state
   const [isLoading, setIsLoading] = useState(false);
+  const [progressStep, setProgressStep] = useState(0);
+  const [totalSteps, setTotalSteps] = useState(4);
+  const [statusMessage, setStatusMessage] = useState('');
+  
   const [error, setError] = useState<string | null>(null);
   const [hasSearched, setHasSearched] = useState(false);
   const [activeSection, setActiveSection] = useState<'recommend' | 'events'>('recommend');
+  const [expandedEventId, setExpandedEventId] = useState<string | null>(null);
+  const [isPlacesSummaryExpanded, setIsPlacesSummaryExpanded] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
 
-  const handleAIRecommend = useCallback(async () => {
-    if (coursePlaces.length === 0) {
-      setError('먼저 장소검색 탭에서 장소를 1개 이상 추가해주세요.');
-      return;
+  const handleAIRecommend = useCallback(async (isLoadMore?: boolean) => {
+    const loadMore = isLoadMore === true;
+    if (loadMore) {
+      setIsLoadingMore(true);
+    } else {
+      setIsLoading(true);
+      setError(null);
+      setHasSearched(true);
+      setProgressStep(1);
+      setStatusMessage('🚀 AI 데이터 분석 준비 중...');
     }
 
-    setIsLoading(true);
-    setError(null);
-    setHasSearched(true);
-
     try {
-      const res = await fetch('/api/ai-recommend', {
+      const response = await fetch('/api/ai-recommend', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -47,6 +58,7 @@ export default function AIRecommendPanel({
             mapx: p.mapx,
             mapy: p.mapy,
           })),
+          excludePlaces: loadMore ? recommendations.map(r => r.name) : [],
           schedule: schedule ? {
             startDate: schedule.startDate,
             endDate: schedule.endDate,
@@ -56,25 +68,61 @@ export default function AIRecommendPanel({
         }),
       });
 
-      if (!res.ok) throw new Error('AI 추천을 가져오는데 실패했습니다.');
+      if (!response.ok || !response.body) {
+        throw new Error('AI 추천 수집에 실패했습니다.');
+      }
 
-      const data = await res.json();
-      setRecommendations(data.recommendations || []);
-      setEvents(data.events || []);
-      setSummary(data.summary || '');
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
 
-      // Auto switch to section with content
-      if (data.events?.length > 0 && data.recommendations?.length === 0) {
-        setActiveSection('events');
-      } else {
-        setActiveSection('recommend');
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(line.slice(6));
+              if (data.type === 'progress') {
+                setProgressStep(data.step);
+                setTotalSteps(data.total);
+                setStatusMessage(data.message);
+              } else if (data.type === 'result') {
+                if (loadMore) {
+                  setRecommendations(prev => [...prev, ...(data.recommendations || [])]);
+                  setEvents(prev => {
+                     const existingIds = new Set(prev.map(e => e.contentId));
+                     return [...prev, ...(data.events || []).filter((e: any) => !existingIds.has(e.contentId))];
+                  });
+                } else {
+                  setRecommendations(data.recommendations || []);
+                  setEvents(data.events || []);
+                  setSummary(data.summary || '');
+                }
+              } else if (data.type === 'error') {
+                setError(data.message);
+              }
+            } catch {
+              // skip parse error
+            }
+          }
+        }
       }
     } catch (err: any) {
       setError(err.message || '오류가 발생했습니다.');
     } finally {
-      setIsLoading(false);
+      if (loadMore) {
+        setIsLoadingMore(false);
+      } else {
+        setIsLoading(false);
+      }
     }
-  }, [coursePlaces, schedule]);
+  }, [coursePlaces, schedule, recommendations]);
 
   const recToPlace = (rec: RecommendedPlace): Place => ({
     id: Math.random().toString(36).slice(2, 9),
@@ -107,9 +155,16 @@ export default function AIRecommendPanel({
     return `${s} ~ ${e}`;
   };
 
+  const getSourceIcon = (sourceType?: string) => {
+    if (sourceType === 'youtube') return '▶️ YouTube';
+    if (sourceType === 'event') return '🎪 행사/축제';
+    if (sourceType === 'popup') return '🛍️ 팝업스토어';
+    return '📝 네이버 블로그';
+  };
+
   return (
     <div className="ai-recommend-panel">
-      {/* Schedule Picker */}
+      {/* Calendar Date Picker with Single Search Button */}
       <DateSchedulePicker
         schedule={schedule}
         onScheduleChange={setSchedule}
@@ -117,46 +172,62 @@ export default function AIRecommendPanel({
         isLoading={isLoading}
       />
 
-      {/* Course places summary */}
+      {/* Selected Places Hint */}
       {coursePlaces.length > 0 && (
         <div className="ai-places-summary">
-          <div className="ai-places-summary-label">
-            📍 담은 장소 ({coursePlaces.length}곳)
+          <div 
+            className="ai-places-summary-label" 
+            style={{ cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+            onClick={() => setIsPlacesSummaryExpanded(!isPlacesSummaryExpanded)}
+          >
+            <span>📍 코스 추가된 장소 ({coursePlaces.length}곳)</span>
+            <span style={{ transform: isPlacesSummaryExpanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s', display: 'inline-block' }}>▼</span>
           </div>
-          <div className="ai-places-chips">
-            {coursePlaces.map((p, i) => (
-              <span key={p.id} className="ai-place-chip">
-                {i + 1}. {stripHtml(p.title)}
-              </span>
-            ))}
+          {isPlacesSummaryExpanded && (
+            <div className="ai-places-chips" style={{ marginTop: '12px' }}>
+              {coursePlaces.map((p, i) => (
+                <span key={p.id} className="ai-place-chip">
+                  {i + 1}. {stripHtml(p.title)}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Real-time Loading Status Modal / Card */}
+      {isLoading && (
+        <div className="ai-realtime-loading-card animate-scale-in">
+          <div className="ai-loading-spinner-wrapper">
+            <div className="ai-loading-pulse-ring" />
+            <div className="ai-loading-icon">✨</div>
+          </div>
+          <div className="ai-loading-status-text">
+            {statusMessage || '실시간 정보 수집 중...'}
+          </div>
+          <div className="ai-loading-progress-bar-bg">
+            <div
+              className="ai-loading-progress-bar-fill"
+              style={{ width: `${(progressStep / totalSteps) * 100}%` }}
+            />
+          </div>
+          <div className="ai-loading-step-count">
+            [{progressStep} / {totalSteps}] 단계 진행 중...
           </div>
         </div>
       )}
 
-      {/* AI Recommend Button */}
-      <button
-        className="btn btn-primary ai-recommend-btn"
-        onClick={handleAIRecommend}
-        disabled={isLoading || coursePlaces.length === 0}
-      >
-        {isLoading ? (
-          <>
-            <span className="dsp-spinner" />
-            AI 분석 중...
-          </>
-        ) : (
-          <>✨ AI 요약 추천</>
-        )}
-      </button>
-
-      {coursePlaces.length === 0 && !hasSearched && (
+      {/* Empty State before search */}
+      {!hasSearched && !isLoading && (
         <div className="ai-empty-state">
-          <div className="ai-empty-icon">✨</div>
-          <h4>AI 추천을 받아보세요!</h4>
+          <div className="ai-empty-icon">📅</div>
+          <h4>데이트 일정에 맞는 AI 추천</h4>
           <p>
-            장소검색 탭에서 가고 싶은 장소를 추가한 뒤
+            위 달력에서 데이트할 기간을 선택한 후
             <br />
-            날짜를 설정하고 AI 추천 버튼을 눌러주세요
+            <strong>[🔍 검색]</strong> 버튼을 누르면 YouTube, 네이버 블로그,
+            <br />
+            한국관광공사의 핫플, 팝업스토어, 축제가 자동으로 정리됩니다!
           </p>
         </div>
       )}
@@ -170,13 +241,7 @@ export default function AIRecommendPanel({
             </div>
           )}
 
-          {/* Summary */}
-          {summary && !error && (
-            <div className="ai-summary-card">
-              <span className="ai-summary-icon">✨</span>
-              <p>{summary}</p>
-            </div>
-          )}
+          {/* AI Summary Removed */}
 
           {/* Section Tabs */}
           {!error && (
@@ -186,7 +251,7 @@ export default function AIRecommendPanel({
                   className={`ai-section-tab ${activeSection === 'recommend' ? 'active' : ''}`}
                   onClick={() => setActiveSection('recommend')}
                 >
-                  ✨ AI 추천 장소
+                  ✨ AI 추천 핫플/팝업
                   {recommendations.length > 0 && (
                     <span className="ai-count-badge">{recommendations.length}</span>
                   )}
@@ -195,20 +260,20 @@ export default function AIRecommendPanel({
                   className={`ai-section-tab ${activeSection === 'events' ? 'active' : ''}`}
                   onClick={() => setActiveSection('events')}
                 >
-                  🎪 행사/축제
+                  🎪 지역 행사/축제
                   {events.length > 0 && (
                     <span className="ai-count-badge">{events.length}</span>
                   )}
                 </button>
               </div>
 
-              {/* Recommendations */}
+              {/* Recommended Places */}
               {activeSection === 'recommend' && (
                 <div className="ai-list stagger-children">
                   {recommendations.length === 0 ? (
                     <div className="ai-empty-section">
                       <div className="ai-empty-section-icon">✨</div>
-                      <p>추천 장소를 가져오지 못했습니다</p>
+                      <p>추천 장소를 불러오지 못했습니다</p>
                     </div>
                   ) : (
                     recommendations.map((rec, idx) => (
@@ -224,6 +289,22 @@ export default function AIRecommendPanel({
                             {rec.name}
                           </h3>
                           <span className="ai-rec-category">{rec.category}</span>
+                        </div>
+                        <div style={{ marginBottom: '6px' }}>
+                          <span style={{
+                            fontSize: '11px', padding: '2px 6px', borderRadius: '4px',
+                            background: 'rgba(255,255,255,0.06)', color: '#f472b6', fontWeight: 600,
+                            cursor: rec.link ? 'pointer' : 'default',
+                            display: 'inline-block'
+                          }}
+                          onClick={(e) => {
+                            if (rec.link) {
+                              e.stopPropagation();
+                              window.open(rec.link, '_blank');
+                            }
+                          }}>
+                            {getSourceIcon((rec as any).sourceType)}
+                          </span>
                         </div>
                         <p className="ai-rec-reason">{rec.reason}</p>
                         {rec.keywords && rec.keywords.length > 0 && (
@@ -247,10 +328,20 @@ export default function AIRecommendPanel({
                       </div>
                     ))
                   )}
+                  {recommendations.length > 0 && (
+                    <button 
+                      className="btn btn-secondary" 
+                      style={{ width: '100%', marginTop: '16px', padding: '12px', borderRadius: '8px', background: 'rgba(255,255,255,0.1)', color: 'white', border: 'none', cursor: 'pointer' }}
+                      onClick={() => handleAIRecommend(true)}
+                      disabled={isLoadingMore}
+                    >
+                      {isLoadingMore ? '더 불러오는 중...' : '+ 더 불러오기'}
+                    </button>
+                  )}
                 </div>
               )}
 
-              {/* Events */}
+              {/* Regional Events */}
               {activeSection === 'events' && (
                 <div className="ai-list stagger-children">
                   {events.length === 0 ? (
@@ -262,42 +353,52 @@ export default function AIRecommendPanel({
                     events.map((event) => (
                       <div
                         key={event.contentId}
-                        className="ai-event-card"
+                        className={`ai-event-card ${expandedEventId === event.contentId ? 'expanded' : ''}`}
                         onMouseEnter={() => {
                           if (event.mapx && event.mapy) {
                             onHighlightPlace?.(eventToPlace(event));
                           }
                         }}
                         onMouseLeave={() => onHighlightPlace?.(null)}
+                        style={{ cursor: 'pointer' }}
+                        onClick={() => setExpandedEventId(prev => prev === event.contentId ? null : event.contentId)}
                       >
-                        {event.imageUrl && (
-                          /* eslint-disable-next-line @next/next/no-img-element */
-                          <img
-                            src={event.imageUrl}
-                            alt={event.title}
-                            className="ai-event-image"
-                          />
-                        )}
-                        <div className="ai-event-content">
-                          <div className="ai-event-header">
-                            <h3 className="ai-event-title">{stripHtml(event.title)}</h3>
-                            <span className="ai-event-badge">행사</span>
+                        <div className="ai-event-header-compact" style={{ padding: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <div>
+                            <h3 className="ai-event-title" style={{ margin: 0, fontSize: '15px' }}>{stripHtml(event.title)}</h3>
+                            <div className="ai-event-address" style={{ fontSize: '13px', color: 'rgba(255,255,255,0.6)', marginTop: '4px' }}>
+                              📍 {event.address || '주소 정보 없음'}
+                            </div>
                           </div>
-                          <div className="ai-event-date">
-                            📅 {formatEventDate(event.startDate, event.endDate)}
-                          </div>
-                          <div className="ai-event-address">
-                            📍 {event.address || '주소 정보 없음'}
-                          </div>
-                          <div className="ai-event-actions">
-                            <button
-                              className="btn btn-primary btn-sm"
-                              onClick={() => onAddPlace(eventToPlace(event))}
-                            >
-                              + 경로 추가
-                            </button>
-                          </div>
+                          <span style={{ transform: expandedEventId === event.contentId ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s', display: 'inline-block' }}>▼</span>
                         </div>
+                        
+                        {expandedEventId === event.contentId && (
+                          <div className="ai-event-details" style={{ padding: '0 16px 16px 16px', borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '16px' }} onClick={(e) => e.stopPropagation()}>
+                            {event.imageUrl && (
+                              /* eslint-disable-next-line @next/next/no-img-element */
+                              <img
+                                src={event.imageUrl}
+                                alt={event.title}
+                                className="ai-event-image"
+                                style={{ borderRadius: '8px', marginBottom: '12px' }}
+                              />
+                            )}
+                            <div className="ai-event-content" style={{ padding: 0 }}>
+                              <div className="ai-event-date">
+                                📅 {formatEventDate(event.startDate, event.endDate)}
+                              </div>
+                              <div className="ai-event-actions" style={{ marginTop: '12px' }}>
+                                <button
+                                  className="btn btn-primary btn-sm"
+                                  onClick={() => onAddPlace(eventToPlace(event))}
+                                >
+                                  + 경로 추가
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     ))
                   )}

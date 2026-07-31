@@ -31,7 +31,7 @@ export default function HomePage() {
   const [directions, setDirections] = useState<DirectionResult | null>(null);
   const [routePath, setRoutePath] = useState<Array<[number, number]> | null>(null);
   
-  // New features state
+  // Route features state
   const [isRouteCreated, setIsRouteCreated] = useState(false);
   const [transitMode, setTransitMode] = useState<TransitMode>('driving');
 
@@ -98,21 +98,21 @@ export default function HomePage() {
         throw new Error(data.error || 'API Error');
       }
 
-      if (data.route?.traoptimal?.[0]) {
-        const route = data.route.traoptimal[0];
-        const summary = route.summary;
-        const fullPath: Array<[number, number]> = route.path;
-
-        // Parse section-level leg data for per-waypoint info
+      if (data._fullPath && data._fullPath.length > 0) {
+        const fullPath: Array<[number, number]> = data._fullPath;
         const parsedLegs = data._parsedLegs || [];
+        const totalDistance = data._totalDistance || 0;
+        const totalDuration = data._totalDuration || 0;
 
         setDirections({
-          totalDistance: summary.distance,
-          totalDuration: summary.duration,
+          totalDistance,
+          totalDuration,
           legs: parsedLegs,
           fullPath,
         });
         setRoutePath(fullPath);
+      } else {
+        throw new Error('No path data');
       }
     } catch {
       // Fallback: Calculate straight-line distance if API fails
@@ -124,7 +124,6 @@ export default function HomePage() {
         return { lng, lat };
       });
 
-      // Build fallback legs from straight-line distances
       const fallbackLegs = [];
       for (let i = 0; i < coords.length - 1; i++) {
         const dist = getStraightLineDistance(
@@ -137,7 +136,7 @@ export default function HomePage() {
         fallbackLegs.push({
           index: i,
           distance: dist,
-          duration: (dist / 40000) * 3600000, // ~40km/h estimate
+          duration: (dist / 40000) * 3600000, // ~40km/h estimate for driving
           name: '',
         });
       }
@@ -149,9 +148,8 @@ export default function HomePage() {
         fullPath,
       });
       setRoutePath(fullPath);
-      showToast('NCP 길찾기 권한이 없어 예상 직선거리로 경로를 생성했습니다.');
     }
-  }, [showToast]);
+  }, []);
 
   const handleCreateRoute = useCallback(() => {
     if (coursePlaces.length < 2) {
@@ -193,7 +191,7 @@ export default function HomePage() {
         .filter((p) => p.id !== id)
         .map((p, i) => ({ ...p, order: i }));
       setCoursePlaces(updated);
-      setIsRouteCreated(false); // Reset route when removing
+      setIsRouteCreated(false);
     },
     [coursePlaces]
   );
@@ -356,7 +354,7 @@ export default function HomePage() {
         <NaverMap
           coursePlaces={coursePlaces}
           highlightPlace={highlightPlace}
-          routePath={isRouteCreated && transitMode === 'driving' ? routePath : null}
+          routePath={isRouteCreated ? routePath : null}
           transitMode={transitMode}
         />
 

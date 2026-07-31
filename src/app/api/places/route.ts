@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server';
 import { katechToWgs84, getStraightLineDistance } from '@/lib/utils';
+import { getCache, setCache } from '@/lib/cache';
 
 export async function GET(request: NextRequest) {
   const query = request.nextUrl.searchParams.get('query');
@@ -14,10 +15,20 @@ export async function GET(request: NextRequest) {
   const lngStr = request.nextUrl.searchParams.get('lng');
   const radiusStr = request.nextUrl.searchParams.get('radius');
 
-  // If doing radius search, fetch more to filter down. Otherwise just use display parameter.
   const isRadiusSearch = latStr && lngStr && radiusStr;
-  const display = request.nextUrl.searchParams.get('display') || (isRadiusSearch ? '50' : '5');
+  const display = request.nextUrl.searchParams.get('display') || (isRadiusSearch ? '50' : '10');
   const start = request.nextUrl.searchParams.get('start') || '1';
+
+  // Check cache first for 0ms instant response
+  const cacheKey = `places:${finalQuery}:${display}:${start}:${latStr || ''}:${lngStr || ''}:${radiusStr || ''}`;
+  const cached = getCache<any>(cacheKey);
+  if (cached) {
+    return Response.json(cached, {
+      headers: {
+        'Cache-Control': 'public, max-age=300, s-maxage=300',
+      },
+    });
+  }
 
   const clientId = process.env.NAVER_CLIENT_ID;
   const clientSecret = process.env.NAVER_CLIENT_SECRET;
@@ -67,7 +78,15 @@ export async function GET(request: NextRequest) {
         });
       }
     }
-    return Response.json(data);
+
+    // Store in cache for 5 mins
+    setCache(cacheKey, data, 300_000);
+
+    return Response.json(data, {
+      headers: {
+        'Cache-Control': 'public, max-age=300, s-maxage=300',
+      },
+    });
   } catch (err) {
     return Response.json(
       { error: 'Failed to fetch places', detail: String(err) },

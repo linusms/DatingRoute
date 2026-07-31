@@ -2138,7 +2138,7 @@ body {
 }
 
 .share-card {
-  background: linear-gradient(165deg, #1a1520, #241e2e);
+  background: #1e1826;
   border: 1px solid rgba(244,114,182,0.3);
   border-radius: 16px;
   padding: 20px;
@@ -2162,10 +2162,7 @@ body {
   font-family: var(--font-display);
   font-size: 18px;
   font-weight: 800;
-  background: linear-gradient(to right, #f472b6, #c084fc);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  color: #f472b6;
 }
 
 .share-card-name {
@@ -2190,7 +2187,7 @@ body {
   width: 24px;
   height: 24px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #f472b6, #c084fc);
+  background: #f472b6;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2264,5 +2261,69 @@ body {
 
 .share-download-btn {
   width: 100%;
+}
+
+/* ===== Real-time AI Loading Progress ===== */
+.ai-realtime-loading-card {
+  background: linear-gradient(135deg, rgba(244,114,182,0.12), rgba(192,132,252,0.12));
+  border: 1px solid rgba(244,114,182,0.3);
+  border-radius: 16px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  text-align: center;
+  box-shadow: 0 8px 24px rgba(244,114,182,0.15);
+}
+
+.ai-loading-spinner-wrapper {
+  position: relative;
+  width: 56px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ai-loading-pulse-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 3px solid rgba(244,114,182,0.6);
+  animation: pulse 1.5s infinite;
+}
+
+.ai-loading-icon {
+  font-size: 26px;
+  animation: float 2s ease-in-out infinite;
+}
+
+.ai-loading-status-text {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  min-height: 24px;
+}
+
+.ai-loading-progress-bar-bg {
+  width: 100%;
+  height: 8px;
+  background: rgba(255,255,255,0.1);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.ai-loading-progress-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #f472b6, #c084fc);
+  border-radius: 4px;
+  transition: width 0.4s ease-out;
+}
+
+.ai-loading-step-count {
+  font-size: 12px;
+  color: var(--color-accent-primary);
+  font-weight: 600;
 }
 

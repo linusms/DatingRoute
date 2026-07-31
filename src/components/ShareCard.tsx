@@ -18,9 +18,11 @@ export default function ShareCard({ places, directions, courseName }: ShareCardP
     try {
       const html2canvas = (await import('html2canvas')).default;
       const canvas = await html2canvas(cardRef.current, {
-        backgroundColor: '#1a1520',
+        backgroundColor: '#1e1826',
         scale: 2,
         useCORS: true,
+        allowTaint: true,
+        logging: false,
       });
       const link = document.createElement('a');
       link.download = `데이트코스_${new Date().toISOString().slice(0, 10)}.png`;

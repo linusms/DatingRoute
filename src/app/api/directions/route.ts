@@ -1,4 +1,5 @@
 import { NextRequest } from 'next/server';
+import { getCache, setCache } from '@/lib/cache';
 
 export async function GET(request: NextRequest) {
   const start = request.nextUrl.searchParams.get('start');
@@ -10,6 +11,16 @@ export async function GET(request: NextRequest) {
       { error: 'start and goal parameters are required (lng,lat format)' },
       { status: 400 }
     );
+  }
+
+  const cacheKey = `directions:${start}:${goal}:${waypoints || ''}`;
+  const cached = getCache<any>(cacheKey);
+  if (cached) {
+    return Response.json(cached, {
+      headers: {
+        'Cache-Control': 'public, max-age=300, s-maxage=300',
+      },
+    });
   }
 
   const clientId = process.env.NEXT_PUBLIC_NCP_CLIENT_ID;
@@ -45,15 +56,15 @@ export async function GET(request: NextRequest) {
 
     const data = await res.json();
 
-    // Parse section-level leg data for per-waypoint distance/duration
-    if (data.route?.traoptimal?.[0]) {
-      const route = data.route.traoptimal[0];
-      const summary = route.summary;
-      const waypoints = summary.waypoints || [];
-      const goal = summary.goal;
+    const routeObj = data.route?.traoptimal?.[0] || data.route?.trafast?.[0] || data.route?.traoption?.[0];
+
+    if (routeObj) {
+      const summary = routeObj.summary;
+      const waypointsArr = summary.waypoints || [];
+      const goalObj = summary.goal;
       
       const legs = [];
-      waypoints.forEach((wp: any, idx: number) => {
+      waypointsArr.forEach((wp: any, idx: number) => {
         legs.push({
           index: idx,
           distance: wp.distance || 0,
@@ -61,20 +72,28 @@ export async function GET(request: NextRequest) {
           name: '',
         });
       });
-      if (goal) {
+      if (goalObj) {
         legs.push({
           index: legs.length,
-          distance: goal.distance || 0,
-          duration: goal.duration || 0,
+          distance: goalObj.distance || 0,
+          duration: goalObj.duration || 0,
           name: '',
         });
       }
 
-      // Attach parsed legs to the response for easy frontend consumption
       data._parsedLegs = legs;
+      data._fullPath = routeObj.path || [];
+      data._totalDistance = summary.distance || 0;
+      data._totalDuration = summary.duration || 0;
     }
 
-    return Response.json(data);
+    setCache(cacheKey, data, 300_000);
+
+    return Response.json(data, {
+      headers: {
+        'Cache-Control': 'public, max-age=300, s-maxage=300',
+      },
+    });
   } catch (err) {
     return Response.json(
       { error: 'Failed to fetch directions', detail: String(err) },
