@@ -699,7 +699,7 @@ export default function HomePage() {
       />
 
       {/* Session Bar */}
-      {sessionMode !== 'dev' && (
+      {sessionMode && (
         <SessionBar
           mode={sessionMode}
           inviteCode={inviteCode}
