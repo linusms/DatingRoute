@@ -36,9 +36,9 @@ export default function SessionBar({
     setTimeout(() => setCopied(null), 2000);
   };
 
-  if (mode === 'dev') return null;
-
-  const modeLabel = mode === 'personal' ? '🔒 개인 모드' : '💑 초대 모드';
+  const modeLabel = mode === 'personal' 
+    ? '🔒 개인 모드' 
+    : (mode === 'dev' ? '🤝 협업 모드' : '🎟️ 초대 모드');
   const memberColors = ['#f472b6', '#c084fc', '#60a5fa', '#34d399', '#fbbf24', '#f87171'];
 
   return (
@@ -47,7 +47,7 @@ export default function SessionBar({
         <span className="session-bar-mode">{modeLabel}</span>
         <span className="session-bar-nickname">{nickname}</span>
 
-        {mode === 'invite' && (
+        {(mode === 'invite' || mode === 'dev') && (
           <span className={`session-bar-status ${isConnected ? 'connected' : 'disconnected'}`}>
             {isConnected ? '🟢' : '🔴'}
           </span>
@@ -55,7 +55,7 @@ export default function SessionBar({
       </div>
 
       <div className="session-bar-center">
-        {mode === 'invite' && inviteCode && (
+        {(mode === 'invite' || mode === 'dev') && inviteCode && (
           <div className="session-bar-invite">
             <span className="session-bar-invite-label">초대코드</span>
             <span className="session-bar-invite-code">{inviteCode}</span>
@@ -78,7 +78,7 @@ export default function SessionBar({
       </div>
 
       <div className="session-bar-right">
-        {mode === 'invite' && members.length > 0 && (
+        {(mode === 'invite' || mode === 'dev') && members.length > 0 && (
           <div className="session-bar-members">
             {members.map((m, i) => (
               <div
@@ -102,9 +102,10 @@ export default function SessionBar({
         <button
           className="session-bar-exit"
           onClick={onDisconnect}
-          title="세션 나가기"
+          title="모드 선택 화면으로"
+          style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600, color: '#f87171' }}
         >
-          🚪
+          <span>🚪</span> 메인 화면으로
         </button>
       </div>
     </div>
