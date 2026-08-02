@@ -19,7 +19,7 @@ import {
   DirectionResult,
   TransitMode,
   SessionMode,
-  SessionMember,
+  RoomMember,
 } from '@/lib/types';
 import {
   saveCourse as saveLocalCourse,
@@ -54,7 +54,7 @@ export default function HomePage() {
   const [inviteCode, setInviteCode] = useState<string | null>(null);
   const [nickname, setNickname] = useState<string>('');
   const [memberId, setMemberId] = useState<string | null>(null);
-  const [members, setMembers] = useState<SessionMember[]>([]);
+  const [members, setMembers] = useState<RoomMember[]>([]);
   const [isOwner, setIsOwner] = useState(false);
   const [isLocalhost, setIsLocalhost] = useState(false);
   const [pendingInviteCode, setPendingInviteCode] = useState<string | null>(null);

@@ -1,13 +1,13 @@
 'use client';
 
 import React, { useState } from 'react';
-import type { SessionMode, SessionMember } from '@/lib/types';
+import type { SessionMode, RoomMember } from '@/lib/types';
 
 interface SessionBarProps {
   mode: SessionMode;
   inviteCode: string | null;
   nickname: string;
-  members: SessionMember[];
+  members: RoomMember[];
   isConnected: boolean;
   onCopyInviteCode: () => void;
   onCopyInviteLink: () => void;
@@ -84,13 +84,13 @@ export default function SessionBar({
               <div
                 key={m.id}
                 className="session-bar-member-avatar"
-                title={m.nickname + (m.isOwner ? ' (호스트)' : '')}
+                title={(m.nickname || 'U') + (m.isOwner ? ' (호스트)' : '')}
                 style={{
                   backgroundColor: memberColors[i % memberColors.length],
                   zIndex: members.length - i,
                 }}
               >
-                {m.nickname.charAt(0).toUpperCase()}
+                {(m.nickname || 'U').charAt(0).toUpperCase()}
               </div>
             ))}
             <span className="session-bar-member-count">

@@ -95,14 +95,36 @@ export async function createRoom(ownerId: string, expiresInDays: number = 30): P
   return { room: roomData as Room, inviteCode };
 }
 
-export async function getRoomByInviteCode(code: string): Promise<Room | null> {
-  const { data } = await supabase.from('rooms').select('*').eq('invite_code', code).single();
-  return data as Room | null;
+export async function getRoomByInviteCode(code: string): Promise<any | null> {
+  const { data } = await supabase
+    .from('rooms')
+    .select('*, members:room_members(*, user:users(nickname))')
+    .eq('invite_code', code)
+    .maybeSingle();
+
+  if (data && data.members) {
+    data.members = data.members.map((m: any) => ({
+      ...m,
+      nickname: m.user?.nickname || 'Unknown'
+    }));
+  }
+  return data;
 }
 
-export async function getRoomById(roomId: string): Promise<Room | null> {
-  const { data } = await supabase.from('rooms').select('*').eq('id', roomId).single();
-  return data as Room | null;
+export async function getRoomById(roomId: string): Promise<any | null> {
+  const { data } = await supabase
+    .from('rooms')
+    .select('*, members:room_members(*, user:users(nickname))')
+    .eq('id', roomId)
+    .single();
+    
+  if (data && data.members) {
+    data.members = data.members.map((m: any) => ({
+      ...m,
+      nickname: m.user?.nickname || 'Unknown'
+    }));
+  }
+  return data;
 }
 
 export async function joinRoom(roomId: string, userId: string): Promise<void> {
@@ -238,7 +260,7 @@ export async function saveCourseForUser(userId: string, roomId: string, name: st
     await supabase.from('course_places').insert(newPlaces);
   }
 
-  return newCourse as Course;
+  return newCourse as unknown as Course;
 }
 
 export async function deleteCourse(courseId: string, userId: string): Promise<void> {

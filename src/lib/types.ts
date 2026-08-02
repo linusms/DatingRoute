@@ -248,6 +248,7 @@ export interface RoomMember {
   userId: string;
   joinedAt: string;
   isOwner: boolean;
+  nickname?: string;
 }
 
 export type SSEEventType =
