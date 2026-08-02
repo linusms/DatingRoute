@@ -225,26 +225,29 @@ export interface AIRecommendResult {
   summary: string;
 }
 
-/* ---- Session / Collaboration ---- */
+/* ---- Users & Collaboration ---- */
 export type SessionMode = 'dev' | 'personal' | 'invite';
 
-export interface Session {
+export interface User {
   id: string;
-  inviteCode: string;
-  ownerName: string;
-  createdAt: string;
-  expiresAt: string;
-  isPersonal: boolean;
-  members: SessionMember[];
+  nickname: string;
+  createdAt?: string;
 }
 
-export interface SessionMember {
+export interface Room {
   id: string;
-  sessionId: string;
-  nickname: string;
+  inviteCode: string;
+  ownerId: string;
+  createdAt: string;
+  expiresAt: string;
+}
+
+export interface RoomMember {
+  id: string;
+  roomId: string;
+  userId: string;
   joinedAt: string;
   isOwner: boolean;
-  isOnline?: boolean;
 }
 
 export type SSEEventType =

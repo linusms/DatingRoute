@@ -9,8 +9,9 @@ interface CourseManagerProps {
   onLoadCourse: (course: Course) => void;
   onSaveCourse: (name: string, description: string) => void;
   hasPlaces: boolean;
-  sessionMode: SessionMode;
+  sessionMode: SessionMode | null;
   sessionId: string | null;
+  userId: string;
 }
 
 export default function CourseManager({
@@ -20,6 +21,7 @@ export default function CourseManager({
   hasPlaces,
   sessionMode,
   sessionId,
+  userId,
 }: CourseManagerProps) {
   const [tab, setTab] = useState<'save' | 'load'>('load');
   const [name, setName] = useState('');
@@ -27,21 +29,18 @@ export default function CourseManager({
   const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(false);
 
-  // Load courses based on mode
+  // Load courses based on user
   useEffect(() => {
-    if (sessionMode === 'dev') {
-      setCourses(getCourses());
-    } else if (sessionId) {
-      setLoading(true);
-      fetch(`/api/sessions/${sessionId}/courses`)
-        .then((res) => res.json())
-        .then((data) => {
-          setCourses(data.courses || []);
-        })
-        .catch(() => setCourses([]))
-        .finally(() => setLoading(false));
-    }
-  }, [sessionMode, sessionId]);
+    if (!userId) return;
+    setLoading(true);
+    fetch(`/api/users/${userId}/courses`)
+      .then((res) => res.json())
+      .then((data) => {
+        setCourses(data.courses || []);
+      })
+      .catch(() => setCourses([]))
+      .finally(() => setLoading(false));
+  }, [userId]);
 
   const handleSave = () => {
     if (!name.trim()) return;
@@ -51,15 +50,11 @@ export default function CourseManager({
 
   const handleDelete = async (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
-    if (sessionMode === 'dev') {
-      deleteLocalCourse(id);
-      setCourses(getCourses());
-    } else if (sessionId) {
-      try {
-        await fetch(`/api/sessions/${sessionId}/courses/${id}`, { method: 'DELETE' });
-        setCourses((prev) => prev.filter((c) => c.id !== id));
-      } catch { /* ignore */ }
-    }
+    if (!userId) return;
+    try {
+      await fetch(`/api/users/${userId}/courses/delete?id=${id}`, { method: 'DELETE' });
+      setCourses((prev) => prev.filter((c) => c.id !== id));
+    } catch { /* ignore */ }
   };
 
   const formatDate = (dateStr: string) => {

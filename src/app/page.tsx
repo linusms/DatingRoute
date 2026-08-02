@@ -10,7 +10,9 @@ import ReviewPanel from '@/components/ReviewPanel';
 import CourseManager from '@/components/CourseManager';
 import SessionModeSelector from '@/components/SessionModeSelector';
 import SessionBar from '@/components/SessionBar';
+import AuthScreen from '@/components/AuthScreen';
 import {
+  User,
   Place,
   CoursePlace,
   Course,
@@ -29,6 +31,7 @@ import { katechToWgs84, getStraightLineDistance } from '@/lib/utils';
 import { useSessionSync } from '@/lib/useSessionSync';
 
 export default function HomePage() {
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [activeTab, setActiveTab] = useState<'search' | 'ai' | 'route'>('search');
   const [coursePlaces, setCoursePlaces] = useState<CoursePlace[]>([]);
 
@@ -138,12 +141,17 @@ export default function HomePage() {
 
     // Try to restore persisted session
     try {
+      const userRaw = localStorage.getItem('datingroute_user');
+      if (userRaw) {
+        setCurrentUser(JSON.parse(userRaw));
+      }
+
       const raw = localStorage.getItem('datingroute_session');
       if (raw) {
         const persisted = JSON.parse(raw);
         if (persisted.mode && persisted.sessionId) {
           // Validate session still exists
-          fetch(`/api/sessions/${persisted.sessionId}`)
+          fetch(`/api/sessions/${persisted.sessionId}?userId=${persisted.memberId}`)
             .then((res) => {
               if (!res.ok) throw new Error('expired');
               return res.json();
@@ -155,11 +163,11 @@ export default function HomePage() {
               setNickname(persisted.nickname);
               setMemberId(persisted.memberId);
               setIsOwner(persisted.isOwner);
-              setMembers(data.session.members || []);
+              setMembers(data.room?.members || []);
 
               // Load live places
-              if (data.livePlaces && data.livePlaces.length > 0) {
-                setCoursePlaces(data.livePlaces);
+              if (data.coursePlaces && data.coursePlaces.length > 0) {
+                setCoursePlaces(data.coursePlaces);
               }
             })
             .catch(() => {
@@ -246,61 +254,85 @@ export default function HomePage() {
   }, []);
 
   // ──── Session Actions ────
-  const handleCreateSession = useCallback(async (ownerName: string, isPersonal: boolean, password?: string) => {
+  const handleCreateSession = useCallback(async (mode: SessionMode) => {
+    if (!currentUser) return;
+    
+    if (mode === 'personal') {
+      const personalRoomId = `personal_${currentUser.id}`;
+      setSessionMode('personal');
+      setSessionId(personalRoomId);
+      setInviteCode(null);
+      setNickname(currentUser.nickname);
+      setMemberId(currentUser.id);
+      setMembers([]);
+      setIsOwner(true);
+      
+      persistSessionData({
+        mode: 'personal',
+        sessionId: personalRoomId,
+        inviteCode: '',
+        nickname: currentUser.nickname,
+        memberId: currentUser.id,
+        isOwner: true,
+      });
+
+      // Fetch personal live places
+      try {
+        const placesRes = await fetch(`/api/sessions/${personalRoomId}?userId=${currentUser.id}`);
+        if (placesRes.ok) {
+          const placesData = await placesRes.json();
+          if (placesData.coursePlaces?.length > 0) {
+            setCoursePlaces(placesData.coursePlaces);
+          } else {
+            setCoursePlaces([]);
+          }
+        }
+      } catch (err) {
+        console.error(err);
+      }
+      return;
+    }
+
+    // Invite mode
     const res = await fetch('/api/sessions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ownerName, isPersonal, password }),
+      body: JSON.stringify({ ownerId: currentUser.id, expiresInDays: 30 }),
     });
     if (!res.ok) {
       const err = await res.json();
       throw new Error(err.error || '세션 생성 실패');
     }
     const data = await res.json();
-    const mode: SessionMode = isPersonal ? 'personal' : 'invite';
 
-    setSessionMode(mode);
-    setSessionId(data.session.id);
-    setInviteCode(data.session.inviteCode);
-    setNickname(ownerName);
-    setMemberId(data.memberId);
-    setMembers(data.session.members);
+    setSessionMode('dev');
+    setSessionId(data.room.id);
+    setInviteCode(data.inviteCode);
+    setNickname(currentUser.nickname);
+    setMemberId(currentUser.id);
+    setMembers([]);
     setIsOwner(true);
 
     persistSessionData({
-      mode,
-      sessionId: data.session.id,
-      inviteCode: data.session.inviteCode,
-      nickname: ownerName,
-      memberId: data.memberId,
+      mode: 'dev',
+      sessionId: data.room.id,
+      inviteCode: data.inviteCode,
+      nickname: currentUser.nickname,
+      memberId: currentUser.id,
       isOwner: true,
     });
 
-    // 로그인 시 저장된 코스 불러오기
-    try {
-      const placesRes = await fetch(`/api/sessions/${data.session.id}/places`);
-      if (placesRes.ok) {
-        const placesData = await placesRes.json();
-        if (placesData.places && placesData.places.length > 0) {
-          setCoursePlaces(placesData.places);
-        } else {
-          setCoursePlaces([]);
-        }
-      }
-    } catch (err) {
-      console.error('Failed to load existing places:', err);
-    }
+    setCoursePlaces([]);
+    showToastMsg(`✨ 초대코드: ${data.inviteCode}`);
+  }, [currentUser, persistSessionData, showToastMsg]);
 
-    if (!isPersonal) {
-      showToastMsg(`✨ 초대코드: ${data.session.inviteCode}`);
-    }
-  }, [persistSessionData, showToastMsg]);
-
-  const handleJoinSession = useCallback(async (code: string, nick: string) => {
+  const handleJoinSession = useCallback(async (code: string) => {
+    if (!currentUser) return;
+    
     const res = await fetch('/api/sessions/join', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ inviteCode: code, nickname: nick }),
+      body: JSON.stringify({ inviteCode: code, userId: currentUser.id }),
     });
     if (!res.ok) {
       const err = await res.json();
@@ -309,37 +341,43 @@ export default function HomePage() {
     const data = await res.json();
 
     setSessionMode('invite');
-    setSessionId(data.session.id);
-    setInviteCode(data.session.inviteCode);
-    setNickname(nick);
-    setMemberId(data.memberId);
-    setMembers(data.session.members);
+    setSessionId(data.room.id);
+    setInviteCode(data.room.inviteCode);
+    setNickname(currentUser.nickname);
+    setMemberId(currentUser.id);
+    setMembers([]);
     setIsOwner(false);
     setPendingInviteCode(null);
 
     persistSessionData({
       mode: 'invite',
-      sessionId: data.session.id,
-      inviteCode: data.session.inviteCode,
-      nickname: nick,
-      memberId: data.memberId,
+      sessionId: data.room.id,
+      inviteCode: data.room.inviteCode,
+      nickname: currentUser.nickname,
+      memberId: currentUser.id,
       isOwner: false,
     });
 
     // Load live places from session
     try {
-      const placesRes = await fetch(`/api/sessions/${data.session.id}/places`);
+      const placesRes = await fetch(`/api/sessions/${data.room.id}?userId=${currentUser.id}`);
       if (placesRes.ok) {
         const placesData = await placesRes.json();
-        if (placesData.places?.length > 0) {
-          setCoursePlaces(placesData.places);
+        if (placesData.coursePlaces?.length > 0) {
+          setCoursePlaces(placesData.coursePlaces);
           setActiveTab('route');
         }
       }
     } catch { /* ignore */ }
 
     showToastMsg(`🎉 세션에 참여했습니다!`);
-  }, [persistSessionData, showToastMsg]);
+  }, [currentUser, persistSessionData, showToastMsg]);
+
+  const handleLogout = useCallback(() => {
+    setCurrentUser(null);
+    localStorage.removeItem('datingroute_user');
+    handleDisconnect();
+  }, []);
 
   const handleDisconnect = useCallback(() => {
     setSessionMode(null);
@@ -452,7 +490,7 @@ export default function HomePage() {
           await fetch(`/api/sessions/${sessionId}/places`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ place: coursePlace, addedBy: nickname }),
+            body: JSON.stringify({ place: coursePlace, userId: currentUser?.id }),
           });
         } catch { /* ignore */ }
       }
@@ -470,7 +508,7 @@ export default function HomePage() {
       if (sessionMode && sessionMode !== 'dev' && sessionId) {
         skipNextSSERef.current = true;
         try {
-          await fetch(`/api/sessions/${sessionId}/places?placeId=${id}&sender=${encodeURIComponent(nickname)}`, {
+          await fetch(`/api/sessions/${sessionId}/places?id=${id}&userId=${currentUser?.id}`, {
             method: 'DELETE',
           });
         } catch { /* ignore */ }
@@ -498,7 +536,7 @@ export default function HomePage() {
             body: JSON.stringify({
               action: 'set',
               places: newPlaces,
-              sender: nickname,
+              userId: currentUser?.id,
             }),
           });
         } catch { /* ignore */ }
@@ -524,7 +562,7 @@ export default function HomePage() {
           await fetch(`/api/sessions/${sessionId}/courses`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name, description, places: coursePlaces, addedBy: nickname }),
+            body: JSON.stringify({ name, description, userId: currentUser?.id, nickname: currentUser?.nickname }),
           });
         } catch { /* ignore */ }
       }
@@ -548,7 +586,7 @@ export default function HomePage() {
           await fetch(`/api/sessions/${sessionId}/places`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'set', places: course.places, sender: nickname }),
+            body: JSON.stringify({ action: 'set', places: course.places, userId: currentUser?.id }),
           });
         } catch { /* ignore */ }
       }
@@ -627,17 +665,24 @@ export default function HomePage() {
   }, [inviteCode, showToastMsg]);
 
   // ──── Render: Mode Selection ────
+  if (!currentUser) {
+    return <AuthScreen onLogin={(u) => {
+      setCurrentUser(u);
+      localStorage.setItem('datingroute_user', JSON.stringify(u));
+    }} />;
+  }
+
   if (sessionMode === null) {
     return (
       <SessionModeSelector
-        isLocalhost={isLocalhost}
-        initialInviteCode={pendingInviteCode}
-        onSelectPersonal={(nickname, password) => handleCreateSession(nickname, true, password)}
-        onSelectInvite={(nickname) => handleCreateSession(nickname, false)}
-        onSelectDev={() => {
-          setSessionMode('dev');
+        onSelect={(mode, code) => {
+          if (mode === 'invite' && code) {
+            handleJoinSession(code);
+          } else {
+            handleCreateSession(mode);
+          }
         }}
-        onJoinInvite={handleJoinSession}
+        isLoading={false}
       />
     );
   }
@@ -650,6 +695,10 @@ export default function HomePage() {
         courseCount={coursePlaces.length}
         sessionMode={sessionMode}
       />
+      <div style={{ position: 'absolute', top: '16px', right: '16px', zIndex: 100, background: 'rgba(255,255,255,0.9)', padding: '6px 12px', borderRadius: '8px', fontWeight: 'bold', fontSize: '14px', boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }}>
+        👤 {currentUser.nickname}님
+        <button onClick={handleLogout} style={{ marginLeft: '10px', fontSize: '12px', color: '#ff4d4f', border: '1px solid #ff4d4f', borderRadius: '4px', padding: '4px 8px', background: 'white', cursor: 'pointer' }}>로그아웃</button>
+      </div>
 
       {/* Session Bar */}
       {sessionMode !== 'dev' && (
@@ -764,6 +813,7 @@ export default function HomePage() {
           hasPlaces={coursePlaces.length > 0}
           sessionMode={sessionMode}
           sessionId={sessionId}
+          userId={currentUser.id}
         />
       )}
 
