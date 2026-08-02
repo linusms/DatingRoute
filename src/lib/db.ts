@@ -173,23 +173,35 @@ export async function joinRoom(roomId: string, userId: string): Promise<void> {
 /* ─────────── Live Courses ─────────── */
 
 export async function getLiveCourseId(roomId: string, ownerId: string): Promise<string> {
-  // Look for the live course for this room OR create it
-  const { data: row } = await supabase
+  const isPersonal = roomId.startsWith('personal_');
+  const dbRoomId = isPersonal ? null : roomId;
+
+  let query = supabase
     .from('courses')
     .select('id')
-    .eq('room_id', roomId)
     .eq('name', LIVE_COURSE_NAME)
-    .maybeSingle();
+    .eq('owner_id', ownerId);
 
-  if (row) return row.id;
+  if (isPersonal) {
+    query = query.is('room_id', null);
+  } else {
+    query = query.eq('room_id', dbRoomId);
+  }
 
+  const { data: existing } = await query.maybeSingle();
+
+  if (existing) return existing.id;
+
+  // Create live course
   const courseId = uuidv4();
-  await supabase.from('courses').insert({
+  const { error } = await supabase.from('courses').insert({
     id: courseId,
-    room_id: roomId,
+    room_id: dbRoomId,
     owner_id: ownerId,
     name: LIVE_COURSE_NAME
   });
+  
+  if (error) console.error('Live course creation error:', error);
 
   return courseId;
 }
@@ -229,7 +241,8 @@ export async function addLivePlace(roomId: string, ownerId: string, placeData: P
     memo: placeData.memo || '',
     order_index: placeData.order || 0,
   };
-  await supabase.from('course_places').insert(newPlaceDb);
+  const { error } = await supabase.from('course_places').insert(newPlaceDb);
+  if (error) console.error('Add live place error:', error);
   
   return mapDbPlaceToCoursePlace(newPlaceDb);
 }
@@ -240,10 +253,11 @@ export async function updateLivePlaces(roomId: string, ownerId: string, places: 
   // Update order or properties
   for (let i = 0; i < places.length; i++) {
     const p = places[i];
-    await supabase.from('course_places').update({
+    const { error } = await supabase.from('course_places').update({
       order_index: i,
       memo: p.memo || '',
     }).eq('id', p.id);
+    if (error) console.error('Update live place error:', error);
   }
 }
 
@@ -310,7 +324,8 @@ export async function saveCourseForUser(userId: string, roomId: string, name: st
     description: description
   };
   
-  await supabase.from('courses').insert(newCourse);
+  const { error: courseError } = await supabase.from('courses').insert(newCourse);
+  if (courseError) console.error('Save course error:', courseError);
 
   // 3. Duplicate places
   if (places && places.length > 0) {
@@ -320,7 +335,8 @@ export async function saveCourseForUser(userId: string, roomId: string, name: st
       course_id: newCourseId,
       order_index: index
     }));
-    await supabase.from('course_places').insert(newPlaces);
+    const { error: placesError } = await supabase.from('course_places').insert(newPlaces);
+    if (placesError) console.error('Save course places error:', placesError);
   }
 
   return newCourse as unknown as Course;
