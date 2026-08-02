@@ -64,7 +64,7 @@ export function useSessionSync({
     channel
       .on(
         'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'events', filter: `session_id=eq.${sessionId}` },
+        { event: 'INSERT', schema: 'public', table: 'events', filter: `room_id=eq.${sessionId}` },
         (payload) => {
           const { type, data } = payload.new;
           const cbs = callbacksRef.current;

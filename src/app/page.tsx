@@ -310,7 +310,14 @@ export default function HomePage() {
     setInviteCode(data.inviteCode);
     setNickname(currentUser.nickname);
     setMemberId(currentUser.id);
-    setMembers([]);
+    setMembers([{
+      id: currentUser.id, // temporary id
+      roomId: data.room.id,
+      userId: currentUser.id,
+      joinedAt: new Date().toISOString(),
+      isOwner: true,
+      nickname: currentUser.nickname
+    }]);
     setIsOwner(true);
 
     persistSessionData({
@@ -345,7 +352,7 @@ export default function HomePage() {
     setInviteCode(data.room.inviteCode);
     setNickname(currentUser.nickname);
     setMemberId(currentUser.id);
-    setMembers([]);
+    setMembers(data.room.members || []);
     setIsOwner(false);
     setPendingInviteCode(null);
 
