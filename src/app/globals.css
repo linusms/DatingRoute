@@ -2466,6 +2466,8 @@ body {
   background: linear-gradient(135deg, rgba(244,114,182,0.05), rgba(192,132,252,0.05));
   opacity: 0;
   transition: opacity 0.3s;
+  pointer-events: none;
+  z-index: 0;
 }
 
 .session-mode-card:hover {
@@ -2596,6 +2598,8 @@ body {
   font-family: var(--font-primary);
   transition: all 0.2s;
   outline: none;
+  position: relative;
+  z-index: 10;
 }
 
 .session-mode-input:focus {
