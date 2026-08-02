@@ -1,20 +1,17 @@
 import { createClient } from '@supabase/supabase-js';
 import { v4 as uuidv4 } from 'uuid';
 import type { Course, CoursePlace, User, Room, RoomMember } from './types';
+import { createHash } from 'crypto';
 
 export const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co',
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder'
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || 'placeholder'
 );
 
 const LIVE_COURSE_NAME = '__live__';
 
-// Helper: Hash password (간단한 구현)
 async function hashPassword(password: string): Promise<string> {
-  const msgUint8 = new TextEncoder().encode(password);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', msgUint8);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
+  return createHash('sha256').update(password).digest('hex');
 }
 
 function generateInviteCode(): string {
