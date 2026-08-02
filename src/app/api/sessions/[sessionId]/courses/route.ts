@@ -10,7 +10,7 @@ export async function GET(
 ) {
   try {
     const { sessionId } = await context.params;
-    const courses = getCoursesBySession(sessionId);
+    const courses = await getCoursesBySession(sessionId);
     // Filter out the __live__ course from the list
     const savedCourses = courses.filter((c) => c.name !== '__live__');
     return NextResponse.json({ courses: savedCourses });
@@ -34,7 +34,7 @@ export async function POST(
       return NextResponse.json({ error: '코스 이름을 입력해주세요.' }, { status: 400 });
     }
 
-    const course = createCourse(
+    const course = await createCourse(
       sessionId,
       name.trim(),
       description?.trim() || '',
@@ -42,8 +42,9 @@ export async function POST(
       addedBy || ''
     );
 
-    // Broadcast course saved event
-    broadcastSSE(sessionId, 'course_saved', { course }, addedBy || '');
+    await broadcastSSE(sessionId, 'course_saved', { course }, addedBy || '');
+
+
 
     return NextResponse.json({ course }, { status: 201 });
   } catch (error: any) {

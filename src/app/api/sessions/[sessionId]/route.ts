@@ -10,13 +10,13 @@ export async function GET(
 ) {
   try {
     const { sessionId } = await context.params;
-    const session = getSessionById(sessionId);
+    const session = await getSessionById(sessionId);
 
     if (!session) {
       return NextResponse.json({ error: '세션을 찾을 수 없습니다.' }, { status: 404 });
     }
 
-    const livePlaces = getLivePlaces(sessionId);
+    const livePlaces = await getLivePlaces(sessionId);
 
     return NextResponse.json({ session, livePlaces });
   } catch (error: any) {
@@ -32,7 +32,7 @@ export async function DELETE(
 ) {
   try {
     const { sessionId } = await context.params;
-    deleteSession(sessionId);
+    await deleteSession(sessionId);
     return NextResponse.json({ ok: true });
   } catch (error: any) {
     console.error('Session delete error:', error);

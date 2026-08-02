@@ -1,92 +1,10 @@
-import Database from 'better-sqlite3';
+import { createClient } from '@supabase/supabase-js';
 import { v4 as uuidv4 } from 'uuid';
-import path from 'path';
 import type { Course, CoursePlace, Session, SessionMember } from './types';
 
-/* ─────────── DB Singleton ─────────── */
+import { supabase } from './supabaseClient';
 
-let _db: Database.Database | null = null;
-
-function getDbPath(): string {
-  // Store DB file in project root /data directory
-  return path.join(process.cwd(), 'data', 'datingroute.db');
-}
-
-export function getDb(): Database.Database {
-  if (_db) return _db;
-
-  const dbPath = getDbPath();
-
-  // Ensure the data directory exists
-  const fs = require('fs');
-  const dir = path.dirname(dbPath);
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
-  }
-
-  _db = new Database(dbPath);
-  _db.pragma('journal_mode = WAL');
-  _db.pragma('foreign_keys = ON');
-
-  initSchema(_db);
-  return _db;
-}
-
-/* ─────────── Schema ─────────── */
-
-function initSchema(db: Database.Database): void {
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS sessions (
-      id TEXT PRIMARY KEY,
-      invite_code TEXT UNIQUE NOT NULL,
-      owner_name TEXT NOT NULL DEFAULT '',
-      created_at TEXT NOT NULL,
-      expires_at TEXT NOT NULL,
-      is_personal INTEGER NOT NULL DEFAULT 0
-    );
-
-    CREATE TABLE IF NOT EXISTS session_members (
-      id TEXT PRIMARY KEY,
-      session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
-      nickname TEXT NOT NULL DEFAULT '',
-      joined_at TEXT NOT NULL,
-      is_owner INTEGER NOT NULL DEFAULT 0
-    );
-
-    CREATE TABLE IF NOT EXISTS courses (
-      id TEXT PRIMARY KEY,
-      session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
-      name TEXT NOT NULL DEFAULT '',
-      description TEXT NOT NULL DEFAULT '',
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL
-    );
-
-    CREATE TABLE IF NOT EXISTS course_places (
-      id TEXT PRIMARY KEY,
-      course_id TEXT NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
-      title TEXT NOT NULL DEFAULT '',
-      category TEXT NOT NULL DEFAULT '',
-      address TEXT NOT NULL DEFAULT '',
-      road_address TEXT NOT NULL DEFAULT '',
-      mapx REAL NOT NULL DEFAULT 0,
-      mapy REAL NOT NULL DEFAULT 0,
-      link TEXT NOT NULL DEFAULT '',
-      description TEXT NOT NULL DEFAULT '',
-      memo TEXT NOT NULL DEFAULT '',
-      order_index INTEGER NOT NULL DEFAULT 0,
-      added_by TEXT NOT NULL DEFAULT ''
-    );
-
-    CREATE INDEX IF NOT EXISTS idx_courses_session ON courses(session_id);
-    CREATE INDEX IF NOT EXISTS idx_places_course ON course_places(course_id);
-    CREATE INDEX IF NOT EXISTS idx_members_session ON session_members(session_id);
-    CREATE INDEX IF NOT EXISTS idx_sessions_invite ON sessions(invite_code);
-  `);
-}
-
-/* ─────────── Invite Code Generation ─────────── */
-
+// Helper function to generate invite code
 function generateInviteCode(): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no I/O/0/1 for clarity
   let code = '';
@@ -96,46 +14,50 @@ function generateInviteCode(): string {
   return code;
 }
 
-function generateUniqueInviteCode(db: Database.Database): string {
-  const check = db.prepare('SELECT 1 FROM sessions WHERE invite_code = ?');
+async function generateUniqueInviteCode(): Promise<string> {
   let code: string;
   let attempts = 0;
-  do {
+  while (true) {
     code = generateInviteCode();
     attempts++;
     if (attempts > 100) throw new Error('Cannot generate unique invite code');
-  } while (check.get(code));
+    const { data } = await supabase.from('sessions').select('id').eq('invite_code', code).maybeSingle();
+    if (!data) break;
+  }
   return code;
 }
 
 /* ─────────── Session CRUD ─────────── */
 
-export function createSession(
+export async function createSession(
   ownerName: string,
   isPersonal: boolean,
   expiresInDays: number = 30
-): { session: Session; memberId: string } {
-  const db = getDb();
+): Promise<{ session: Session; memberId: string }> {
   const sessionId = uuidv4();
   const memberId = uuidv4();
-  const inviteCode = generateUniqueInviteCode(db);
+  const inviteCode = await generateUniqueInviteCode();
   const now = new Date().toISOString();
   const expiresAt = new Date(Date.now() + expiresInDays * 24 * 60 * 60 * 1000).toISOString();
 
-  const insertSession = db.prepare(`
-    INSERT INTO sessions (id, invite_code, owner_name, created_at, expires_at, is_personal)
-    VALUES (?, ?, ?, ?, ?, ?)
-  `);
+  // Insert session
+  await supabase.from('sessions').insert({
+    id: sessionId,
+    invite_code: inviteCode,
+    owner_name: ownerName,
+    created_at: now,
+    expires_at: expiresAt,
+    is_personal: isPersonal
+  });
 
-  const insertMember = db.prepare(`
-    INSERT INTO session_members (id, session_id, nickname, joined_at, is_owner)
-    VALUES (?, ?, ?, ?, 1)
-  `);
-
-  db.transaction(() => {
-    insertSession.run(sessionId, inviteCode, ownerName, now, expiresAt, isPersonal ? 1 : 0);
-    insertMember.run(memberId, sessionId, ownerName, now);
-  })();
+  // Insert member
+  await supabase.from('session_members').insert({
+    id: memberId,
+    session_id: sessionId,
+    nickname: ownerName,
+    joined_at: now,
+    is_owner: true
+  });
 
   return {
     session: {
@@ -157,64 +79,76 @@ export function createSession(
   };
 }
 
-export function getSessionByInviteCode(code: string): Session | null {
-  const db = getDb();
-  const row = db.prepare('SELECT * FROM sessions WHERE invite_code = ?').get(code) as any;
-  if (!row) return null;
+export async function getSessionByInviteCode(code: string): Promise<Session | null> {
+  const { data: row } = await supabase
+    .from('sessions')
+    .select('*')
+    .eq('invite_code', code)
+    .maybeSingle();
 
-  // Check expiry
+  if (!row) return null;
   if (new Date(row.expires_at) < new Date()) return null;
 
-  const members = getSessionMembers(row.id);
+  const members = await getSessionMembers(row.id);
   return {
     id: row.id,
     inviteCode: row.invite_code,
     ownerName: row.owner_name,
     createdAt: row.created_at,
     expiresAt: row.expires_at,
-    isPersonal: !!row.is_personal,
+    isPersonal: row.is_personal,
     members,
   };
 }
 
-export function getSessionById(sessionId: string): Session | null {
-  const db = getDb();
-  const row = db.prepare('SELECT * FROM sessions WHERE id = ?').get(sessionId) as any;
+export async function getSessionById(sessionId: string): Promise<Session | null> {
+  const { data: row } = await supabase
+    .from('sessions')
+    .select('*')
+    .eq('id', sessionId)
+    .maybeSingle();
+
   if (!row) return null;
 
-  const members = getSessionMembers(row.id);
+  const members = await getSessionMembers(row.id);
   return {
     id: row.id,
     inviteCode: row.invite_code,
     ownerName: row.owner_name,
     createdAt: row.created_at,
     expiresAt: row.expires_at,
-    isPersonal: !!row.is_personal,
+    isPersonal: row.is_personal,
     members,
   };
 }
 
-export function getSessionMembers(sessionId: string): SessionMember[] {
-  const db = getDb();
-  const rows = db.prepare('SELECT * FROM session_members WHERE session_id = ?').all(sessionId) as any[];
-  return rows.map((r) => ({
+export async function getSessionMembers(sessionId: string): Promise<SessionMember[]> {
+  const { data: rows } = await supabase
+    .from('session_members')
+    .select('*')
+    .eq('session_id', sessionId);
+    
+  if (!rows) return [];
+  return rows.map((r: any) => ({
     id: r.id,
     sessionId: r.session_id,
     nickname: r.nickname,
     joinedAt: r.joined_at,
-    isOwner: !!r.is_owner,
+    isOwner: r.is_owner,
   }));
 }
 
-export function joinSession(sessionId: string, nickname: string): SessionMember {
-  const db = getDb();
+export async function joinSession(sessionId: string, nickname: string): Promise<SessionMember> {
   const memberId = uuidv4();
   const now = new Date().toISOString();
 
-  db.prepare(`
-    INSERT INTO session_members (id, session_id, nickname, joined_at, is_owner)
-    VALUES (?, ?, ?, ?, 0)
-  `).run(memberId, sessionId, nickname, now);
+  await supabase.from('session_members').insert({
+    id: memberId,
+    session_id: sessionId,
+    nickname,
+    joined_at: now,
+    is_owner: false
+  });
 
   return {
     id: memberId,
@@ -225,45 +159,49 @@ export function joinSession(sessionId: string, nickname: string): SessionMember 
   };
 }
 
-export function deleteSession(sessionId: string): void {
-  const db = getDb();
-  db.prepare('DELETE FROM sessions WHERE id = ?').run(sessionId);
+export async function deleteSession(sessionId: string): Promise<void> {
+  await supabase.from('sessions').delete().eq('id', sessionId);
 }
 
 /* ─────────── Course CRUD ─────────── */
 
-export function createCourse(
+export async function createCourse(
   sessionId: string,
   name: string,
   description: string,
   places: CoursePlace[],
   addedBy: string = ''
-): Course {
-  const db = getDb();
+): Promise<Course> {
   const courseId = uuidv4();
   const now = new Date().toISOString();
 
-  const insertCourse = db.prepare(`
-    INSERT INTO courses (id, session_id, name, description, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?)
-  `);
+  await supabase.from('courses').insert({
+    id: courseId,
+    session_id: sessionId,
+    name,
+    description,
+    created_at: now,
+    updated_at: now
+  });
 
-  const insertPlace = db.prepare(`
-    INSERT INTO course_places (id, course_id, title, category, address, road_address, mapx, mapy, link, description, memo, order_index, added_by)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `);
-
-  db.transaction(() => {
-    insertCourse.run(courseId, sessionId, name, description, now, now);
-    places.forEach((p, i) => {
-      insertPlace.run(
-        p.id || uuidv4(), courseId,
-        p.title, p.category, p.address, p.roadAddress,
-        p.mapx, p.mapy, p.link, p.description, p.memo,
-        i, addedBy
-      );
-    });
-  })();
+  if (places.length > 0) {
+    const placesToInsert = places.map((p, i) => ({
+      id: p.id || uuidv4(),
+      course_id: courseId,
+      title: p.title,
+      category: p.category,
+      address: p.address,
+      road_address: p.roadAddress,
+      mapx: p.mapx,
+      mapy: p.mapy,
+      link: p.link,
+      description: p.description,
+      memo: p.memo,
+      order_index: i,
+      added_by: addedBy
+    }));
+    await supabase.from('course_places').insert(placesToInsert);
+  }
 
   return {
     id: courseId,
@@ -275,45 +213,59 @@ export function createCourse(
   };
 }
 
-export function getCoursesBySession(sessionId: string): Course[] {
-  const db = getDb();
-  const rows = db.prepare('SELECT * FROM courses WHERE session_id = ? ORDER BY created_at DESC').all(sessionId) as any[];
+export async function getCoursesBySession(sessionId: string): Promise<Course[]> {
+  const { data: rows } = await supabase
+    .from('courses')
+    .select('*')
+    .eq('session_id', sessionId)
+    .order('created_at', { ascending: false });
 
-  return rows.map((r) => {
-    const places = getCoursePlaces(r.id);
-    return {
+  if (!rows) return [];
+
+  const courses: Course[] = [];
+  for (const r of rows) {
+    const places = await getCoursePlaces(r.id);
+    courses.push({
       id: r.id,
       name: r.name,
       description: r.description,
       places,
       createdAt: r.created_at,
       updatedAt: r.updated_at,
-    };
-  });
+    });
+  }
+  return courses;
 }
 
-export function getCourseById(courseId: string): Course | null {
-  const db = getDb();
-  const row = db.prepare('SELECT * FROM courses WHERE id = ?').get(courseId) as any;
+export async function getCourseById(courseId: string): Promise<Course | null> {
+  const { data: row } = await supabase
+    .from('courses')
+    .select('*')
+    .eq('id', courseId)
+    .maybeSingle();
+
   if (!row) return null;
 
+  const places = await getCoursePlaces(row.id);
   return {
     id: row.id,
     name: row.name,
     description: row.description,
-    places: getCoursePlaces(row.id),
+    places,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
 }
 
-function getCoursePlaces(courseId: string): CoursePlace[] {
-  const db = getDb();
-  const rows = db.prepare(
-    'SELECT * FROM course_places WHERE course_id = ? ORDER BY order_index'
-  ).all(courseId) as any[];
+export async function getCoursePlaces(courseId: string): Promise<CoursePlace[]> {
+  const { data: rows } = await supabase
+    .from('course_places')
+    .select('*')
+    .eq('course_id', courseId)
+    .order('order_index', { ascending: true });
 
-  return rows.map((r) => ({
+  if (!rows) return [];
+  return rows.map((r: any) => ({
     id: r.id,
     title: r.title,
     category: r.category,
@@ -329,225 +281,182 @@ function getCoursePlaces(courseId: string): CoursePlace[] {
   }));
 }
 
-export function updateCourse(
+export async function updateCourse(
   courseId: string,
   data: { name?: string; description?: string; places?: CoursePlace[] },
   addedBy: string = ''
-): Course | null {
-  const db = getDb();
+): Promise<Course | null> {
   const now = new Date().toISOString();
+  
+  if (data.name !== undefined || data.description !== undefined) {
+    const updates: any = { updated_at: now };
+    if (data.name !== undefined) updates.name = data.name;
+    if (data.description !== undefined) updates.description = data.description;
+    await supabase.from('courses').update(updates).eq('id', courseId);
+  }
 
-  const existing = db.prepare('SELECT * FROM courses WHERE id = ?').get(courseId) as any;
-  if (!existing) return null;
-
-  db.transaction(() => {
-    if (data.name !== undefined || data.description !== undefined) {
-      db.prepare(`
-        UPDATE courses SET name = ?, description = ?, updated_at = ? WHERE id = ?
-      `).run(
-        data.name ?? existing.name,
-        data.description ?? existing.description,
-        now, courseId
-      );
+  if (data.places) {
+    // Delete existing places
+    await supabase.from('course_places').delete().eq('course_id', courseId);
+    
+    // Insert new ones
+    if (data.places.length > 0) {
+      const placesToInsert = data.places.map((p, i) => ({
+        id: p.id || uuidv4(),
+        course_id: courseId,
+        title: p.title,
+        category: p.category,
+        address: p.address,
+        road_address: p.roadAddress,
+        mapx: p.mapx,
+        mapy: p.mapy,
+        link: p.link,
+        description: p.description,
+        memo: p.memo,
+        order_index: i,
+        added_by: (p as any).addedBy || addedBy
+      }));
+      await supabase.from('course_places').insert(placesToInsert);
     }
-
-    if (data.places) {
-      db.prepare('DELETE FROM course_places WHERE course_id = ?').run(courseId);
-      const insertPlace = db.prepare(`
-        INSERT INTO course_places (id, course_id, title, category, address, road_address, mapx, mapy, link, description, memo, order_index, added_by)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `);
-      data.places.forEach((p, i) => {
-        insertPlace.run(
-          p.id || uuidv4(), courseId,
-          p.title, p.category, p.address, p.roadAddress,
-          p.mapx, p.mapy, p.link, p.description, p.memo,
-          i, (p as any).addedBy || addedBy
-        );
-      });
-
-      db.prepare('UPDATE courses SET updated_at = ? WHERE id = ?').run(now, courseId);
-    }
-  })();
+    await supabase.from('courses').update({ updated_at: now }).eq('id', courseId);
+  }
 
   return getCourseById(courseId);
 }
 
-export function deleteCourseDb(courseId: string): void {
-  const db = getDb();
-  db.prepare('DELETE FROM courses WHERE id = ?').run(courseId);
+export async function deleteCourseDb(courseId: string): Promise<void> {
+  await supabase.from('courses').delete().eq('id', courseId);
 }
 
 /* ─────────── Live Places (session-level working set) ─────────── */
-// These are the "current" places being worked on in a session,
-// stored as a special course named "__live__"
 
 const LIVE_COURSE_NAME = '__live__';
 
-export function getLiveCourseId(sessionId: string): string {
-  const db = getDb();
-  const row = db.prepare(
-    "SELECT id FROM courses WHERE session_id = ? AND name = ?"
-  ).get(sessionId, LIVE_COURSE_NAME) as any;
+export async function getLiveCourseId(sessionId: string): Promise<string> {
+  const { data: row } = await supabase
+    .from('courses')
+    .select('id')
+    .eq('session_id', sessionId)
+    .eq('name', LIVE_COURSE_NAME)
+    .maybeSingle();
 
   if (row) return row.id;
 
-  // Create live course if it doesn't exist
   const courseId = uuidv4();
   const now = new Date().toISOString();
-  db.prepare(`
-    INSERT INTO courses (id, session_id, name, description, created_at, updated_at)
-    VALUES (?, ?, ?, '', ?, ?)
-  `).run(courseId, sessionId, LIVE_COURSE_NAME, now, now);
+  await supabase.from('courses').insert({
+    id: courseId,
+    session_id: sessionId,
+    name: LIVE_COURSE_NAME,
+    description: '',
+    created_at: now,
+    updated_at: now
+  });
 
   return courseId;
 }
 
-export function getLivePlaces(sessionId: string): CoursePlace[] {
-  const courseId = getLiveCourseId(sessionId);
+export async function getLivePlaces(sessionId: string): Promise<CoursePlace[]> {
+  const courseId = await getLiveCourseId(sessionId);
   return getCoursePlaces(courseId);
 }
 
-export function addLivePlace(sessionId: string, place: CoursePlace, addedBy: string = ''): CoursePlace[] {
-  const db = getDb();
-  const courseId = getLiveCourseId(sessionId);
+export async function addLivePlace(sessionId: string, place: CoursePlace, addedBy: string = ''): Promise<CoursePlace[]> {
+  const courseId = await getLiveCourseId(sessionId);
 
-  // Get current max order
-  const maxRow = db.prepare(
-    'SELECT MAX(order_index) as mx FROM course_places WHERE course_id = ?'
-  ).get(courseId) as any;
-  const nextOrder = (maxRow?.mx ?? -1) + 1;
+  const { data: maxRow } = await supabase
+    .from('course_places')
+    .select('order_index')
+    .eq('course_id', courseId)
+    .order('order_index', { ascending: false })
+    .limit(1)
+    .maybeSingle();
 
-  db.prepare(`
-    INSERT INTO course_places (id, course_id, title, category, address, road_address, mapx, mapy, link, description, memo, order_index, added_by)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(
-    place.id || uuidv4(), courseId,
-    place.title, place.category, place.address, place.roadAddress,
-    place.mapx, place.mapy, place.link, place.description, place.memo,
-    nextOrder, addedBy
-  );
+  const nextOrder = maxRow ? maxRow.order_index + 1 : 0;
 
-  db.prepare('UPDATE courses SET updated_at = ? WHERE id = ?')
-    .run(new Date().toISOString(), courseId);
-
-  return getCoursePlaces(courseId);
-}
-
-export function removeLivePlace(sessionId: string, placeId: string): CoursePlace[] {
-  const db = getDb();
-  const courseId = getLiveCourseId(sessionId);
-
-  db.prepare('DELETE FROM course_places WHERE id = ? AND course_id = ?')
-    .run(placeId, courseId);
-
-  // Re-index remaining places
-  const remaining = getCoursePlaces(courseId);
-  const updateOrder = db.prepare('UPDATE course_places SET order_index = ? WHERE id = ?');
-  db.transaction(() => {
-    remaining.forEach((p, i) => {
-      updateOrder.run(i, p.id);
-    });
-  })();
-
-  db.prepare('UPDATE courses SET updated_at = ? WHERE id = ?')
-    .run(new Date().toISOString(), courseId);
-
-  return getCoursePlaces(courseId);
-}
-
-export function reorderLivePlaces(sessionId: string, placeIds: string[]): CoursePlace[] {
-  const db = getDb();
-  const courseId = getLiveCourseId(sessionId);
-
-  const updateOrder = db.prepare('UPDATE course_places SET order_index = ? WHERE id = ? AND course_id = ?');
-  db.transaction(() => {
-    placeIds.forEach((id, i) => {
-      updateOrder.run(i, id, courseId);
-    });
-  })();
-
-  db.prepare('UPDATE courses SET updated_at = ? WHERE id = ?')
-    .run(new Date().toISOString(), courseId);
-
-  return getCoursePlaces(courseId);
-}
-
-export function setLivePlaces(sessionId: string, places: CoursePlace[], addedBy: string = ''): CoursePlace[] {
-  const db = getDb();
-  const courseId = getLiveCourseId(sessionId);
-
-  const insertPlace = db.prepare(`
-    INSERT INTO course_places (id, course_id, title, category, address, road_address, mapx, mapy, link, description, memo, order_index, added_by)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `);
-
-  db.transaction(() => {
-    db.prepare('DELETE FROM course_places WHERE course_id = ?').run(courseId);
-    places.forEach((p, i) => {
-      insertPlace.run(
-        p.id || uuidv4(), courseId,
-        p.title, p.category, p.address, p.roadAddress,
-        p.mapx, p.mapy, p.link, p.description, p.memo,
-        i, (p as any).addedBy || addedBy
-      );
-    });
-  })();
-
-  db.prepare('UPDATE courses SET updated_at = ? WHERE id = ?')
-    .run(new Date().toISOString(), courseId);
-
-  return getCoursePlaces(courseId);
-}
-
-/* ─────────── SSE Broadcasting ─────────── */
-
-type SSEController = ReadableStreamDefaultController;
-
-const sessionListeners = new Map<string, Set<SSEController>>();
-
-export function addSSEListener(sessionId: string, controller: SSEController): void {
-  if (!sessionListeners.has(sessionId)) {
-    sessionListeners.set(sessionId, new Set());
-  }
-  sessionListeners.get(sessionId)!.add(controller);
-}
-
-export function removeSSEListener(sessionId: string, controller: SSEController): void {
-  const listeners = sessionListeners.get(sessionId);
-  if (listeners) {
-    listeners.delete(controller);
-    if (listeners.size === 0) {
-      sessionListeners.delete(sessionId);
-    }
-  }
-}
-
-export function broadcastSSE(
-  sessionId: string,
-  type: string,
-  data: unknown,
-  sender: string
-): void {
-  const listeners = sessionListeners.get(sessionId);
-  if (!listeners || listeners.size === 0) return;
-
-  const event = JSON.stringify({
-    type,
-    data,
-    timestamp: new Date().toISOString(),
-    sender,
+  await supabase.from('course_places').insert({
+    id: place.id || uuidv4(),
+    course_id: courseId,
+    title: place.title,
+    category: place.category,
+    address: place.address,
+    road_address: place.roadAddress,
+    mapx: place.mapx,
+    mapy: place.mapy,
+    link: place.link,
+    description: place.description,
+    memo: place.memo,
+    order_index: nextOrder,
+    added_by: addedBy
   });
 
-  const message = `data: ${event}\n\n`;
-  const encoder = new TextEncoder();
+  await supabase.from('courses').update({ updated_at: new Date().toISOString() }).eq('id', courseId);
+  return getCoursePlaces(courseId);
+}
 
-  for (const controller of listeners) {
-    try {
-      controller.enqueue(encoder.encode(message));
-    } catch {
-      // Controller closed, remove it
-      listeners.delete(controller);
-    }
+export async function removeLivePlace(sessionId: string, placeId: string): Promise<CoursePlace[]> {
+  const courseId = await getLiveCourseId(sessionId);
+  await supabase.from('course_places').delete().eq('id', placeId).eq('course_id', courseId);
+
+  // Re-index
+  const remaining = await getCoursePlaces(courseId);
+  for (let i = 0; i < remaining.length; i++) {
+    await supabase.from('course_places').update({ order_index: i }).eq('id', remaining[i].id);
   }
+
+  await supabase.from('courses').update({ updated_at: new Date().toISOString() }).eq('id', courseId);
+  return getCoursePlaces(courseId);
+}
+
+export async function reorderLivePlaces(sessionId: string, placeIds: string[]): Promise<CoursePlace[]> {
+  const courseId = await getLiveCourseId(sessionId);
+  for (let i = 0; i < placeIds.length; i++) {
+    await supabase.from('course_places').update({ order_index: i }).eq('id', placeIds[i]).eq('course_id', courseId);
+  }
+  await supabase.from('courses').update({ updated_at: new Date().toISOString() }).eq('id', courseId);
+  return getCoursePlaces(courseId);
+}
+
+export async function setLivePlaces(sessionId: string, places: CoursePlace[], addedBy: string = ''): Promise<CoursePlace[]> {
+  const courseId = await getLiveCourseId(sessionId);
+
+  await supabase.from('course_places').delete().eq('course_id', courseId);
+
+  if (places.length > 0) {
+    const placesToInsert = places.map((p, i) => ({
+      id: p.id || uuidv4(),
+      course_id: courseId,
+      title: p.title,
+      category: p.category,
+      address: p.address,
+      road_address: p.roadAddress,
+      mapx: p.mapx,
+      mapy: p.mapy,
+      link: p.link,
+      description: p.description,
+      memo: p.memo,
+      order_index: i,
+      added_by: (p as any).addedBy || addedBy
+    }));
+    await supabase.from('course_places').insert(placesToInsert);
+  }
+
+  await supabase.from('courses').update({ updated_at: new Date().toISOString() }).eq('id', courseId);
+  return getCoursePlaces(courseId);
+}
+
+/* ─────────── SSE Broadcasting (via Supabase Events Table) ─────────── */
+
+export async function broadcastSSE(
+  sessionId: string,
+  type: string,
+  data: any,
+  sender: string
+): Promise<void> {
+  await supabase.from('events').insert({
+    session_id: sessionId,
+    type,
+    data,
+    sender
+  });
 }

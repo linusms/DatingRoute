@@ -11,7 +11,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: '닉네임을 입력해주세요.' }, { status: 400 });
     }
 
-    const result = createSession(
+    const result = await createSession(
       ownerName.trim(),
       !!isPersonal,
       expiresInDays ?? 30
@@ -37,7 +37,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: '세션 ID가 필요합니다.' }, { status: 400 });
     }
 
-    const session = getSessionById(id);
+    const session = await getSessionById(id);
     if (!session) {
       return NextResponse.json({ error: '세션을 찾을 수 없습니다.' }, { status: 404 });
     }

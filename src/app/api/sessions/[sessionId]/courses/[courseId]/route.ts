@@ -15,7 +15,7 @@ export async function GET(
 ) {
   try {
     const { courseId } = await context.params;
-    const course = getCourse(courseId);
+    const course = await getCourse(courseId);
 
     if (!course) {
       return NextResponse.json({ error: '코스를 찾을 수 없습니다.' }, { status: 404 });
@@ -38,13 +38,15 @@ export async function PUT(
     const body = await request.json();
     const { name, description, places, addedBy } = body;
 
-    const updated = updateCourse(courseId, { name, description, places }, addedBy || '');
+    const updated = await updateCourse(courseId, { name, description, places }, addedBy || '');
 
     if (!updated) {
       return NextResponse.json({ error: '코스를 찾을 수 없습니다.' }, { status: 404 });
     }
 
-    broadcastSSE(sessionId, 'course_saved', { course: updated }, addedBy || '');
+    await broadcastSSE(sessionId, 'course_saved', { course: updated }, addedBy || '');
+
+
 
     return NextResponse.json({ course: updated });
   } catch (error: any) {
@@ -60,8 +62,8 @@ export async function DELETE(
 ) {
   try {
     const { sessionId, courseId } = await context.params;
-    deleteCourseDb(courseId);
-    broadcastSSE(sessionId, 'course_deleted', { courseId }, '');
+    await deleteCourseDb(courseId);
+    await broadcastSSE(sessionId, 'course_deleted', { courseId }, '');
     return NextResponse.json({ ok: true });
   } catch (error: any) {
     console.error('Course delete error:', error);

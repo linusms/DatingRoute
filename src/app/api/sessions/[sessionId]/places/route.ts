@@ -18,7 +18,7 @@ export async function GET(
 ) {
   try {
     const { sessionId } = await context.params;
-    const places = getLivePlaces(sessionId);
+    const places = await getLivePlaces(sessionId);
     return NextResponse.json({ places });
   } catch (error: any) {
     console.error('Get places error:', error);
@@ -40,9 +40,9 @@ export async function POST(
       return NextResponse.json({ error: '장소 정보가 필요합니다.' }, { status: 400 });
     }
 
-    const updated = addLivePlace(sessionId, place as CoursePlace, addedBy || '');
+    const updated = await addLivePlace(sessionId, place as CoursePlace, addedBy || '');
 
-    broadcastSSE(sessionId, 'place_added', {
+    await broadcastSSE(sessionId, 'place_added', {
       place,
       allPlaces: updated,
     }, addedBy || '');
@@ -67,15 +67,11 @@ export async function PUT(
     let updated: CoursePlace[];
 
     if (action === 'reorder' && placeIds) {
-      updated = reorderLivePlaces(sessionId, placeIds);
-      broadcastSSE(sessionId, 'places_reordered', {
-        allPlaces: updated,
-      }, sender || '');
+      updated = await reorderLivePlaces(sessionId, placeIds);
+      await broadcastSSE(sessionId, 'places_reordered', { allPlaces: updated }, sender || '');
     } else if (action === 'set' && places) {
-      updated = setLivePlaces(sessionId, places, sender || '');
-      broadcastSSE(sessionId, 'places_reordered', {
-        allPlaces: updated,
-      }, sender || '');
+      updated = await setLivePlaces(sessionId, places, sender || '');
+      await broadcastSSE(sessionId, 'places_reordered', { allPlaces: updated }, sender || '');
     } else {
       return NextResponse.json({ error: 'action 필드가 필요합니다.' }, { status: 400 });
     }
@@ -102,9 +98,9 @@ export async function DELETE(
       return NextResponse.json({ error: 'placeId가 필요합니다.' }, { status: 400 });
     }
 
-    const updated = removeLivePlace(sessionId, placeId);
+    const updated = await removeLivePlace(sessionId, placeId);
 
-    broadcastSSE(sessionId, 'place_removed', {
+    await broadcastSSE(sessionId, 'place_removed', {
       placeId,
       allPlaces: updated,
     }, sender);

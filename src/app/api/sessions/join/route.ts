@@ -16,7 +16,7 @@ export async function POST(request: NextRequest) {
     }
 
     const code = inviteCode.trim().toUpperCase();
-    const session = getSessionByInviteCode(code);
+    const session = await getSessionByInviteCode(code);
 
     if (!session) {
       return NextResponse.json(
@@ -38,10 +38,9 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    const member = joinSession(session.id, nickname.trim());
+    const member = await joinSession(session.id, nickname.trim());
 
-    // Broadcast member joined event
-    broadcastSSE(session.id, 'member_joined', {
+    await broadcastSSE(session.id, 'member_joined', {
       member: {
         id: member.id,
         nickname: member.nickname,
@@ -51,7 +50,7 @@ export async function POST(request: NextRequest) {
     }, nickname.trim());
 
     // Refresh session to include new member
-    const updatedSession = getSessionByInviteCode(code);
+    const updatedSession = await getSessionByInviteCode(code);
 
     return NextResponse.json({
       session: updatedSession,
