@@ -1,14 +1,16 @@
 'use client';
 
-import React, { useState } from 'react';
-import { Course } from '@/lib/types';
-import { getCourses, deleteCourse } from '@/lib/courseStorage';
+import React, { useState, useEffect } from 'react';
+import { Course, SessionMode } from '@/lib/types';
+import { getCourses, deleteCourse as deleteLocalCourse } from '@/lib/courseStorage';
 
 interface CourseManagerProps {
   onClose: () => void;
   onLoadCourse: (course: Course) => void;
   onSaveCourse: (name: string, description: string) => void;
   hasPlaces: boolean;
+  sessionMode: SessionMode;
+  sessionId: string | null;
 }
 
 export default function CourseManager({
@@ -16,11 +18,30 @@ export default function CourseManager({
   onLoadCourse,
   onSaveCourse,
   hasPlaces,
+  sessionMode,
+  sessionId,
 }: CourseManagerProps) {
   const [tab, setTab] = useState<'save' | 'load'>('load');
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
-  const [courses, setCourses] = useState<Course[]>(getCourses());
+  const [courses, setCourses] = useState<Course[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  // Load courses based on mode
+  useEffect(() => {
+    if (sessionMode === 'dev') {
+      setCourses(getCourses());
+    } else if (sessionId) {
+      setLoading(true);
+      fetch(`/api/sessions/${sessionId}/courses`)
+        .then((res) => res.json())
+        .then((data) => {
+          setCourses(data.courses || []);
+        })
+        .catch(() => setCourses([]))
+        .finally(() => setLoading(false));
+    }
+  }, [sessionMode, sessionId]);
 
   const handleSave = () => {
     if (!name.trim()) return;
@@ -28,10 +49,17 @@ export default function CourseManager({
     onClose();
   };
 
-  const handleDelete = (e: React.MouseEvent, id: string) => {
+  const handleDelete = async (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
-    deleteCourse(id);
-    setCourses(getCourses());
+    if (sessionMode === 'dev') {
+      deleteLocalCourse(id);
+      setCourses(getCourses());
+    } else if (sessionId) {
+      try {
+        await fetch(`/api/sessions/${sessionId}/courses/${id}`, { method: 'DELETE' });
+        setCourses((prev) => prev.filter((c) => c.id !== id));
+      } catch { /* ignore */ }
+    }
   };
 
   const formatDate = (dateStr: string) => {
@@ -102,7 +130,11 @@ export default function CourseManager({
             </>
           ) : (
             <>
-              {courses.length === 0 ? (
+              {loading ? (
+                <div className="review-empty">
+                  <p>⏳ 불러오는 중...</p>
+                </div>
+              ) : courses.length === 0 ? (
                 <div className="review-empty">
                   <p>저장된 코스가 없습니다</p>
                 </div>

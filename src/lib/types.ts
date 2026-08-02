@@ -224,3 +224,41 @@ export interface AIRecommendResult {
   events: RegionEvent[];
   summary: string;
 }
+
+/* ---- Session / Collaboration ---- */
+export type SessionMode = 'dev' | 'personal' | 'invite';
+
+export interface Session {
+  id: string;
+  inviteCode: string;
+  ownerName: string;
+  createdAt: string;
+  expiresAt: string;
+  isPersonal: boolean;
+  members: SessionMember[];
+}
+
+export interface SessionMember {
+  id: string;
+  sessionId: string;
+  nickname: string;
+  joinedAt: string;
+  isOwner: boolean;
+  isOnline?: boolean;
+}
+
+export type SSEEventType =
+  | 'place_added'
+  | 'place_removed'
+  | 'places_reordered'
+  | 'course_saved'
+  | 'course_deleted'
+  | 'member_joined'
+  | 'connected';
+
+export interface SSEEvent {
+  type: SSEEventType;
+  data: unknown;
+  timestamp: string;
+  sender: string; // nickname of whoever triggered
+}

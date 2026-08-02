@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import Header from '@/components/Header';
 import SearchPanel from '@/components/SearchPanel';
 import AIRecommendPanel from '@/components/AIRecommendPanel';
@@ -8,29 +8,34 @@ import CourseBuilder from '@/components/CourseBuilder';
 import NaverMap from '@/components/NaverMap';
 import ReviewPanel from '@/components/ReviewPanel';
 import CourseManager from '@/components/CourseManager';
+import SessionModeSelector from '@/components/SessionModeSelector';
+import SessionBar from '@/components/SessionBar';
 import {
   Place,
   CoursePlace,
   Course,
   DirectionResult,
-  TransitMode
+  TransitMode,
+  SessionMode,
+  SessionMember,
 } from '@/lib/types';
 import {
-  saveCourse,
+  saveCourse as saveLocalCourse,
   generateCourseId,
   encodeCourseToUrl,
   decodeCourseFromUrl,
 } from '@/lib/courseStorage';
 import { katechToWgs84, getStraightLineDistance } from '@/lib/utils';
+import { useSessionSync } from '@/lib/useSessionSync';
 
 export default function HomePage() {
   const [activeTab, setActiveTab] = useState<'search' | 'ai' | 'route'>('search');
   const [coursePlaces, setCoursePlaces] = useState<CoursePlace[]>([]);
-  
+
   // Directions state
   const [directions, setDirections] = useState<DirectionResult | null>(null);
   const [routePath, setRoutePath] = useState<Array<[number, number]> | null>(null);
-  
+
   // Route features state
   const [isRouteCreated, setIsRouteCreated] = useState(false);
   const [transitMode, setTransitMode] = useState<TransitMode>('driving');
@@ -39,6 +44,89 @@ export default function HomePage() {
   const [reviewPlace, setReviewPlace] = useState<string | null>(null);
   const [showManager, setShowManager] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+
+  // Session state
+  const [sessionMode, setSessionMode] = useState<SessionMode | null>(null); // null = not yet decided
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [inviteCode, setInviteCode] = useState<string | null>(null);
+  const [nickname, setNickname] = useState<string>('');
+  const [memberId, setMemberId] = useState<string | null>(null);
+  const [members, setMembers] = useState<SessionMember[]>([]);
+  const [isOwner, setIsOwner] = useState(false);
+  const [isLocalhost, setIsLocalhost] = useState(false);
+  const [pendingInviteCode, setPendingInviteCode] = useState<string | null>(null);
+
+  // Skip SSE updates that were triggered by this client
+  const skipNextSSERef = useRef(false);
+
+  // Detect localhost and check for invite parameter
+  useEffect(() => {
+    const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    setIsLocalhost(isLocal);
+
+    // Check for invite code in URL
+    const params = new URLSearchParams(window.location.search);
+    const invite = params.get('invite');
+    if (invite) {
+      setPendingInviteCode(invite.toUpperCase());
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+
+    // Check for old-style shared URL
+    const shared = params.get('shared');
+    if (shared) {
+      const decoded = decodeCourseFromUrl(shared);
+      if (decoded) {
+        setCoursePlaces(decoded.places);
+        setActiveTab('route');
+        setSessionMode('dev'); // Load shared course in dev mode
+        showToastMsg(`"${decoded.name}" 공유 코스를 불러왔습니다!`);
+        window.history.replaceState({}, '', window.location.pathname);
+        return;
+      }
+    }
+
+    // Try to restore persisted session
+    try {
+      const raw = localStorage.getItem('datingroute_session');
+      if (raw) {
+        const persisted = JSON.parse(raw);
+        if (persisted.mode && persisted.sessionId) {
+          // Validate session still exists
+          fetch(`/api/sessions/${persisted.sessionId}`)
+            .then((res) => {
+              if (!res.ok) throw new Error('expired');
+              return res.json();
+            })
+            .then((data) => {
+              setSessionMode(persisted.mode);
+              setSessionId(persisted.sessionId);
+              setInviteCode(persisted.inviteCode);
+              setNickname(persisted.nickname);
+              setMemberId(persisted.memberId);
+              setIsOwner(persisted.isOwner);
+              setMembers(data.session.members || []);
+
+              // Load live places
+              if (data.livePlaces && data.livePlaces.length > 0) {
+                setCoursePlaces(data.livePlaces);
+              }
+            })
+            .catch(() => {
+              localStorage.removeItem('datingroute_session');
+              // Session expired, show mode selector
+            });
+          return;
+        }
+      }
+    } catch { /* ignore */ }
+
+    // If invite code in URL, show join flow
+    if (invite) {
+      // Will be handled by SessionModeSelector
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Initialize Kakao SDK
   useEffect(() => {
@@ -52,25 +140,158 @@ export default function HomePage() {
     }
   }, []);
 
-  const showToast = useCallback((msg: string) => {
+  // ──── SSE Real-time Sync ────
+  const { isConnected } = useSessionSync({
+    sessionId,
+    enabled: sessionMode === 'invite' && !!sessionId,
+    onPlaceAdded: (_place, allPlaces) => {
+      if (skipNextSSERef.current) {
+        skipNextSSERef.current = false;
+        return;
+      }
+      if (allPlaces) setCoursePlaces(allPlaces);
+    },
+    onPlaceRemoved: (_placeId, allPlaces) => {
+      if (skipNextSSERef.current) {
+        skipNextSSERef.current = false;
+        return;
+      }
+      if (allPlaces) {
+        setCoursePlaces(allPlaces);
+        setIsRouteCreated(false);
+      }
+    },
+    onPlacesReordered: (allPlaces) => {
+      if (skipNextSSERef.current) {
+        skipNextSSERef.current = false;
+        return;
+      }
+      if (allPlaces) {
+        setCoursePlaces(allPlaces);
+        setIsRouteCreated(false);
+      }
+    },
+    onMemberJoined: (member) => {
+      setMembers((prev) => {
+        if (prev.find((m) => m.id === member.id)) return prev;
+        return [...prev, member];
+      });
+      showToastMsg(`🎉 ${member.nickname}님이 참여했습니다!`);
+    },
+  });
+
+  // ──── Helper ────
+  const showToastMsg = useCallback((msg: string) => {
     setToast(msg);
     setTimeout(() => setToast(null), 2500);
   }, []);
 
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const shared = params.get('shared');
-    if (shared) {
-      const decoded = decodeCourseFromUrl(shared);
-      if (decoded) {
-        setCoursePlaces(decoded.places);
-        setActiveTab('route');
-        showToast(`"${decoded.name}" 공유 코스를 불러왔습니다!`);
-        window.history.replaceState({}, '', window.location.pathname);
-      }
-    }
-  }, [showToast]);
+  const persistSessionData = useCallback((data: {
+    mode: SessionMode; sessionId: string; inviteCode: string;
+    nickname: string; memberId: string; isOwner: boolean;
+  }) => {
+    try {
+      localStorage.setItem('datingroute_session', JSON.stringify(data));
+    } catch { /* ignore */ }
+  }, []);
 
+  // ──── Session Actions ────
+  const handleCreateSession = useCallback(async (ownerName: string, isPersonal: boolean) => {
+    const res = await fetch('/api/sessions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ownerName, isPersonal }),
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || '세션 생성 실패');
+    }
+    const data = await res.json();
+    const mode: SessionMode = isPersonal ? 'personal' : 'invite';
+
+    setSessionMode(mode);
+    setSessionId(data.session.id);
+    setInviteCode(data.session.inviteCode);
+    setNickname(ownerName);
+    setMemberId(data.memberId);
+    setMembers(data.session.members);
+    setIsOwner(true);
+
+    persistSessionData({
+      mode,
+      sessionId: data.session.id,
+      inviteCode: data.session.inviteCode,
+      nickname: ownerName,
+      memberId: data.memberId,
+      isOwner: true,
+    });
+
+    if (!isPersonal) {
+      showToastMsg(`✨ 초대코드: ${data.session.inviteCode}`);
+    }
+  }, [persistSessionData, showToastMsg]);
+
+  const handleJoinSession = useCallback(async (code: string, nick: string) => {
+    const res = await fetch('/api/sessions/join', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ inviteCode: code, nickname: nick }),
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || '세션 참여 실패');
+    }
+    const data = await res.json();
+
+    setSessionMode('invite');
+    setSessionId(data.session.id);
+    setInviteCode(data.session.inviteCode);
+    setNickname(nick);
+    setMemberId(data.memberId);
+    setMembers(data.session.members);
+    setIsOwner(false);
+    setPendingInviteCode(null);
+
+    persistSessionData({
+      mode: 'invite',
+      sessionId: data.session.id,
+      inviteCode: data.session.inviteCode,
+      nickname: nick,
+      memberId: data.memberId,
+      isOwner: false,
+    });
+
+    // Load live places from session
+    try {
+      const placesRes = await fetch(`/api/sessions/${data.session.id}/places`);
+      if (placesRes.ok) {
+        const placesData = await placesRes.json();
+        if (placesData.places?.length > 0) {
+          setCoursePlaces(placesData.places);
+          setActiveTab('route');
+        }
+      }
+    } catch { /* ignore */ }
+
+    showToastMsg(`🎉 세션에 참여했습니다!`);
+  }, [persistSessionData, showToastMsg]);
+
+  const handleDisconnect = useCallback(() => {
+    setSessionMode(null);
+    setSessionId(null);
+    setInviteCode(null);
+    setNickname('');
+    setMemberId(null);
+    setMembers([]);
+    setIsOwner(false);
+    setCoursePlaces([]);
+    setDirections(null);
+    setRoutePath(null);
+    setIsRouteCreated(false);
+    localStorage.removeItem('datingroute_session');
+  }, []);
+
+  // ──── Directions ────
   const fetchDirections = useCallback(async (places: CoursePlace[]) => {
     if (places.length < 2) {
       setDirections(null);
@@ -93,29 +314,22 @@ export default function HomePage() {
 
       const res = await fetch(url);
       const data = await res.json();
-      
-      if (!res.ok || data.error) {
-        throw new Error(data.error || 'API Error');
-      }
+
+      if (!res.ok || data.error) throw new Error(data.error || 'API Error');
 
       if (data._fullPath && data._fullPath.length > 0) {
-        const fullPath: Array<[number, number]> = data._fullPath;
-        const parsedLegs = data._parsedLegs || [];
-        const totalDistance = data._totalDistance || 0;
-        const totalDuration = data._totalDuration || 0;
-
         setDirections({
-          totalDistance,
-          totalDuration,
-          legs: parsedLegs,
-          fullPath,
+          totalDistance: data._totalDistance || 0,
+          totalDuration: data._totalDuration || 0,
+          legs: data._parsedLegs || [],
+          fullPath: data._fullPath,
         });
-        setRoutePath(fullPath);
+        setRoutePath(data._fullPath);
       } else {
         throw new Error('No path data');
       }
     } catch {
-      // Fallback: Calculate straight-line distance if API fails
+      // Fallback: straight-line distance
       let totalDistMeters = 0;
       const fullPath: Array<[number, number]> = [];
       const coords = places.map((p) => {
@@ -126,47 +340,31 @@ export default function HomePage() {
 
       const fallbackLegs = [];
       for (let i = 0; i < coords.length - 1; i++) {
-        const dist = getStraightLineDistance(
-          coords[i].lat,
-          coords[i].lng,
-          coords[i+1].lat,
-          coords[i+1].lng
-        );
+        const dist = getStraightLineDistance(coords[i].lat, coords[i].lng, coords[i + 1].lat, coords[i + 1].lng);
         totalDistMeters += dist;
-        fallbackLegs.push({
-          index: i,
-          distance: dist,
-          duration: (dist / 40000) * 3600000, // ~40km/h estimate for driving
-          name: '',
-        });
+        fallbackLegs.push({ index: i, distance: dist, duration: (dist / 40000) * 3600000, name: '' });
       }
-      
-      setDirections({
-        totalDistance: totalDistMeters,
-        totalDuration: (totalDistMeters / 40000) * 3600000,
-        legs: fallbackLegs,
-        fullPath,
-      });
+
+      setDirections({ totalDistance: totalDistMeters, totalDuration: (totalDistMeters / 40000) * 3600000, legs: fallbackLegs, fullPath });
       setRoutePath(fullPath);
     }
   }, []);
 
   const handleCreateRoute = useCallback(() => {
     if (coursePlaces.length < 2) {
-      showToast('경로를 만들려면 장소가 2개 이상 필요합니다.');
+      showToastMsg('경로를 만들려면 장소가 2개 이상 필요합니다.');
       return;
     }
     fetchDirections(coursePlaces);
     setIsRouteCreated(true);
-  }, [coursePlaces, fetchDirections, showToast]);
+  }, [coursePlaces, fetchDirections, showToastMsg]);
 
+  // ──── Place Actions (with server sync) ────
   const handleAddPlace = useCallback(
-    (place: Place) => {
-      const alreadyExists = coursePlaces.some(
-        (p) => p.title === place.title
-      );
+    async (place: Place) => {
+      const alreadyExists = coursePlaces.some((p) => p.title === place.title);
       if (alreadyExists) {
-        showToast('이미 코스에 추가된 장소입니다');
+        showToastMsg('이미 코스에 추가된 장소입니다');
         return;
       }
 
@@ -179,117 +377,234 @@ export default function HomePage() {
 
       const updated = [...coursePlaces, coursePlace];
       setCoursePlaces(updated);
-      setIsRouteCreated(false); // Reset route when adding
-      showToast(`"${place.title.replace(/<[^>]+>/g, '')}" 추가됨`);
+      setIsRouteCreated(false);
+      showToastMsg(`"${place.title.replace(/<[^>]+>/g, '')}" 추가됨`);
+
+      // Sync to server
+      if (sessionMode && sessionMode !== 'dev' && sessionId) {
+        skipNextSSERef.current = true;
+        try {
+          await fetch(`/api/sessions/${sessionId}/places`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ place: coursePlace, addedBy: nickname }),
+          });
+        } catch { /* ignore */ }
+      }
     },
-    [coursePlaces, showToast]
+    [coursePlaces, showToastMsg, sessionMode, sessionId, nickname]
   );
 
   const handleRemovePlace = useCallback(
-    (id: string) => {
-      const updated = coursePlaces
-        .filter((p) => p.id !== id)
-        .map((p, i) => ({ ...p, order: i }));
+    async (id: string) => {
+      const updated = coursePlaces.filter((p) => p.id !== id).map((p, i) => ({ ...p, order: i }));
       setCoursePlaces(updated);
       setIsRouteCreated(false);
+
+      // Sync to server
+      if (sessionMode && sessionMode !== 'dev' && sessionId) {
+        skipNextSSERef.current = true;
+        try {
+          await fetch(`/api/sessions/${sessionId}/places?placeId=${id}&sender=${encodeURIComponent(nickname)}`, {
+            method: 'DELETE',
+          });
+        } catch { /* ignore */ }
+      }
     },
-    [coursePlaces]
+    [coursePlaces, sessionMode, sessionId, nickname]
   );
 
   const handleReorderPlaces = useCallback(
-    (newPlaces: CoursePlace[]) => {
+    async (newPlaces: CoursePlace[]) => {
       setCoursePlaces(newPlaces);
       if (isRouteCreated) {
         setIsRouteCreated(false);
         setRoutePath(null);
         setDirections(null);
       }
+
+      // Sync to server
+      if (sessionMode && sessionMode !== 'dev' && sessionId) {
+        skipNextSSERef.current = true;
+        try {
+          await fetch(`/api/sessions/${sessionId}/places`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'set',
+              places: newPlaces,
+              sender: nickname,
+            }),
+          });
+        } catch { /* ignore */ }
+      }
     },
-    [isRouteCreated]
+    [isRouteCreated, sessionMode, sessionId, nickname]
   );
 
+  // ──── Course Save/Load ────
   const handleSaveCourse = useCallback(
-    (name: string, description: string) => {
-      const course: Course = {
-        id: generateCourseId(),
-        name,
-        description,
-        places: coursePlaces,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-      saveCourse(course);
-      showToast(`"${name}" 저장되었습니다!`);
+    async (name: string, description: string) => {
+      if (sessionMode === 'dev') {
+        const course: Course = {
+          id: generateCourseId(),
+          name, description,
+          places: coursePlaces,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+        saveLocalCourse(course);
+      } else if (sessionId) {
+        try {
+          await fetch(`/api/sessions/${sessionId}/courses`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, description, places: coursePlaces, addedBy: nickname }),
+          });
+        } catch { /* ignore */ }
+      }
+      showToastMsg(`"${name}" 저장되었습니다!`);
     },
-    [coursePlaces, showToast]
+    [coursePlaces, showToastMsg, sessionMode, sessionId, nickname]
   );
 
   const handleLoadCourse = useCallback(
-    (course: Course) => {
+    async (course: Course) => {
       setCoursePlaces(course.places);
       setActiveTab('route');
       const hasRoute = course.places.length >= 2;
       setIsRouteCreated(hasRoute);
-      if (hasRoute) {
-        fetchDirections(course.places);
+      if (hasRoute) fetchDirections(course.places);
+
+      // Sync loaded course to live places
+      if (sessionMode && sessionMode !== 'dev' && sessionId) {
+        skipNextSSERef.current = true;
+        try {
+          await fetch(`/api/sessions/${sessionId}/places`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'set', places: course.places, sender: nickname }),
+          });
+        } catch { /* ignore */ }
       }
-      showToast(`"${course.name}" 불러왔습니다`);
+
+      showToastMsg(`"${course.name}" 불러왔습니다`);
     },
-    [showToast, fetchDirections]
+    [showToastMsg, fetchDirections, sessionMode, sessionId, nickname]
   );
 
+  // ──── Share ────
   const handleShareCourseUrl = useCallback(() => {
     if (coursePlaces.length === 0) return;
-    const course: Course = {
-      id: '', name: '공유 코스', description: '', places: coursePlaces, createdAt: '', updatedAt: '',
-    };
-    const url = encodeCourseToUrl(course);
-    navigator.clipboard.writeText(url).then(() => {
-      showToast('공유 링크가 클립보드에 복사되었습니다!');
-    });
-  }, [coursePlaces, showToast]);
+
+    if (sessionMode === 'invite' && inviteCode) {
+      // Share via invite link
+      const url = `${window.location.origin}?invite=${inviteCode}`;
+      navigator.clipboard.writeText(url).then(() => {
+        showToastMsg('초대 링크가 클립보드에 복사되었습니다!');
+      });
+    } else {
+      // Legacy URL share
+      const course: Course = {
+        id: '', name: '공유 코스', description: '', places: coursePlaces, createdAt: '', updatedAt: '',
+      };
+      const url = encodeCourseToUrl(course);
+      navigator.clipboard.writeText(url).then(() => {
+        showToastMsg('공유 링크가 클립보드에 복사되었습니다!');
+      });
+    }
+  }, [coursePlaces, showToastMsg, sessionMode, inviteCode]);
 
   const handleShareKakao = useCallback(() => {
     if (coursePlaces.length === 0) return;
     if (!window.Kakao || !window.Kakao.isInitialized()) {
-      showToast('카카오톡 공유가 설정되지 않았습니다. API 키를 확인해주세요.');
+      showToastMsg('카카오톡 공유가 설정되지 않았습니다. API 키를 확인해주세요.');
       return;
     }
-    
-    const course: Course = {
-      id: '', name: '우리의 데이트 코스 💖', description: '제가 짠 데이트 코스 어때요?', places: coursePlaces, createdAt: '', updatedAt: '',
-    };
-    const url = encodeCourseToUrl(course);
+
+    let url: string;
+    if (sessionMode === 'invite' && inviteCode) {
+      url = `${window.location.origin}?invite=${inviteCode}`;
+    } else {
+      const course: Course = {
+        id: '', name: '우리의 데이트 코스 💖', description: '', places: coursePlaces, createdAt: '', updatedAt: '',
+      };
+      url = encodeCourseToUrl(course);
+    }
 
     window.Kakao.Share.sendDefault({
       objectType: 'feed',
       content: {
         title: 'DatingRoute - 데이트 코스 제안',
-        description: coursePlaces.map(p => p.title.replace(/<[^>]+>/g, '')).join(' ➔ '),
+        description: coursePlaces.map((p) => p.title.replace(/<[^>]+>/g, '')).join(' ➔ '),
         imageUrl: 'https://cdn-icons-png.flaticon.com/512/3238/3238002.png',
-        link: {
-          mobileWebUrl: url,
-          webUrl: url,
-        },
+        link: { mobileWebUrl: url, webUrl: url },
       },
-      buttons: [
-        {
-          title: '코스 확인하기',
-          link: {
-            mobileWebUrl: url,
-            webUrl: url,
-          },
-        },
-      ],
+      buttons: [{ title: '코스 확인하기', link: { mobileWebUrl: url, webUrl: url } }],
     });
-  }, [coursePlaces, showToast]);
+  }, [coursePlaces, showToastMsg, sessionMode, inviteCode]);
 
+  const handleCopyInviteCode = useCallback(() => {
+    if (inviteCode) {
+      navigator.clipboard.writeText(inviteCode).then(() => {
+        showToastMsg(`초대코드 "${inviteCode}" 복사됨!`);
+      });
+    }
+  }, [inviteCode, showToastMsg]);
+
+  const handleCopyInviteLink = useCallback(() => {
+    if (inviteCode) {
+      const url = `${window.location.origin}?invite=${inviteCode}`;
+      navigator.clipboard.writeText(url).then(() => {
+        showToastMsg('초대 링크가 복사되었습니다!');
+      });
+    }
+  }, [inviteCode, showToastMsg]);
+
+  // ──── Render: Mode Selection ────
+  if (sessionMode === null) {
+    return (
+      <SessionModeSelector
+        isLocalhost={isLocalhost}
+        initialInviteCode={pendingInviteCode}
+        onSelectPersonal={async (nick) => {
+          await handleCreateSession(nick, true);
+        }}
+        onSelectInvite={async (nick) => {
+          await handleCreateSession(nick, false);
+        }}
+        onSelectDev={() => {
+          setSessionMode('dev');
+        }}
+        onJoinInvite={async (code, nick) => {
+          await handleJoinSession(code, nick);
+        }}
+      />
+    );
+  }
+
+  // ──── Render: Main App ────
   return (
     <div className="app-layout">
       <Header
         onOpenManager={() => setShowManager(true)}
         courseCount={coursePlaces.length}
+        sessionMode={sessionMode}
       />
+
+      {/* Session Bar */}
+      {sessionMode !== 'dev' && (
+        <SessionBar
+          mode={sessionMode}
+          inviteCode={inviteCode}
+          nickname={nickname}
+          members={members}
+          isConnected={isConnected}
+          onCopyInviteCode={handleCopyInviteCode}
+          onCopyInviteLink={handleCopyInviteLink}
+          onDisconnect={handleDisconnect}
+        />
+      )}
 
       <div className="app-main">
         <aside className="sidebar">
@@ -372,6 +687,8 @@ export default function HomePage() {
           onLoadCourse={handleLoadCourse}
           onSaveCourse={handleSaveCourse}
           hasPlaces={coursePlaces.length > 0}
+          sessionMode={sessionMode}
+          sessionId={sessionId}
         />
       )}
 

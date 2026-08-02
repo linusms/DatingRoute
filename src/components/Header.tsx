@@ -1,13 +1,15 @@
 'use client';
 
 import React, { useState } from 'react';
+import type { SessionMode } from '@/lib/types';
 
 interface HeaderProps {
   onOpenManager: () => void;
   courseCount: number;
+  sessionMode: SessionMode;
 }
 
-export default function Header({ onOpenManager, courseCount }: HeaderProps) {
+export default function Header({ onOpenManager, courseCount, sessionMode }: HeaderProps) {
   const [isShuttingDown, setIsShuttingDown] = useState(false);
 
   const handleShutdown = async () => {
@@ -53,23 +55,27 @@ export default function Header({ onOpenManager, courseCount }: HeaderProps) {
         }}>
           📂 저장된 코스
         </button>
-        <button 
-          onClick={handleShutdown} 
-          disabled={isShuttingDown}
-          title="로컬 서버를 끄고 메모리(RAM)를 회수합니다"
-          style={{
-            background: isShuttingDown ? 'rgba(100,100,100,0.3)' : 'rgba(239,68,68,0.15)', 
-            color: isShuttingDown ? '#aaa' : '#ef4444', 
-            border: isShuttingDown ? '1px solid #555' : '1px solid rgba(239,68,68,0.4)',
-            padding: '8px 16px', borderRadius: '8px', fontWeight: 700, 
-            display: 'flex', alignItems: 'center', gap: '6px', 
-            cursor: isShuttingDown ? 'not-allowed' : 'pointer',
-            transition: 'all 0.2s ease',
-            boxShadow: isShuttingDown ? 'none' : '0 0 10px rgba(239,68,68,0.2)'
-          }}
-        >
-          {isShuttingDown ? '⏹️ 종료 중...' : '🛑 서버 종료'}
-        </button>
+
+        {/* Show shutdown button only in dev mode (localhost) */}
+        {sessionMode === 'dev' && (
+          <button 
+            onClick={handleShutdown} 
+            disabled={isShuttingDown}
+            title="로컬 서버를 끄고 메모리(RAM)를 회수합니다"
+            style={{
+              background: isShuttingDown ? 'rgba(100,100,100,0.3)' : 'rgba(239,68,68,0.15)', 
+              color: isShuttingDown ? '#aaa' : '#ef4444', 
+              border: isShuttingDown ? '1px solid #555' : '1px solid rgba(239,68,68,0.4)',
+              padding: '8px 16px', borderRadius: '8px', fontWeight: 700, 
+              display: 'flex', alignItems: 'center', gap: '6px', 
+              cursor: isShuttingDown ? 'not-allowed' : 'pointer',
+              transition: 'all 0.2s ease',
+              boxShadow: isShuttingDown ? 'none' : '0 0 10px rgba(239,68,68,0.2)'
+            }}
+          >
+            {isShuttingDown ? '⏹️ 종료 중...' : '🛑 서버 종료'}
+          </button>
+        )}
       </div>
     </header>
   );
