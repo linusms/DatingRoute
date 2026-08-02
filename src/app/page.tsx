@@ -209,12 +209,14 @@ export default function HomePage() {
       }
       if (allPlaces) {
         setCoursePlaces(allPlaces);
+        setIsRouteCreated(false);
       } else if (_place) {
         setCoursePlaces(prev => {
           const exists = prev.find(p => p.id === _place.id);
           if (exists) return prev;
           return [...prev, _place].sort((a, b) => a.order - b.order);
         });
+        setIsRouteCreated(false);
       }
     },
     onPlaceRemoved: (_placeId, allPlaces) => {
