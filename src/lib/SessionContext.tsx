@@ -17,7 +17,7 @@ interface SessionState {
 }
 
 interface SessionActions {
-  createSession: (ownerName: string, isPersonal: boolean) => Promise<Session>;
+  createSession: (ownerName: string, isPersonal: boolean, password?: string) => Promise<Session>;
   joinSession: (inviteCode: string, nickname: string) => Promise<Session>;
   setDevMode: () => void;
   disconnect: () => void;
@@ -115,11 +115,11 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const handleCreateSession = useCallback(
-    async (ownerName: string, isPersonal: boolean): Promise<Session> => {
+    async (ownerName: string, isPersonal: boolean, password?: string): Promise<Session> => {
       const res = await fetch('/api/sessions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ownerName, isPersonal }),
+        body: JSON.stringify({ ownerName, isPersonal, password }),
       });
 
       if (!res.ok) {

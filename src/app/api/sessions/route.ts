@@ -1,20 +1,54 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createSession, getSessionById } from '@/lib/db';
+import { createSession, getSessionById, getPersonalSessionByNameAndPassword } from '@/lib/db';
+import { supabase } from '@/lib/supabaseClient';
 
 // POST /api/sessions — Create a new session
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { ownerName, isPersonal, expiresInDays } = body;
+    const { ownerName, isPersonal, expiresInDays, password } = body;
 
     if (!ownerName || typeof ownerName !== 'string' || ownerName.trim().length === 0) {
       return NextResponse.json({ error: '닉네임을 입력해주세요.' }, { status: 400 });
     }
 
+    const trimmedName = ownerName.trim();
+
+    if (isPersonal) {
+      if (!password || typeof password !== 'string' || password.trim().length === 0) {
+        return NextResponse.json({ error: '비밀번호를 입력해주세요.' }, { status: 400 });
+      }
+
+      // Check if an account (personal session) already exists for this username
+      const { data: existingUser } = await supabase
+        .from('sessions')
+        .select('id')
+        .eq('owner_name', trimmedName)
+        .eq('is_personal', true)
+        .limit(1)
+        .maybeSingle();
+
+      if (existingUser) {
+        // User exists, try to login
+        const session = await getPersonalSessionByNameAndPassword(trimmedName, password);
+        if (session) {
+          const memberId = session.members.find((m) => m.isOwner)?.id || session.members[0]?.id;
+          return NextResponse.json({
+            session,
+            memberId,
+          }, { status: 200 });
+        } else {
+          return NextResponse.json({ error: '비밀번호가 일치하지 않습니다.' }, { status: 401 });
+        }
+      }
+    }
+
+    // If no existing user, or if invite mode, create new
     const result = await createSession(
-      ownerName.trim(),
+      trimmedName,
       !!isPersonal,
-      expiresInDays ?? 30
+      expiresInDays ?? 30,
+      password
     );
 
     return NextResponse.json({

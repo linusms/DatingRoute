@@ -246,11 +246,11 @@ export default function HomePage() {
   }, []);
 
   // ──── Session Actions ────
-  const handleCreateSession = useCallback(async (ownerName: string, isPersonal: boolean) => {
+  const handleCreateSession = useCallback(async (ownerName: string, isPersonal: boolean, password?: string) => {
     const res = await fetch('/api/sessions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ownerName, isPersonal }),
+      body: JSON.stringify({ ownerName, isPersonal, password }),
     });
     if (!res.ok) {
       const err = await res.json();
@@ -617,18 +617,12 @@ export default function HomePage() {
       <SessionModeSelector
         isLocalhost={isLocalhost}
         initialInviteCode={pendingInviteCode}
-        onSelectPersonal={async (nick) => {
-          await handleCreateSession(nick, true);
-        }}
-        onSelectInvite={async (nick) => {
-          await handleCreateSession(nick, false);
-        }}
+        onSelectPersonal={(nickname, password) => handleCreateSession(nickname, true, password)}
+        onSelectInvite={(nickname) => handleCreateSession(nickname, false)}
         onSelectDev={() => {
           setSessionMode('dev');
         }}
-        onJoinInvite={async (code, nick) => {
-          await handleJoinSession(code, nick);
-        }}
+        onJoinInvite={handleJoinSession}
       />
     );
   }

@@ -4,6 +4,13 @@ import type { Course, CoursePlace, Session, SessionMember } from './types';
 
 import { supabase } from './supabaseClient';
 
+async function hashPassword(password: string): Promise<string> {
+  const msgUint8 = new TextEncoder().encode(password);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', msgUint8);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
 // Helper function to generate invite code
 function generateInviteCode(): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no I/O/0/1 for clarity
@@ -32,7 +39,8 @@ async function generateUniqueInviteCode(): Promise<string> {
 export async function createSession(
   ownerName: string,
   isPersonal: boolean,
-  expiresInDays: number = 30
+  expiresInDays: number = 30,
+  password?: string
 ): Promise<{ session: Session; memberId: string }> {
   const sessionId = uuidv4();
   const memberId = uuidv4();
@@ -40,11 +48,17 @@ export async function createSession(
   const now = new Date().toISOString();
   const expiresAt = new Date(Date.now() + expiresInDays * 24 * 60 * 60 * 1000).toISOString();
 
+  let hashedPassword = null;
+  if (isPersonal && password) {
+    hashedPassword = await hashPassword(password);
+  }
+
   // Insert session
   await supabase.from('sessions').insert({
     id: sessionId,
     invite_code: inviteCode,
     owner_name: ownerName,
+    password: hashedPassword,
     created_at: now,
     expires_at: expiresAt,
     is_personal: isPersonal
@@ -136,6 +150,35 @@ export async function getSessionMembers(sessionId: string): Promise<SessionMembe
     joinedAt: r.joined_at,
     isOwner: r.is_owner,
   }));
+}
+
+export async function getPersonalSessionByNameAndPassword(ownerName: string, password: string): Promise<Session | null> {
+  const hashedPassword = await hashPassword(password);
+  
+  const { data: row } = await supabase
+    .from('sessions')
+    .select('*')
+    .eq('owner_name', ownerName)
+    .eq('password', hashedPassword)
+    .eq('is_personal', true)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (!row) return null;
+  
+  if (new Date(row.expires_at) < new Date()) return null;
+
+  const members = await getSessionMembers(row.id);
+  return {
+    id: row.id,
+    inviteCode: row.invite_code,
+    ownerName: row.owner_name,
+    createdAt: row.created_at,
+    expiresAt: row.expires_at,
+    isPersonal: row.is_personal,
+    members,
+  };
 }
 
 export async function joinSession(sessionId: string, nickname: string): Promise<SessionMember> {

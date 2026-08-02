@@ -5,6 +5,7 @@ CREATE TABLE sessions (
   id TEXT PRIMARY KEY,
   invite_code TEXT UNIQUE NOT NULL,
   owner_name TEXT NOT NULL DEFAULT '',
+  password TEXT, -- 개인 모드용 비밀번호 해시
   created_at TIMESTAMPTZ NOT NULL,
   expires_at TIMESTAMPTZ NOT NULL,
   is_personal BOOLEAN NOT NULL DEFAULT FALSE

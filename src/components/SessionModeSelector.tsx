@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 
 interface SessionModeSelectorProps {
-  onSelectPersonal: (nickname: string) => void;
+  onSelectPersonal: (nickname: string, password?: string) => void;
   onSelectInvite: (nickname: string) => void;
   onSelectDev: () => void;
   isLocalhost: boolean;
@@ -24,6 +24,7 @@ export default function SessionModeSelector({
   );
   const [selectedMode, setSelectedMode] = useState<'personal' | 'invite' | null>(null);
   const [nickname, setNickname] = useState('');
+  const [password, setPassword] = useState('');
   const [inviteCode, setInviteCode] = useState(initialInviteCode || '');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -43,7 +44,12 @@ export default function SessionModeSelector({
     setError('');
     try {
       if (selectedMode === 'personal') {
-        await onSelectPersonal(nickname.trim());
+        if (!password.trim()) {
+          setError('비밀번호를 입력해주세요!');
+          setLoading(false);
+          return;
+        }
+        await onSelectPersonal(nickname.trim(), password.trim());
       } else {
         await onSelectInvite(nickname.trim());
       }
@@ -154,26 +160,53 @@ export default function SessionModeSelector({
             </p>
 
             <div className="session-mode-input-group">
-              <label>닉네임</label>
+              <label>{selectedMode === 'personal' ? '아이디 (닉네임)' : '닉네임'}</label>
               <input
                 className="session-mode-input"
-                placeholder="예: 민서기 💕"
+                placeholder={selectedMode === 'personal' ? "예: minseok" : "예: 민서기 💕"}
                 value={nickname}
                 onChange={(e) => setNickname(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleNicknameSubmit()}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    if (selectedMode === 'personal') {
+                      document.getElementById('session-password-input')?.focus();
+                    } else {
+                      handleNicknameSubmit();
+                    }
+                  }
+                }}
                 maxLength={20}
                 autoFocus
               />
             </div>
 
-            {error && <div className="session-mode-error">{error}</div>}
+            {selectedMode === 'personal' && (
+              <div className="session-mode-input-group" style={{ marginTop: '1rem' }}>
+                <label>비밀번호</label>
+                <input
+                  id="session-password-input"
+                  className="session-mode-input"
+                  type="password"
+                  placeholder="비밀번호를 입력하세요"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleNicknameSubmit()}
+                />
+                <p style={{ fontSize: '0.8rem', color: 'var(--color-text-secondary)', marginTop: '0.5rem', textAlign: 'left' }}>
+                  처음이라면 입력한 정보로 자동 가입됩니다.
+                </p>
+              </div>
+            )}
+
+            {error && <div className="session-mode-error" style={{ marginTop: '1rem' }}>{error}</div>}
 
             <button
               className="session-mode-submit"
+              style={{ marginTop: '1.5rem' }}
               onClick={handleNicknameSubmit}
-              disabled={loading || !nickname.trim()}
+              disabled={loading || !nickname.trim() || (selectedMode === 'personal' && !password.trim())}
             >
-              {loading ? '⏳ 생성 중...' : '✨ 시작하기'}
+              {loading ? '⏳ 처리 중...' : '✨ 시작하기'}
             </button>
           </div>
         )}

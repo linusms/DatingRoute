@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server';
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import { katechToWgs84, getStraightLineDistance } from '@/lib/utils';
 
 export async function POST(request: NextRequest) {
   const encoder = new TextEncoder();
@@ -134,18 +135,26 @@ export async function POST(request: NextRequest) {
         const blogData: Record<string, any[]> = {};
         const ytData: Record<string, any[]> = {};
 
-        const searchTargets = places.length > 0
-          ? places.slice(0, 4).map((p: any) => (p.title || '').replace(/<[^>]+>/g, ''))
+        const regionNames = Array.from(regions).filter(r => r.includes(' ')).map(r => r.split(' ')[1]) || [];
+        if (regionNames.length === 0 && regions.size > 0) {
+          regionNames.push(...Array.from(regions));
+        }
+        
+        // Remove duplicates
+        const uniqueRegions = Array.from(new Set(regionNames));
+
+        const searchTargets = uniqueRegions.length > 0
+          ? uniqueRegions.slice(0, 2).flatMap((r) => [`${r} 팝업스토어`, `${r} 핫플 데이트`])
           : ['서울 데이트 팝업스토어', '성수 데이트 핫플', '홍대 데이트 코스'];
 
-        const ytTargets = places.length > 0
-          ? places.slice(0, 3).map((p: any) => (p.title || '').replace(/<[^>]+>/g, ''))
+        const ytTargets = uniqueRegions.length > 0
+          ? uniqueRegions.slice(0, 2).map((r) => `${r} 데이트 핫플`)
           : ['서울 데이트 코스 추천', '핫플레이스 팝업스토어'];
 
         // Blog Promises
         const blogPromises = (naverClientId && naverClientSecret) ? searchTargets.map(async (target: string) => {
           try {
-            const blogUrl = `https://openapi.naver.com/v1/search/blog.json?query=${encodeURIComponent(target + ' 팝업 핫플 데이트')}&display=5&sort=sim`;
+            const blogUrl = `https://openapi.naver.com/v1/search/blog.json?query=${encodeURIComponent(target)}&display=5&sort=sim`;
             const blogRes = await fetch(blogUrl, {
               headers: {
                 'X-Naver-Client-Id': naverClientId,
@@ -170,7 +179,7 @@ export async function POST(request: NextRequest) {
         // YouTube Promises
         const ytPromises = (youtubeKey && youtubeKey !== 'your_youtube_api_key') ? ytTargets.map(async (target: string) => {
           try {
-            const ytUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&maxResults=5&q=${encodeURIComponent(target + ' 데이트 핫플')}&type=video&key=${youtubeKey}&relevanceLanguage=ko`;
+            const ytUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&maxResults=5&q=${encodeURIComponent(target)}&type=video&key=${youtubeKey}&relevanceLanguage=ko`;
             const ytRes = await fetch(ytUrl);
             if (ytRes.ok) {
               const yd = await ytRes.json();
@@ -346,7 +355,24 @@ ${eventContext}
               });
 
               const resolvedPlaces = await Promise.all(placeSearchPromises);
-              recommendations = resolvedPlaces.filter(Boolean);
+              
+              // 5km 반경 필터링 적용 (기존 장소가 있을 때만)
+              if (places.length > 0) {
+                const filteredPlaces = resolvedPlaces.filter(Boolean).filter((recPlace: any) => {
+                  const { lng: recLng, lat: recLat } = katechToWgs84(recPlace.mapx, recPlace.mapy);
+                  
+                  // 기존 코스 장소 중 하나라도 5km(5000m) 이내에 있으면 통과
+                  return places.some((coursePlace: any) => {
+                    const { lng: courseLng, lat: courseLat } = katechToWgs84(coursePlace.mapx, coursePlace.mapy);
+                    const distance = getStraightLineDistance(recLat, recLng, courseLat, courseLng);
+                    return distance <= 5000;
+                  });
+                });
+                
+                recommendations = filteredPlaces;
+              } else {
+                recommendations = resolvedPlaces.filter(Boolean);
+              }
             }
           } catch (err) {
             console.error('Gemini error:', err);
