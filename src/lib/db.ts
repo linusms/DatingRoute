@@ -23,6 +23,40 @@ function generateInviteCode(): string {
   return code;
 }
 
+/* ─────────── Mapper Functions ─────────── */
+
+function mapDbUserToUser(row: any): User {
+  if (!row) return row;
+  return {
+    ...row,
+    createdAt: row.created_at,
+  } as User;
+}
+
+function mapDbRoomToRoom(row: any): Room {
+  if (!row) return row;
+  return {
+    ...row,
+    ownerId: row.owner_id,
+    inviteCode: row.invite_code,
+    expiresAt: row.expires_at,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  } as Room;
+}
+
+function mapDbRoomMemberToRoomMember(row: any): RoomMember {
+  if (!row) return row;
+  return {
+    ...row,
+    roomId: row.room_id,
+    userId: row.user_id,
+    isOwner: row.is_owner,
+    joinedAt: row.joined_at,
+    nickname: row.user?.nickname || row.users?.nickname || row.nickname || 'Unknown',
+  } as RoomMember;
+}
+
 /* ─────────── Auth (Users) ─────────── */
 
 export async function registerUser(nickname: string, password: string): Promise<User | null> {
@@ -37,7 +71,7 @@ export async function registerUser(nickname: string, password: string): Promise<
     console.error('Register error:', error);
     return null; // or throw error
   }
-  return data as User;
+  return mapDbUserToUser(data);
 }
 
 export async function loginUser(nickname: string, password: string): Promise<User | null> {
@@ -50,12 +84,12 @@ export async function loginUser(nickname: string, password: string): Promise<Use
     .single();
 
   if (error || !data) return null;
-  return data as User;
+  return mapDbUserToUser(data);
 }
 
 export async function getUserById(userId: string): Promise<User | null> {
   const { data } = await supabase.from('users').select('*').eq('id', userId).single();
-  return data as User;
+  return mapDbUserToUser(data);
 }
 
 /* ─────────── Rooms (Workspaces) ─────────── */
@@ -89,7 +123,7 @@ export async function createRoom(ownerId: string, expiresInDays: number = 30): P
   });
 
   const { data: roomData } = await supabase.from('rooms').select('*').eq('id', roomId).single();
-  return { room: roomData as Room, inviteCode };
+  return { room: mapDbRoomToRoom(roomData), inviteCode };
 }
 
 export async function getRoomByInviteCode(code: string): Promise<any | null> {
@@ -100,12 +134,9 @@ export async function getRoomByInviteCode(code: string): Promise<any | null> {
     .maybeSingle();
 
   if (data && data.members) {
-    data.members = data.members.map((m: any) => ({
-      ...m,
-      nickname: m.user?.nickname || 'Unknown'
-    }));
+    data.members = data.members.map(mapDbRoomMemberToRoomMember);
   }
-  return data;
+  return data ? mapDbRoomToRoom(data) : null;
 }
 
 export async function getRoomById(roomId: string): Promise<any | null> {
@@ -116,12 +147,9 @@ export async function getRoomById(roomId: string): Promise<any | null> {
     .single();
     
   if (data && data.members) {
-    data.members = data.members.map((m: any) => ({
-      ...m,
-      nickname: m.user?.nickname || 'Unknown'
-    }));
+    data.members = data.members.map(mapDbRoomMemberToRoomMember);
   }
-  return data;
+  return data ? mapDbRoomToRoom(data) : null;
 }
 
 export async function joinRoom(roomId: string, userId: string): Promise<void> {
