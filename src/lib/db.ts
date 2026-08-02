@@ -166,6 +166,14 @@ export async function getLiveCourseId(roomId: string, ownerId: string): Promise<
   return courseId;
 }
 
+function mapDbPlaceToCoursePlace(row: any): CoursePlace {
+  return {
+    ...row,
+    roadAddress: row.road_address,
+    order: row.order_index,
+  } as CoursePlace;
+}
+
 export async function getLivePlaces(roomId: string, ownerId: string): Promise<CoursePlace[]> {
   const courseId = await getLiveCourseId(roomId, ownerId);
   const { data: rows } = await supabase
@@ -174,18 +182,28 @@ export async function getLivePlaces(roomId: string, ownerId: string): Promise<Co
     .eq('course_id', courseId)
     .order('order_index', { ascending: true });
   
-  return (rows || []) as CoursePlace[];
+  return (rows || []).map(mapDbPlaceToCoursePlace);
 }
 
 export async function addLivePlace(roomId: string, ownerId: string, placeData: Partial<CoursePlace>): Promise<CoursePlace> {
   const courseId = await getLiveCourseId(roomId, ownerId);
-  const newPlace = {
-    ...placeData,
+  const newPlaceDb = {
     id: uuidv4(),
     course_id: courseId,
+    title: placeData.title || '',
+    category: placeData.category || '',
+    address: placeData.address || '',
+    road_address: placeData.roadAddress || '',
+    mapx: placeData.mapx || 0,
+    mapy: placeData.mapy || 0,
+    link: placeData.link || '',
+    description: placeData.description || '',
+    memo: placeData.memo || '',
+    order_index: placeData.order || 0,
   };
-  await supabase.from('course_places').insert(newPlace);
-  return newPlace as CoursePlace;
+  await supabase.from('course_places').insert(newPlaceDb);
+  
+  return mapDbPlaceToCoursePlace(newPlaceDb);
 }
 
 export async function updateLivePlaces(roomId: string, ownerId: string, places: CoursePlace[]): Promise<void> {
@@ -227,12 +245,14 @@ export async function getUserCourses(userId: string): Promise<Course[]> {
 
   const placesByCourse = (places || []).reduce((acc: any, p: any) => {
     if (!acc[p.course_id]) acc[p.course_id] = [];
-    acc[p.course_id].push(p);
+    acc[p.course_id].push(mapDbPlaceToCoursePlace(p));
     return acc;
   }, {});
 
   return courses.map((c) => ({
     ...c,
+    createdAt: c.created_at,
+    updatedAt: c.updated_at,
     places: placesByCourse[c.id] || [],
   })) as Course[];
 }
@@ -244,7 +264,7 @@ export async function getCoursePlaces(courseId: string): Promise<CoursePlace[]> 
     .eq('course_id', courseId)
     .order('order_index', { ascending: true });
   
-  return (rows || []) as CoursePlace[];
+  return (rows || []).map(mapDbPlaceToCoursePlace);
 }
 
 export async function saveCourseForUser(userId: string, roomId: string, name: string, description: string): Promise<Course> {
