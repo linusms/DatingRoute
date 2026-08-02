@@ -276,6 +276,21 @@ export default function HomePage() {
       isOwner: true,
     });
 
+    // 로그인 시 저장된 코스 불러오기
+    try {
+      const placesRes = await fetch(`/api/sessions/${data.session.id}/places`);
+      if (placesRes.ok) {
+        const placesData = await placesRes.json();
+        if (placesData.places && placesData.places.length > 0) {
+          setCoursePlaces(placesData.places);
+        } else {
+          setCoursePlaces([]);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to load existing places:', err);
+    }
+
     if (!isPersonal) {
       showToastMsg(`✨ 초대코드: ${data.session.inviteCode}`);
     }

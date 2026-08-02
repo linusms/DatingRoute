@@ -151,11 +151,11 @@ export default function SessionModeSelector({
               {selectedMode === 'personal' ? '🔒' : '💑'}
             </div>
             <h2 className="session-mode-nickname-title">
-              {selectedMode === 'personal' ? '개인 모드' : '초대 모드'}
+              {selectedMode === 'personal' ? '개인 코스 로그인 / 생성' : '초대 모드'}
             </h2>
             <p className="session-mode-nickname-desc">
               {selectedMode === 'personal'
-                ? '나만의 코스를 만들어보세요!'
+                ? '기존 코스를 불러오거나 새 코스를 만드세요!'
                 : '상대방에게 보낼 초대코드가 생성됩니다!'}
             </p>
 
@@ -193,7 +193,7 @@ export default function SessionModeSelector({
                   onKeyDown={(e) => e.key === 'Enter' && handleNicknameSubmit()}
                 />
                 <p style={{ fontSize: '0.8rem', color: 'var(--color-text-secondary)', marginTop: '0.5rem', textAlign: 'left' }}>
-                  처음이라면 입력한 정보로 자동 가입됩니다.
+                  입력하신 계정이 존재하면 로그인되고, 없으면 자동 가입됩니다.
                 </p>
               </div>
             )}
