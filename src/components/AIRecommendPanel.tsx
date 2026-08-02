@@ -139,13 +139,15 @@ export default function AIRecommendPanel({
   const eventToPlace = (event: RegionEvent): Place => ({
     id: event.contentId || Math.random().toString(36).slice(2, 9),
     title: event.title,
-    category: event.category || '행사',
+    category: '행사/축제',
     address: event.address,
     roadAddress: event.address,
-    mapx: event.mapx ? event.mapx * 10_000_000 : 0,
-    mapy: event.mapy ? event.mapy * 10_000_000 : 0,
-    link: '',
-    description: '',
+    mapx: event.mapx ? Math.round(event.mapx * 10_000_000) : 0,
+    mapy: event.mapy ? Math.round(event.mapy * 10_000_000) : 0,
+    link: event.contentId
+      ? `https://korean.visitkorea.or.kr/detail/ms_detail.do?cotid=${event.contentId}`
+      : '',
+    description: `${formatEventDate(event.startDate, event.endDate)}`,
   });
 
   const formatEventDate = (start: string, end: string) => {
@@ -388,13 +390,33 @@ export default function AIRecommendPanel({
                               <div className="ai-event-date">
                                 📅 {formatEventDate(event.startDate, event.endDate)}
                               </div>
-                              <div className="ai-event-actions" style={{ marginTop: '12px' }}>
+                              <div className="ai-event-actions" style={{ marginTop: '12px', display: 'flex', gap: '8px', alignItems: 'center' }}>
                                 <button
                                   className="btn btn-primary btn-sm"
                                   onClick={() => onAddPlace(eventToPlace(event))}
                                 >
                                   + 경로 추가
                                 </button>
+                                {event.contentId && (
+                                  <button
+                                    className="btn btn-sm"
+                                    style={{
+                                      background: 'rgba(255,255,255,0.08)',
+                                      color: '#f472b6',
+                                      border: '1px solid rgba(244,114,182,0.3)',
+                                      cursor: 'pointer',
+                                      borderRadius: '6px',
+                                      padding: '4px 10px',
+                                      fontSize: '13px',
+                                    }}
+                                    onClick={() => window.open(
+                                      `https://korean.visitkorea.or.kr/detail/ms_detail.do?cotid=${event.contentId}`,
+                                      '_blank'
+                                    )}
+                                  >
+                                    🔗 상세보기
+                                  </button>
+                                )}
                               </div>
                             </div>
                           </div>

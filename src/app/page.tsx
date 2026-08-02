@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import Header from '@/components/Header';
 import SearchPanel from '@/components/SearchPanel';
 import AIRecommendPanel from '@/components/AIRecommendPanel';
@@ -58,6 +58,56 @@ export default function HomePage() {
 
   // Skip SSE updates that were triggered by this client
   const skipNextSSERef = useRef(false);
+
+  // ──── Resize Panel State ────
+  const [sidebarSize, setSidebarSize] = useState<number | null>(null); // null = use default
+  const isDraggingRef = useRef(false);
+  const appMainRef = useRef<HTMLDivElement>(null);
+
+  const isMobile = useMemo(() => {
+    if (typeof window === 'undefined') return false;
+    return window.innerWidth <= 768;
+  }, []);
+
+  const handleResizeStart = useCallback((e: React.MouseEvent | React.TouchEvent) => {
+    e.preventDefault();
+    isDraggingRef.current = true;
+    document.body.style.cursor = isMobile ? 'row-resize' : 'col-resize';
+    document.body.style.userSelect = 'none';
+
+    const handleMove = (ev: MouseEvent | TouchEvent) => {
+      if (!isDraggingRef.current || !appMainRef.current) return;
+      const rect = appMainRef.current.getBoundingClientRect();
+      const clientPos = 'touches' in ev ? ev.touches[0] : ev;
+
+      if (isMobile) {
+        // Vertical resize: sidebar height
+        const offsetY = clientPos.clientY - rect.top;
+        const percent = (offsetY / rect.height) * 100;
+        setSidebarSize(Math.max(20, Math.min(80, percent)));
+      } else {
+        // Horizontal resize: sidebar width
+        const offsetX = clientPos.clientX - rect.left;
+        const percent = (offsetX / rect.width) * 100;
+        setSidebarSize(Math.max(15, Math.min(70, percent)));
+      }
+    };
+
+    const handleEnd = () => {
+      isDraggingRef.current = false;
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      document.removeEventListener('mousemove', handleMove);
+      document.removeEventListener('mouseup', handleEnd);
+      document.removeEventListener('touchmove', handleMove);
+      document.removeEventListener('touchend', handleEnd);
+    };
+
+    document.addEventListener('mousemove', handleMove);
+    document.addEventListener('mouseup', handleEnd);
+    document.addEventListener('touchmove', handleMove, { passive: false });
+    document.addEventListener('touchend', handleEnd);
+  }, [isMobile]);
 
   // Detect localhost and check for invite parameter
   useEffect(() => {
@@ -606,8 +656,15 @@ export default function HomePage() {
         />
       )}
 
-      <div className="app-main">
-        <aside className="sidebar">
+      <div className="app-main" ref={appMainRef}>
+        <aside
+          className="sidebar"
+          style={sidebarSize != null ? (
+            isMobile
+              ? { height: `${sidebarSize}vh`, maxHeight: `${sidebarSize}vh` }
+              : { width: `${sidebarSize}%`, minWidth: `${sidebarSize}%` }
+          ) : undefined}
+        >
           <div className="sidebar-tabs">
             <button
               className={`sidebar-tab ${activeTab === 'search' ? 'active' : ''}`}
@@ -665,6 +722,15 @@ export default function HomePage() {
             </div>
           </div>
         </aside>
+
+        {/* Resize Handle */}
+        <div
+          className={`resize-handle ${isDraggingRef.current ? 'dragging' : ''}`}
+          onMouseDown={handleResizeStart}
+          onTouchStart={handleResizeStart}
+        >
+          <div className="resize-handle-bar" />
+        </div>
 
         <NaverMap
           coursePlaces={coursePlaces}
