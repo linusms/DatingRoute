@@ -216,7 +216,25 @@ export async function getUserCourses(userId: string): Promise<Course[]> {
     .neq('name', LIVE_COURSE_NAME)
     .order('created_at', { ascending: false });
 
-  return (courses || []) as Course[];
+  if (!courses || courses.length === 0) return [];
+
+  const courseIds = courses.map((c) => c.id);
+  const { data: places } = await supabase
+    .from('course_places')
+    .select('*')
+    .in('course_id', courseIds)
+    .order('order_index', { ascending: true });
+
+  const placesByCourse = (places || []).reduce((acc: any, p: any) => {
+    if (!acc[p.course_id]) acc[p.course_id] = [];
+    acc[p.course_id].push(p);
+    return acc;
+  }, {});
+
+  return courses.map((c) => ({
+    ...c,
+    places: placesByCourse[c.id] || [],
+  })) as Course[];
 }
 
 export async function getCoursePlaces(courseId: string): Promise<CoursePlace[]> {
