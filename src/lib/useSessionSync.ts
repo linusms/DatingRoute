@@ -71,13 +71,13 @@ export function useSessionSync({
 
           switch (type) {
             case 'place_added':
-              cbs.onPlaceAdded?.(data.place, data.allPlaces);
+              cbs.onPlaceAdded?.(data.place, data.places);
               break;
             case 'place_removed':
-              cbs.onPlaceRemoved?.(data.placeId, data.allPlaces);
+              cbs.onPlaceRemoved?.(data.id, data.places);
               break;
             case 'places_reordered':
-              cbs.onPlacesReordered?.(data.allPlaces);
+              cbs.onPlacesReordered?.(data.places);
               break;
             case 'course_saved':
               cbs.onCourseSaved?.(data.course);

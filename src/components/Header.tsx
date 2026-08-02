@@ -14,7 +14,7 @@ interface HeaderProps {
 export default function Header({ onOpenManager, courseCount, sessionMode, currentUser, onLogout }: HeaderProps) {
   return (
     <header className="header" style={{
-      display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+      display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px',
       padding: '16px 24px', background: 'rgba(26,21,32,0.8)', backdropFilter: 'blur(12px)',
       borderBottom: '1px solid rgba(244,114,182,0.2)'
     }}>
@@ -25,7 +25,7 @@ export default function Header({ onOpenManager, courseCount, sessionMode, curren
           <div className="header-subtitle" style={{ fontSize: '12px', color: '#8b7fa8' }}>데이트 코스 플래너</div>
         </div>
       </div>
-      <div className="header-actions" style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+      <div className="header-actions" style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end', flexShrink: 1 }}>
         {courseCount > 0 && (
           <div style={{
             display: 'flex', alignItems: 'center', gap: '6px',

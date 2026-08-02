@@ -207,7 +207,15 @@ export default function HomePage() {
         skipNextSSERef.current = false;
         return;
       }
-      if (allPlaces) setCoursePlaces(allPlaces);
+      if (allPlaces) {
+        setCoursePlaces(allPlaces);
+      } else if (_place) {
+        setCoursePlaces(prev => {
+          const exists = prev.find(p => p.id === _place.id);
+          if (exists) return prev;
+          return [...prev, _place].sort((a, b) => a.order - b.order);
+        });
+      }
     },
     onPlaceRemoved: (_placeId, allPlaces) => {
       if (skipNextSSERef.current) {
@@ -216,6 +224,9 @@ export default function HomePage() {
       }
       if (allPlaces) {
         setCoursePlaces(allPlaces);
+        setIsRouteCreated(false);
+      } else if (_placeId) {
+        setCoursePlaces(prev => prev.filter(p => p.id !== _placeId));
         setIsRouteCreated(false);
       }
     },
