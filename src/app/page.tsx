@@ -694,11 +694,9 @@ export default function HomePage() {
         onOpenManager={() => setShowManager(true)}
         courseCount={coursePlaces.length}
         sessionMode={sessionMode}
+        currentUser={currentUser}
+        onLogout={handleLogout}
       />
-      <div style={{ position: 'absolute', top: '16px', right: '16px', zIndex: 100, background: 'rgba(255,255,255,0.9)', padding: '6px 12px', borderRadius: '8px', fontWeight: 'bold', fontSize: '14px', boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }}>
-        👤 {currentUser.nickname}님
-        <button onClick={handleLogout} style={{ marginLeft: '10px', fontSize: '12px', color: '#ff4d4f', border: '1px solid #ff4d4f', borderRadius: '4px', padding: '4px 8px', background: 'white', cursor: 'pointer' }}>로그아웃</button>
-      </div>
 
       {/* Session Bar */}
       {sessionMode !== 'dev' && (
