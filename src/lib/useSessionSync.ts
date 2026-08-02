@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useCallback, useState } from 'react';
-import type { CoursePlace, SessionMember } from './types';
+import type { CoursePlace, RoomMember } from './types';
 import { supabase } from './supabaseClient';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 
@@ -13,7 +13,7 @@ interface UseSessionSyncOptions {
   onPlacesReordered?: (allPlaces: CoursePlace[]) => void;
   onCourseSaved?: (course: any) => void;
   onCourseDeleted?: (courseId: string) => void;
-  onMemberJoined?: (member: SessionMember) => void;
+  onMemberJoined?: (member: RoomMember) => void;
   onConnected?: (data: any) => void;
 }
 
