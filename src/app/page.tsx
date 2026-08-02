@@ -201,7 +201,7 @@ export default function HomePage() {
   // ──── SSE Real-time Sync ────
   const { isConnected } = useSessionSync({
     sessionId,
-    enabled: sessionMode === 'invite' && !!sessionId,
+    enabled: (sessionMode === 'invite' || sessionMode === 'dev') && !!sessionId,
     onPlaceAdded: (_place, allPlaces) => {
       if (skipNextSSERef.current) {
         skipNextSSERef.current = false;
@@ -484,7 +484,7 @@ export default function HomePage() {
       showToastMsg(`"${place.title.replace(/<[^>]+>/g, '')}" 추가됨`);
 
       // Sync to server
-      if (sessionMode && sessionMode !== 'dev' && sessionId) {
+      if (sessionMode && sessionId) {
         skipNextSSERef.current = true;
         try {
           await fetch(`/api/sessions/${sessionId}/places`, {
@@ -505,7 +505,7 @@ export default function HomePage() {
       setIsRouteCreated(false);
 
       // Sync to server
-      if (sessionMode && sessionMode !== 'dev' && sessionId) {
+      if (sessionMode && sessionId) {
         skipNextSSERef.current = true;
         try {
           await fetch(`/api/sessions/${sessionId}/places?id=${id}&userId=${currentUser?.id}`, {
@@ -527,7 +527,7 @@ export default function HomePage() {
       }
 
       // Sync to server
-      if (sessionMode && sessionMode !== 'dev' && sessionId) {
+      if (sessionMode && sessionId) {
         skipNextSSERef.current = true;
         try {
           await fetch(`/api/sessions/${sessionId}/places`, {
@@ -548,16 +548,7 @@ export default function HomePage() {
   // ──── Course Save/Load ────
   const handleSaveCourse = useCallback(
     async (name: string, description: string) => {
-      if (sessionMode === 'dev') {
-        const course: Course = {
-          id: generateCourseId(),
-          name, description,
-          places: coursePlaces,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        };
-        saveLocalCourse(course);
-      } else if (sessionId) {
+      if (sessionId) {
         try {
           await fetch(`/api/sessions/${sessionId}/courses`, {
             method: 'POST',
@@ -580,7 +571,7 @@ export default function HomePage() {
       if (hasRoute) fetchDirections(course.places);
 
       // Sync loaded course to live places
-      if (sessionMode && sessionMode !== 'dev' && sessionId) {
+      if (sessionMode && sessionId) {
         skipNextSSERef.current = true;
         try {
           await fetch(`/api/sessions/${sessionId}/places`, {
