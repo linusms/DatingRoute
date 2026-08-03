@@ -17,6 +17,7 @@ CREATE TABLE users (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   nickname TEXT UNIQUE NOT NULL,
   password TEXT NOT NULL,
+  session_token TEXT,  -- 단일 기기 로그인 강제용
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 

@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { v4 as uuidv4 } from 'uuid';
 import type { Course, CoursePlace, User, Room, RoomMember } from './types';
-import { createHash } from 'crypto';
+import { createHash, randomBytes } from 'crypto';
 
 export const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co',
@@ -12,6 +12,10 @@ const LIVE_COURSE_NAME = '__live__';
 
 async function hashPassword(password: string): Promise<string> {
   return createHash('sha256').update(password).digest('hex');
+}
+
+function generateSessionToken(): string {
+  return randomBytes(32).toString('hex');
 }
 
 function generateInviteCode(): string {
@@ -28,7 +32,9 @@ function generateInviteCode(): string {
 function mapDbUserToUser(row: any): User {
   if (!row) return row;
   return {
-    ...row,
+    id: row.id,
+    nickname: row.nickname,
+    sessionToken: row.session_token,
     createdAt: row.created_at,
   } as User;
 }
@@ -55,6 +61,14 @@ function mapDbRoomMemberToRoomMember(row: any): RoomMember {
     joinedAt: row.joined_at,
     nickname: row.user?.nickname || row.users?.nickname || row.nickname || 'Unknown',
   } as RoomMember;
+}
+
+function mapDbPlaceToCoursePlace(row: any): CoursePlace {
+  return {
+    ...row,
+    roadAddress: row.road_address,
+    order: row.order_index,
+  } as CoursePlace;
 }
 
 /* ─────────── Auth (Users) ─────────── */
@@ -84,7 +98,27 @@ export async function loginUser(nickname: string, password: string): Promise<Use
     .single();
 
   if (error || !data) return null;
+
+  // Generate new session token (invalidates any previous session on other devices)
+  const sessionToken = generateSessionToken();
+  await supabase
+    .from('users')
+    .update({ session_token: sessionToken })
+    .eq('id', data.id);
+
+  data.session_token = sessionToken;
   return mapDbUserToUser(data);
+}
+
+export async function validateSessionToken(userId: string, sessionToken: string): Promise<boolean> {
+  const { data } = await supabase
+    .from('users')
+    .select('session_token')
+    .eq('id', userId)
+    .single();
+
+  if (!data) return false;
+  return data.session_token === sessionToken;
 }
 
 export async function getUserById(userId: string): Promise<User | null> {
@@ -120,6 +154,15 @@ export async function createRoom(ownerId: string, expiresInDays: number = 30): P
     room_id: roomId,
     user_id: ownerId,
     is_owner: true
+  });
+
+  // Auto-create live course for the room
+  const liveCourseId = uuidv4();
+  await supabase.from('courses').insert({
+    id: liveCourseId,
+    room_id: roomId,
+    owner_id: ownerId,
+    name: LIVE_COURSE_NAME,
   });
 
   const { data: roomData } = await supabase.from('rooms').select('*').eq('id', roomId).single();
@@ -170,33 +213,28 @@ export async function joinRoom(roomId: string, userId: string): Promise<void> {
   }
 }
 
-/* ─────────── Live Courses ─────────── */
+/* ─────────── Live Courses (Room-based, shared) ─────────── */
 
+/**
+ * Gets or creates the live course for a room. All members of the room share the same live course.
+ * The live course is identified by name='__live__' and room_id=roomId.
+ */
 export async function getLiveCourseId(roomId: string, ownerId: string): Promise<string> {
-  const isPersonal = roomId.startsWith('personal_');
-  const dbRoomId = isPersonal ? null : roomId;
-
-  let query = supabase
+  // All routes now go through rooms - find the live course by room_id
+  const { data: existing } = await supabase
     .from('courses')
     .select('id')
     .eq('name', LIVE_COURSE_NAME)
-    .eq('owner_id', ownerId);
-
-  if (isPersonal) {
-    query = query.is('room_id', null);
-  } else {
-    query = query.eq('room_id', dbRoomId);
-  }
-
-  const { data: existing } = await query.maybeSingle();
+    .eq('room_id', roomId)
+    .maybeSingle();
 
   if (existing) return existing.id;
 
-  // Create live course
+  // Create live course for the room
   const courseId = uuidv4();
   const { error } = await supabase.from('courses').insert({
     id: courseId,
-    room_id: dbRoomId,
+    room_id: roomId,
     owner_id: ownerId,
     name: LIVE_COURSE_NAME
   });
@@ -204,14 +242,6 @@ export async function getLiveCourseId(roomId: string, ownerId: string): Promise<
   if (error) console.error('Live course creation error:', error);
 
   return courseId;
-}
-
-function mapDbPlaceToCoursePlace(row: any): CoursePlace {
-  return {
-    ...row,
-    roadAddress: row.road_address,
-    order: row.order_index,
-  } as CoursePlace;
 }
 
 export async function getLivePlaces(roomId: string, ownerId: string): Promise<CoursePlace[]> {
@@ -266,19 +296,46 @@ export async function deleteLivePlace(roomId: string, ownerId: string, placeId: 
   await supabase.from('course_places').delete().eq('id', placeId).eq('course_id', courseId);
 }
 
-/* ─────────── User Courses (Saved Courses) ─────────── */
+/* ─────────── User Courses (Saved + Collaborative) ─────────── */
 
-export async function getUserCourses(userId: string): Promise<Course[]> {
-  const { data: courses } = await supabase
+/**
+ * Retrieves all courses visible to the user:
+ * 1. Saved courses owned by the user (where name != __live__)
+ * 2. Live courses from rooms the user has participated in (unsaved collaborative routes)
+ */
+export async function getUserCoursesWithCollaborative(userId: string): Promise<Course[]> {
+  // 1. Get saved courses owned by the user
+  const { data: ownedCourses } = await supabase
     .from('courses')
     .select('*')
     .eq('owner_id', userId)
     .neq('name', LIVE_COURSE_NAME)
     .order('created_at', { ascending: false });
 
-  if (!courses || courses.length === 0) return [];
+  // 2. Get rooms where the user is a member
+  const { data: memberships } = await supabase
+    .from('room_members')
+    .select('room_id, is_owner')
+    .eq('user_id', userId);
 
-  const courseIds = courses.map((c) => c.id);
+  const roomIds = (memberships || []).map(m => m.room_id);
+
+  // 3. Get live courses from those rooms (unsaved collaborative routes)
+  let liveCourses: any[] = [];
+  if (roomIds.length > 0) {
+    const { data: roomLiveCourses } = await supabase
+      .from('courses')
+      .select('*, rooms!inner(id, invite_code, owner_id)')
+      .eq('name', LIVE_COURSE_NAME)
+      .in('room_id', roomIds);
+    liveCourses = roomLiveCourses || [];
+  }
+
+  // Combine all course IDs
+  const allCourses = [...(ownedCourses || []), ...liveCourses];
+  if (allCourses.length === 0) return [];
+
+  const courseIds = allCourses.map(c => c.id);
   const { data: places } = await supabase
     .from('course_places')
     .select('*')
@@ -291,12 +348,62 @@ export async function getUserCourses(userId: string): Promise<Course[]> {
     return acc;
   }, {});
 
-  return courses.map((c) => ({
-    ...c,
+  // 4. Get member counts for collaborative rooms
+  let memberCountByRoom: Record<string, number> = {};
+  if (roomIds.length > 0) {
+    const { data: allMembers } = await supabase
+      .from('room_members')
+      .select('room_id')
+      .in('room_id', roomIds);
+    
+    (allMembers || []).forEach(m => {
+      memberCountByRoom[m.room_id] = (memberCountByRoom[m.room_id] || 0) + 1;
+    });
+  }
+
+  // Map owned courses
+  const result: Course[] = (ownedCourses || []).map((c) => ({
+    id: c.id,
+    name: c.name,
+    description: c.description || '',
+    places: placesByCourse[c.id] || [],
+    roomId: c.room_id || undefined,
+    isCollaborative: false,
     createdAt: c.created_at,
     updatedAt: c.updated_at,
-    places: placesByCourse[c.id] || [],
-  })) as Course[];
+  }));
+
+  // Map live collaborative courses (show as "unsaved" in dashboard)
+  for (const c of liveCourses) {
+    // Skip if user already saved this room's course (avoid duplicates)
+    const alreadySaved = (ownedCourses || []).some(oc => oc.room_id === c.room_id);
+    // Always show the live course - it represents the collaborative workspace
+    const memberCount = memberCountByRoom[c.room_id] || 1;
+    // Only show as collaborative unsaved if more than 1 member or user is not the owner
+    const isUserOwner = (memberships || []).some(m => m.room_id === c.room_id && m.is_owner);
+    
+    result.push({
+      id: c.id,
+      name: '저장되지 않은 경로',
+      description: '',
+      places: placesByCourse[c.id] || [],
+      roomId: c.room_id,
+      isCollaborative: memberCount > 1,
+      memberCount,
+      createdAt: c.created_at,
+      updatedAt: c.updated_at,
+    });
+  }
+
+  // Sort: most recently updated first
+  result.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+
+  return result;
+}
+
+/** @deprecated Use getUserCoursesWithCollaborative instead */
+export async function getUserCourses(userId: string): Promise<Course[]> {
+  return getUserCoursesWithCollaborative(userId);
 }
 
 export async function getCoursePlaces(courseId: string): Promise<CoursePlace[]> {
@@ -319,7 +426,7 @@ export async function saveCourseForUser(userId: string, roomId: string, name: st
   const newCourse = {
     id: newCourseId,
     owner_id: userId,
-    room_id: null, // Detached from room since it's a permanent snapshot
+    room_id: roomId, // Keep room reference for collaborative re-access
     name: name,
     description: description
   };

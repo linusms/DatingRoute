@@ -8,7 +8,7 @@ import CourseBuilder from '@/components/CourseBuilder';
 import NaverMap from '@/components/NaverMap';
 import ReviewPanel from '@/components/ReviewPanel';
 import CourseManager from '@/components/CourseManager';
-import SessionModeSelector from '@/components/SessionModeSelector';
+import DashboardScreen from '@/components/DashboardScreen';
 import SessionBar from '@/components/SessionBar';
 import AuthScreen from '@/components/AuthScreen';
 import {
@@ -22,8 +22,6 @@ import {
   RoomMember,
 } from '@/lib/types';
 import {
-  saveCourse as saveLocalCourse,
-  generateCourseId,
   encodeCourseToUrl,
   decodeCourseFromUrl,
 } from '@/lib/courseStorage';
@@ -45,25 +43,24 @@ export default function HomePage() {
 
   const [highlightPlace, setHighlightPlace] = useState<Place | null>(null);
   const [reviewPlace, setReviewPlace] = useState<string | null>(null);
-  const [showManager, setShowManager] = useState(false);
+  const [showSaveModal, setShowSaveModal] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
 
-  // Session state
-  const [sessionMode, setSessionMode] = useState<SessionMode | null>(null); // null = not yet decided
-  const [sessionId, setSessionId] = useState<string | null>(null);
+  // Session state - unified: null = dashboard, 'builder' = editing
+  const [sessionMode, setSessionMode] = useState<SessionMode | null>(null);
+  const [sessionId, setSessionId] = useState<string | null>(null); // room ID
   const [inviteCode, setInviteCode] = useState<string | null>(null);
   const [nickname, setNickname] = useState<string>('');
-  const [memberId, setMemberId] = useState<string | null>(null);
   const [members, setMembers] = useState<RoomMember[]>([]);
   const [isOwner, setIsOwner] = useState(false);
-  const [isLocalhost, setIsLocalhost] = useState(false);
   const [pendingInviteCode, setPendingInviteCode] = useState<string | null>(null);
+  const [sessionInvalidated, setSessionInvalidated] = useState(false);
 
   // Skip SSE updates that were triggered by this client
   const skipNextSSERef = useRef(false);
 
   // ──── Resize Panel State ────
-  const [sidebarSize, setSidebarSize] = useState<number | null>(null); // null = use default
+  const [sidebarSize, setSidebarSize] = useState<number | null>(null);
   const isDraggingRef = useRef(false);
   const appMainRef = useRef<HTMLDivElement>(null);
 
@@ -84,12 +81,10 @@ export default function HomePage() {
       const clientPos = 'touches' in ev ? ev.touches[0] : ev;
 
       if (isMobile) {
-        // Vertical resize: sidebar height
         const offsetY = clientPos.clientY - rect.top;
         const percent = (offsetY / rect.height) * 100;
         setSidebarSize(Math.max(20, Math.min(80, percent)));
       } else {
-        // Horizontal resize: sidebar width
         const offsetX = clientPos.clientX - rect.left;
         const percent = (offsetX / rect.width) * 100;
         setSidebarSize(Math.max(15, Math.min(70, percent)));
@@ -112,11 +107,30 @@ export default function HomePage() {
     document.addEventListener('touchend', handleEnd);
   }, [isMobile]);
 
-  // Detect localhost and check for invite parameter
-  useEffect(() => {
-    const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-    setIsLocalhost(isLocal);
+  // ──── Session Token Validation ────
+  const validateSession = useCallback(async () => {
+    if (!currentUser?.sessionToken || !currentUser?.id) return;
+    try {
+      const res = await fetch('/api/auth/validate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: currentUser.id, sessionToken: currentUser.sessionToken }),
+      });
+      if (!res.ok) {
+        setSessionInvalidated(true);
+      }
+    } catch { /* ignore network errors */ }
+  }, [currentUser?.id, currentUser?.sessionToken]);
 
+  // Periodically validate session token (every 30 seconds)
+  useEffect(() => {
+    if (!currentUser?.sessionToken) return;
+    const interval = setInterval(validateSession, 30000);
+    return () => clearInterval(interval);
+  }, [validateSession, currentUser?.sessionToken]);
+
+  // Detect invite parameter and restore session on mount
+  useEffect(() => {
     // Check for invite code in URL
     const params = new URLSearchParams(window.location.search);
     const invite = params.get('invite');
@@ -132,57 +146,19 @@ export default function HomePage() {
       if (decoded) {
         setCoursePlaces(decoded.places);
         setActiveTab('route');
-        setSessionMode('dev'); // Load shared course in dev mode
         showToastMsg(`"${decoded.name}" 공유 코스를 불러왔습니다!`);
         window.history.replaceState({}, '', window.location.pathname);
         return;
       }
     }
 
-    // Try to restore persisted session
+    // Try to restore persisted user
     try {
       const userRaw = localStorage.getItem('datingroute_user');
       if (userRaw) {
         setCurrentUser(JSON.parse(userRaw));
       }
-
-      const raw = localStorage.getItem('datingroute_session');
-      if (raw) {
-        const persisted = JSON.parse(raw);
-        if (persisted.mode && persisted.sessionId) {
-          // Validate session still exists
-          fetch(`/api/sessions/${persisted.sessionId}?userId=${persisted.memberId}`)
-            .then((res) => {
-              if (!res.ok) throw new Error('expired');
-              return res.json();
-            })
-            .then((data) => {
-              setSessionMode(persisted.mode);
-              setSessionId(persisted.sessionId);
-              setInviteCode(persisted.inviteCode);
-              setNickname(persisted.nickname);
-              setMemberId(persisted.memberId);
-              setIsOwner(persisted.isOwner);
-              setMembers(data.room?.members || []);
-
-              // Load live places
-              if (data.coursePlaces && data.coursePlaces.length > 0) {
-                setCoursePlaces(data.coursePlaces);
-              }
-            })
-            .catch(() => {
-              localStorage.removeItem('datingroute_session');
-              // Session expired, show mode selector
-            });
-          return;
-        }
-      }
     } catch { /* ignore */ }
-
-    // If invite code in URL, show join flow
-    if (invite) {
-      // Will be handled by SessionModeSelector
-    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -201,7 +177,7 @@ export default function HomePage() {
   // ──── SSE Real-time Sync ────
   const { isConnected } = useSessionSync({
     sessionId,
-    enabled: (sessionMode === 'invite' || sessionMode === 'dev') && !!sessionId,
+    enabled: sessionMode === 'builder' && !!sessionId,
     onPlaceAdded: (_place, allPlaces) => {
       if (skipNextSSERef.current) {
         skipNextSSERef.current = false;
@@ -257,98 +233,126 @@ export default function HomePage() {
     setTimeout(() => setToast(null), 2500);
   }, []);
 
-  const persistSessionData = useCallback((data: {
-    mode: SessionMode; sessionId: string; inviteCode: string;
-    nickname: string; memberId: string; isOwner: boolean;
-  }) => {
-    try {
-      localStorage.setItem('datingroute_session', JSON.stringify(data));
-    } catch { /* ignore */ }
-  }, []);
-
   // ──── Session Actions ────
-  const handleCreateSession = useCallback(async (mode: SessionMode) => {
+
+  /** Create a new route: always creates a room */
+  const handleCreateNewRoute = useCallback(async () => {
     if (!currentUser) return;
-    
-    if (mode === 'personal') {
-      const personalRoomId = `personal_${currentUser.id}`;
-      setSessionMode('personal');
-      setSessionId(personalRoomId);
-      setInviteCode(null);
-      setNickname(currentUser.nickname);
-      setMemberId(currentUser.id);
-      setMembers([]);
-      setIsOwner(true);
-      
-      persistSessionData({
-        mode: 'personal',
-        sessionId: personalRoomId,
-        inviteCode: '',
-        nickname: currentUser.nickname,
-        memberId: currentUser.id,
-        isOwner: true,
+
+    try {
+      const res = await fetch('/api/sessions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ownerId: currentUser.id, expiresInDays: 30 }),
       });
+      if (!res.ok) throw new Error('방 생성 실패');
+      const data = await res.json();
 
-      // Fetch personal live places
-      try {
-        const placesRes = await fetch(`/api/sessions/${personalRoomId}?userId=${currentUser.id}`);
-        if (placesRes.ok) {
-          const placesData = await placesRes.json();
-          if (placesData.coursePlaces?.length > 0) {
-            setCoursePlaces(placesData.coursePlaces);
-          } else {
-            setCoursePlaces([]);
-          }
-        }
-      } catch (err) {
-        console.error(err);
-      }
-      return;
+      setSessionMode('builder');
+      setSessionId(data.room.id);
+      setInviteCode(data.inviteCode);
+      setNickname(currentUser.nickname);
+      setMembers([{
+        id: currentUser.id,
+        roomId: data.room.id,
+        userId: currentUser.id,
+        joinedAt: new Date().toISOString(),
+        isOwner: true,
+        nickname: currentUser.nickname,
+      }]);
+      setIsOwner(true);
+      setCoursePlaces([]);
+      setDirections(null);
+      setRoutePath(null);
+      setIsRouteCreated(false);
+    } catch (err) {
+      console.error(err);
+      showToastMsg('경로 생성에 실패했습니다.');
     }
+  }, [currentUser, showToastMsg]);
 
-    // Invite mode
-    const res = await fetch('/api/sessions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ownerId: currentUser.id, expiresInDays: 30 }),
-    });
-    if (!res.ok) {
-      const err = await res.json();
-      throw new Error(err.error || '세션 생성 실패');
-    }
-    const data = await res.json();
-
-    setSessionMode('dev');
-    setSessionId(data.room.id);
-    setInviteCode(data.inviteCode);
-    setNickname(currentUser.nickname);
-    setMemberId(currentUser.id);
-    setMembers([{
-      id: currentUser.id, // temporary id
-      roomId: data.room.id,
-      userId: currentUser.id,
-      joinedAt: new Date().toISOString(),
-      isOwner: true,
-      nickname: currentUser.nickname
-    }]);
-    setIsOwner(true);
-
-    persistSessionData({
-      mode: 'dev',
-      sessionId: data.room.id,
-      inviteCode: data.inviteCode,
-      nickname: currentUser.nickname,
-      memberId: currentUser.id,
-      isOwner: true,
-    });
-
-    setCoursePlaces([]);
-    showToastMsg(`✨ 초대코드: ${data.inviteCode}`);
-  }, [currentUser, persistSessionData, showToastMsg]);
-
-  const handleJoinSession = useCallback(async (code: string) => {
+  /** Load an existing course from the dashboard */
+  const handleLoadCourseFromDashboard = useCallback(async (course: Course) => {
     if (!currentUser) return;
-    
+
+    // If the course has a roomId, reconnect to that room
+    if (course.roomId) {
+      try {
+        const res = await fetch(`/api/sessions/${course.roomId}?userId=${currentUser.id}`);
+        if (res.ok) {
+          const data = await res.json();
+
+          setSessionMode('builder');
+          setSessionId(course.roomId);
+          setInviteCode(data.room?.inviteCode || data.room?.invite_code || null);
+          setNickname(currentUser.nickname);
+          setMembers(data.room?.members || []);
+          setIsOwner(data.room?.ownerId === currentUser.id);
+
+          // Use live places from the room (latest state)
+          if (data.coursePlaces && data.coursePlaces.length > 0) {
+            setCoursePlaces(data.coursePlaces);
+          } else {
+            setCoursePlaces(course.places);
+          }
+
+          setDirections(null);
+          setRoutePath(null);
+          setIsRouteCreated(false);
+          return;
+        }
+      } catch { /* room may have expired, fall through */ }
+    }
+
+    // Fallback: just load the places without a room (legacy/expired room)
+    // Create a new room for this course
+    try {
+      const res = await fetch('/api/sessions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ownerId: currentUser.id, expiresInDays: 30 }),
+      });
+      if (!res.ok) throw new Error('방 생성 실패');
+      const data = await res.json();
+
+      setSessionMode('builder');
+      setSessionId(data.room.id);
+      setInviteCode(data.inviteCode);
+      setNickname(currentUser.nickname);
+      setMembers([{
+        id: currentUser.id,
+        roomId: data.room.id,
+        userId: currentUser.id,
+        joinedAt: new Date().toISOString(),
+        isOwner: true,
+        nickname: currentUser.nickname,
+      }]);
+      setIsOwner(true);
+      setCoursePlaces(course.places);
+
+      // Sync places to the new room's live course
+      if (course.places.length > 0) {
+        skipNextSSERef.current = true;
+        await fetch(`/api/sessions/${data.room.id}/places`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'set', places: course.places, userId: currentUser.id }),
+        });
+      }
+
+      setDirections(null);
+      setRoutePath(null);
+      setIsRouteCreated(false);
+    } catch (err) {
+      console.error(err);
+      showToastMsg('경로 불러오기에 실패했습니다.');
+    }
+  }, [currentUser, showToastMsg]);
+
+  /** Join a room by invite code */
+  const handleJoinByInviteCode = useCallback(async (code: string) => {
+    if (!currentUser) return;
+
     const res = await fetch('/api/sessions/join', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -356,29 +360,20 @@ export default function HomePage() {
     });
     if (!res.ok) {
       const err = await res.json();
+      showToastMsg(err.error || '유효하지 않은 초대코드입니다.');
       throw new Error(err.error || '세션 참여 실패');
     }
     const data = await res.json();
 
-    setSessionMode('invite');
+    setSessionMode('builder');
     setSessionId(data.room.id);
     setInviteCode(data.room.inviteCode);
     setNickname(currentUser.nickname);
-    setMemberId(currentUser.id);
     setMembers(data.room.members || []);
     setIsOwner(false);
     setPendingInviteCode(null);
 
-    persistSessionData({
-      mode: 'invite',
-      sessionId: data.room.id,
-      inviteCode: data.room.inviteCode,
-      nickname: currentUser.nickname,
-      memberId: currentUser.id,
-      isOwner: false,
-    });
-
-    // Load live places from session
+    // Load live places from room
     try {
       const placesRes = await fetch(`/api/sessions/${data.room.id}?userId=${currentUser.id}`);
       if (placesRes.ok) {
@@ -390,29 +385,44 @@ export default function HomePage() {
       }
     } catch { /* ignore */ }
 
-    showToastMsg(`🎉 세션에 참여했습니다!`);
-  }, [currentUser, persistSessionData, showToastMsg]);
+    showToastMsg('🎉 경로에 참여했습니다!');
+  }, [currentUser, showToastMsg]);
+
+  /** Create invite code for current room (already created with room, just display it) */
+  const handleCreateInviteCode = useCallback(() => {
+    // The invite code was already created when the room was created
+    // Just show it
+    if (inviteCode) {
+      showToastMsg(`초대코드: ${inviteCode}`);
+    }
+  }, [inviteCode, showToastMsg]);
 
   const handleLogout = useCallback(() => {
     setCurrentUser(null);
     localStorage.removeItem('datingroute_user');
-    handleDisconnect();
+    handleGoToDashboard();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleDisconnect = useCallback(() => {
+  const handleGoToDashboard = useCallback(() => {
     setSessionMode(null);
     setSessionId(null);
     setInviteCode(null);
     setNickname('');
-    setMemberId(null);
     setMembers([]);
     setIsOwner(false);
     setCoursePlaces([]);
     setDirections(null);
     setRoutePath(null);
     setIsRouteCreated(false);
-    localStorage.removeItem('datingroute_session');
   }, []);
+
+  const handleSessionInvalidatedLogout = useCallback(() => {
+    setSessionInvalidated(false);
+    setCurrentUser(null);
+    localStorage.removeItem('datingroute_user');
+    handleGoToDashboard();
+  }, [handleGoToDashboard]);
 
   // ──── Directions ────
   const fetchDirections = useCallback(async (places: CoursePlace[]) => {
@@ -504,7 +514,7 @@ export default function HomePage() {
       showToastMsg(`"${place.title.replace(/<[^>]+>/g, '')}" 추가됨`);
 
       // Sync to server
-      if (sessionMode && sessionId) {
+      if (sessionId) {
         skipNextSSERef.current = true;
         try {
           await fetch(`/api/sessions/${sessionId}/places`, {
@@ -515,7 +525,7 @@ export default function HomePage() {
         } catch { /* ignore */ }
       }
     },
-    [coursePlaces, showToastMsg, sessionMode, sessionId, nickname]
+    [coursePlaces, showToastMsg, sessionId, currentUser?.id]
   );
 
   const handleRemovePlace = useCallback(
@@ -525,7 +535,7 @@ export default function HomePage() {
       setIsRouteCreated(false);
 
       // Sync to server
-      if (sessionMode && sessionId) {
+      if (sessionId) {
         skipNextSSERef.current = true;
         try {
           await fetch(`/api/sessions/${sessionId}/places?id=${id}&userId=${currentUser?.id}`, {
@@ -534,7 +544,7 @@ export default function HomePage() {
         } catch { /* ignore */ }
       }
     },
-    [coursePlaces, sessionMode, sessionId, nickname]
+    [coursePlaces, sessionId, currentUser?.id]
   );
 
   const handleReorderPlaces = useCallback(
@@ -547,7 +557,7 @@ export default function HomePage() {
       }
 
       // Sync to server
-      if (sessionMode && sessionId) {
+      if (sessionId) {
         skipNextSSERef.current = true;
         try {
           await fetch(`/api/sessions/${sessionId}/places`, {
@@ -562,10 +572,10 @@ export default function HomePage() {
         } catch { /* ignore */ }
       }
     },
-    [isRouteCreated, sessionMode, sessionId, nickname]
+    [isRouteCreated, sessionId, currentUser?.id]
   );
 
-  // ──── Course Save/Load ────
+  // ──── Course Save ────
   const handleSaveCourse = useCallback(
     async (name: string, description: string) => {
       if (sessionId) {
@@ -579,46 +589,19 @@ export default function HomePage() {
       }
       showToastMsg(`"${name}" 저장되었습니다!`);
     },
-    [coursePlaces, showToastMsg, sessionMode, sessionId, nickname]
-  );
-
-  const handleLoadCourse = useCallback(
-    async (course: Course) => {
-      setCoursePlaces(course.places);
-      setActiveTab('route');
-      const hasRoute = course.places.length >= 2;
-      setIsRouteCreated(hasRoute);
-      if (hasRoute) fetchDirections(course.places);
-
-      // Sync loaded course to live places
-      if (sessionMode && sessionId) {
-        skipNextSSERef.current = true;
-        try {
-          await fetch(`/api/sessions/${sessionId}/places`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'set', places: course.places, userId: currentUser?.id }),
-          });
-        } catch { /* ignore */ }
-      }
-
-      showToastMsg(`"${course.name}" 불러왔습니다`);
-    },
-    [showToastMsg, fetchDirections, sessionMode, sessionId, nickname]
+    [showToastMsg, sessionId, currentUser?.id, currentUser?.nickname]
   );
 
   // ──── Share ────
   const handleShareCourseUrl = useCallback(() => {
     if (coursePlaces.length === 0) return;
 
-    if (sessionMode === 'invite' && inviteCode) {
-      // Share via invite link
+    if (inviteCode) {
       const url = `${window.location.origin}?invite=${inviteCode}`;
       navigator.clipboard.writeText(url).then(() => {
         showToastMsg('초대 링크가 클립보드에 복사되었습니다!');
       });
     } else {
-      // Legacy URL share
       const course: Course = {
         id: '', name: '공유 코스', description: '', places: coursePlaces, createdAt: '', updatedAt: '',
       };
@@ -627,7 +610,7 @@ export default function HomePage() {
         showToastMsg('공유 링크가 클립보드에 복사되었습니다!');
       });
     }
-  }, [coursePlaces, showToastMsg, sessionMode, inviteCode]);
+  }, [coursePlaces, showToastMsg, inviteCode]);
 
   const handleShareKakao = useCallback(() => {
     if (coursePlaces.length === 0) return;
@@ -637,7 +620,7 @@ export default function HomePage() {
     }
 
     let url: string;
-    if (sessionMode === 'invite' && inviteCode) {
+    if (inviteCode) {
       url = `${window.location.origin}?invite=${inviteCode}`;
     } else {
       const course: Course = {
@@ -656,7 +639,7 @@ export default function HomePage() {
       },
       buttons: [{ title: '코스 확인하기', link: { mobileWebUrl: url, webUrl: url } }],
     });
-  }, [coursePlaces, showToastMsg, sessionMode, inviteCode]);
+  }, [coursePlaces, showToastMsg, inviteCode]);
 
   const handleCopyInviteCode = useCallback(() => {
     if (inviteCode) {
@@ -675,7 +658,25 @@ export default function HomePage() {
     }
   }, [inviteCode, showToastMsg]);
 
-  // ──── Render: Mode Selection ────
+  // ──── Render: Session Invalidated ────
+  if (sessionInvalidated) {
+    return (
+      <div className="session-invalidated-overlay">
+        <div className="session-invalidated-card">
+          <div className="session-invalidated-icon">⚠️</div>
+          <div className="session-invalidated-title">다른 기기에서 로그인됨</div>
+          <div className="session-invalidated-text">
+            동일한 계정으로 다른 기기에서 로그인되어<br />현재 세션이 종료되었습니다.
+          </div>
+          <button className="session-invalidated-btn" onClick={handleSessionInvalidatedLogout}>
+            확인
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ──── Render: Auth Screen ────
   if (!currentUser) {
     return <AuthScreen onLogin={(u) => {
       setCurrentUser(u);
@@ -683,45 +684,41 @@ export default function HomePage() {
     }} />;
   }
 
+  // ──── Render: Dashboard (no session mode selected) ────
   if (sessionMode === null) {
     return (
-      <SessionModeSelector
-        onSelect={(mode, code) => {
-          if (mode === 'invite' && code) {
-            handleJoinSession(code);
-          } else {
-            handleCreateSession(mode);
-          }
-        }}
-        isLoading={false}
+      <DashboardScreen
+        currentUser={currentUser}
+        onCreateNew={handleCreateNewRoute}
+        onLoadCourse={handleLoadCourseFromDashboard}
+        onLogout={handleLogout}
+        pendingInviteCode={pendingInviteCode}
+        onJoinByInviteCode={handleJoinByInviteCode}
       />
     );
   }
 
-  // ──── Render: Main App ────
+  // ──── Render: Main App (Builder) ────
   return (
     <div className="app-layout">
       <Header
-        onOpenManager={() => setShowManager(true)}
+        onOpenSaveModal={() => setShowSaveModal(true)}
+        onGoToDashboard={handleGoToDashboard}
         courseCount={coursePlaces.length}
-        sessionMode={sessionMode}
         currentUser={currentUser}
         onLogout={handleLogout}
       />
 
       {/* Session Bar */}
-      {sessionMode && (
-        <SessionBar
-          mode={sessionMode}
-          inviteCode={inviteCode}
-          nickname={nickname}
-          members={members}
-          isConnected={isConnected}
-          onCopyInviteCode={handleCopyInviteCode}
-          onCopyInviteLink={handleCopyInviteLink}
-          onDisconnect={handleDisconnect}
-        />
-      )}
+      <SessionBar
+        inviteCode={inviteCode}
+        nickname={nickname}
+        members={members}
+        isConnected={isConnected}
+        onCopyInviteCode={handleCopyInviteCode}
+        onCopyInviteLink={handleCopyInviteLink}
+        onDisconnect={handleGoToDashboard}
+      />
 
       <div className="app-main" ref={appMainRef}>
         <aside
@@ -785,6 +782,12 @@ export default function HomePage() {
                 onChangeTransitMode={setTransitMode}
                 onShareCourseUrl={handleShareCourseUrl}
                 onShareKakao={handleShareKakao}
+                inviteCode={inviteCode}
+                onCreateInviteCode={handleCreateInviteCode}
+                onJoinByInviteCode={handleJoinByInviteCode}
+                onCopyInviteCode={handleCopyInviteCode}
+                onCopyInviteLink={handleCopyInviteLink}
+                members={members}
               />
             </div>
           </div>
@@ -814,15 +817,11 @@ export default function HomePage() {
         )}
       </div>
 
-      {showManager && (
+      {showSaveModal && (
         <CourseManager
-          onClose={() => setShowManager(false)}
-          onLoadCourse={handleLoadCourse}
+          onClose={() => setShowSaveModal(false)}
           onSaveCourse={handleSaveCourse}
           hasPlaces={coursePlaces.length > 0}
-          sessionMode={sessionMode}
-          sessionId={sessionId}
-          userId={currentUser.id}
         />
       )}
 

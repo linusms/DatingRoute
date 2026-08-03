@@ -1,10 +1,9 @@
 'use client';
 
 import React, { useState } from 'react';
-import type { SessionMode, RoomMember } from '@/lib/types';
+import type { RoomMember } from '@/lib/types';
 
 interface SessionBarProps {
-  mode: SessionMode;
   inviteCode: string | null;
   nickname: string;
   members: RoomMember[];
@@ -15,7 +14,6 @@ interface SessionBarProps {
 }
 
 export default function SessionBar({
-  mode,
   inviteCode,
   nickname,
   members,
@@ -36,26 +34,23 @@ export default function SessionBar({
     setTimeout(() => setCopied(null), 2000);
   };
 
-  const modeLabel = mode === 'personal' 
-    ? '🔒 개인 모드' 
-    : (mode === 'dev' ? '🤝 협업 모드' : '🎟️ 초대 모드');
+  const isCollaborative = members.length > 1;
   const memberColors = ['#f472b6', '#c084fc', '#60a5fa', '#34d399', '#fbbf24', '#f87171'];
 
   return (
     <div className="session-bar">
       <div className="session-bar-left">
-        <span className="session-bar-mode">{modeLabel}</span>
+        <span className="session-bar-mode">
+          {isCollaborative ? '👥 협업 중' : '✏️ 편집 중'}
+        </span>
         <span className="session-bar-nickname">{nickname}</span>
-
-        {(mode === 'invite' || mode === 'dev') && (
-          <span className={`session-bar-status ${isConnected ? 'connected' : 'disconnected'}`}>
-            {isConnected ? '🟢' : '🔴'}
-          </span>
-        )}
+        <span className={`session-bar-status ${isConnected ? 'connected' : 'disconnected'}`}>
+          {isConnected ? '🟢' : '🔴'}
+        </span>
       </div>
 
       <div className="session-bar-center">
-        {(mode === 'invite' || mode === 'dev') && inviteCode && (
+        {inviteCode && (
           <div className="session-bar-invite">
             <span className="session-bar-invite-label">초대코드</span>
             <span className="session-bar-invite-code">{inviteCode}</span>
@@ -78,7 +73,7 @@ export default function SessionBar({
       </div>
 
       <div className="session-bar-right">
-        {(mode === 'invite' || mode === 'dev') && members.length > 0 && (
+        {members.length > 0 && (
           <div className="session-bar-members">
             {members.map((m, i) => (
               <div
@@ -102,10 +97,10 @@ export default function SessionBar({
         <button
           className="session-bar-exit"
           onClick={onDisconnect}
-          title="모드 선택 화면으로"
+          title="대시보드로"
           style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600, color: '#f87171' }}
         >
-          <span>🚪</span> 메인 화면으로
+          <span>🏠</span> 대시보드
         </button>
       </div>
     </div>

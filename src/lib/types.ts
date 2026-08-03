@@ -47,6 +47,9 @@ export interface Course {
   name: string;
   description: string;
   places: CoursePlace[];
+  roomId?: string;
+  isCollaborative?: boolean;
+  memberCount?: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -226,11 +229,12 @@ export interface AIRecommendResult {
 }
 
 /* ---- Users & Collaboration ---- */
-export type SessionMode = 'dev' | 'personal' | 'invite';
+export type SessionMode = 'builder';
 
 export interface User {
   id: string;
   nickname: string;
+  sessionToken?: string;
   createdAt?: string;
 }
 

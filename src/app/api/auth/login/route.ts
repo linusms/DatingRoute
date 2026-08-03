@@ -13,6 +13,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: '잘못된 닉네임이거나 비밀번호가 틀렸습니다.' }, { status: 401 });
     }
 
+    // sessionToken is now included in the user object from loginUser()
     return NextResponse.json({ user }, { status: 200 });
   } catch (error) {
     console.error('Login API error:', error);

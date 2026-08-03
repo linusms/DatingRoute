@@ -1,6 +1,6 @@
 export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
-import { getUserCourses } from '@/lib/db';
+import { getUserCoursesWithCollaborative } from '@/lib/db';
 
 type RouteContext = { params: Promise<{ userId: string }> };
 
@@ -12,7 +12,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: '유저 ID가 필요합니다.' }, { status: 400 });
     }
 
-    const courses = await getUserCourses(userId);
+    const courses = await getUserCoursesWithCollaborative(userId);
     return NextResponse.json({ courses }, { status: 200 });
   } catch (error: any) {
     console.error('User courses fetch error:', error);
