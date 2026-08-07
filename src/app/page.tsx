@@ -580,14 +580,19 @@ export default function HomePage() {
     async (name: string, description: string) => {
       if (sessionId) {
         try {
-          await fetch(`/api/sessions/${sessionId}/courses`, {
+          const res = await fetch(`/api/sessions/${sessionId}/courses`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ name, description, userId: currentUser?.id, nickname: currentUser?.nickname }),
           });
-        } catch { /* ignore */ }
+          if (!res.ok) {
+            throw new Error('Save failed');
+          }
+          showToastMsg(`"${name}" 저장되었습니다!`);
+        } catch {
+          showToastMsg('경로 저장에 실패했습니다. (저장되지 않음)');
+        }
       }
-      showToastMsg(`"${name}" 저장되었습니다!`);
     },
     [showToastMsg, sessionId, currentUser?.id, currentUser?.nickname]
   );

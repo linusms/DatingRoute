@@ -46,12 +46,7 @@ export default function Header({ onOpenSaveModal, onGoToDashboard, courseCount, 
             💾 경로 저장
           </button>
         )}
-        <button className="btn btn-secondary" onClick={onGoToDashboard} style={{
-          background: 'rgba(244,114,182,0.1)', color: '#f472b6', border: '1px solid rgba(244,114,182,0.3)',
-          padding: '8px 16px', borderRadius: '8px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer'
-        }}>
-          🏠 대시보드
-        </button>
+
 
         {currentUser && (
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', background: 'rgba(255,255,255,0.05)', padding: '6px 12px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)' }}>
