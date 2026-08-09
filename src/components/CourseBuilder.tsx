@@ -64,6 +64,7 @@ export default function CourseBuilder({
   const [joinCode, setJoinCode] = useState('');
   const [joinLoading, setJoinLoading] = useState(false);
   const [codeCopied, setCodeCopied] = useState(false);
+  const [showStorageDropdown, setShowStorageDropdown] = useState(false);
 
   // Course naming state
   const [isEditingName, setIsEditingName] = useState(false);
@@ -84,6 +85,7 @@ export default function CourseBuilder({
 
   // Day label helper
   const getDayLabel = (dayNum: number) => {
+    if (dayNum === 0) return '보관함 (미지정)';
     if (!schedule?.startDate) return `Day ${dayNum}`;
     const date = new Date(schedule.startDate);
     date.setDate(date.getDate() + dayNum - 1);
@@ -133,7 +135,7 @@ export default function CourseBuilder({
     if (activeDayTab === 'all') {
       onReorderPlaces(newFiltered);
     } else {
-      const otherPlaces = places.filter(p => (p.day || 1) !== activeDayTab);
+      const otherPlaces = places.filter(p => (p.day ?? 0) !== activeDayTab);
       const updatedFilteredPlaces = newFiltered.map(p => ({ ...p, day: activeDayTab }));
       onReorderPlaces([...otherPlaces, ...updatedFilteredPlaces]);
     }
@@ -141,7 +143,7 @@ export default function CourseBuilder({
 
   const filteredPlaces = useMemo(() => {
     if (activeDayTab === 'all') return draggablePlaces;
-    return draggablePlaces.filter(p => (p.day || 1) === activeDayTab);
+    return draggablePlaces.filter(p => (p.day ?? 0) === activeDayTab);
   }, [draggablePlaces, activeDayTab]);
 
   // Sync internal drag list when external places change
@@ -179,8 +181,8 @@ export default function CourseBuilder({
     for (let i = 0; i < places.length - 1; i++) {
       const p1 = places[i];
       const p2 = places[i + 1];
-      if ((p1.day ?? 1) === (p2.day ?? 1)) {
-        const day = p1.day ?? 1;
+      if ((p1.day ?? 0) === (p2.day ?? 0) && (p1.day ?? 0) !== 0) {
+        const day = p1.day ?? 0;
         if (!stats[day]) stats[day] = { distance: 0, durationMs: 0 };
         const leg = directions.legs[i];
         if (leg) {
@@ -381,33 +383,31 @@ export default function CourseBuilder({
           </div>
 
           {/* Day Tabs */}
-          {isMultiDay && (
-            <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', marginBottom: '16px', paddingBottom: '4px' }} className="custom-scrollbar">
+          <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', marginBottom: '16px', paddingBottom: '4px' }} className="custom-scrollbar">
+            <button
+              onClick={() => setActiveDayTab('all')}
+              style={{
+                padding: '6px 12px', borderRadius: '12px', fontSize: '13px', whiteSpace: 'nowrap',
+                background: activeDayTab === 'all' ? 'linear-gradient(135deg, #f472b6, #c084fc)' : 'rgba(255,255,255,0.05)',
+                color: activeDayTab === 'all' ? '#fff' : '#8b7fa8', border: 'none', cursor: 'pointer'
+              }}
+            >
+              전체
+            </button>
+            {Array.from({ length: dayCount + 1 }).map((_, i) => (
               <button
-                onClick={() => setActiveDayTab('all')}
+                key={i}
+                onClick={() => setActiveDayTab(i)}
                 style={{
                   padding: '6px 12px', borderRadius: '12px', fontSize: '13px', whiteSpace: 'nowrap',
-                  background: activeDayTab === 'all' ? 'linear-gradient(135deg, #f472b6, #c084fc)' : 'rgba(255,255,255,0.05)',
-                  color: activeDayTab === 'all' ? '#fff' : '#8b7fa8', border: 'none', cursor: 'pointer'
+                  background: activeDayTab === i ? 'linear-gradient(135deg, #f472b6, #c084fc)' : 'rgba(255,255,255,0.05)',
+                  color: activeDayTab === i ? '#fff' : '#8b7fa8', border: 'none', cursor: 'pointer'
                 }}
               >
-                전체
+                {getDayLabel(i)}
               </button>
-              {Array.from({ length: dayCount }).map((_, i) => (
-                <button
-                  key={i}
-                  onClick={() => setActiveDayTab(i + 1)}
-                  style={{
-                    padding: '6px 12px', borderRadius: '12px', fontSize: '13px', whiteSpace: 'nowrap',
-                    background: activeDayTab === i + 1 ? 'linear-gradient(135deg, #f472b6, #c084fc)' : 'rgba(255,255,255,0.05)',
-                    color: activeDayTab === i + 1 ? '#fff' : '#8b7fa8', border: 'none', cursor: 'pointer'
-                  }}
-                >
-                  {getDayLabel(i + 1)}
-                </button>
-              ))}
-            </div>
-          )}
+            ))}
+          </div>
           {/* Route Mode & Stats (Only if route is created) */}
           {isRouteCreated && directions && (() => {
             let walkingDuration = 0;
@@ -621,6 +621,7 @@ export default function CourseBuilder({
                               outline: 'none',
                             }}
                           >
+                            <option value={0} style={{ background: '#1a1520' }}>보관함</option>
                             {Array.from({ length: dayCount }, (_, i) => i + 1).map(d => (
                               <option key={d} value={d} style={{ background: '#1a1520' }}>
                                 Day {d}
@@ -675,6 +676,59 @@ export default function CourseBuilder({
             });
             })()}
           </div>
+
+          {/* Add from Storage Button */}
+          {activeDayTab !== 'all' && activeDayTab !== 0 && (
+            <div style={{ marginTop: '16px' }}>
+              <button
+                onClick={() => setShowStorageDropdown(!showStorageDropdown)}
+                style={{
+                  width: '100%', padding: '12px', borderRadius: '12px',
+                  background: 'rgba(255,255,255,0.03)', border: '1px dashed rgba(244,114,182,0.4)',
+                  color: '#f472b6', fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px'
+                }}
+              >
+                <span>+</span> 담은 장소 목록에서 추가
+              </button>
+              
+              {showStorageDropdown && (
+                <div className="animate-fade-in" style={{
+                  marginTop: '8px', background: 'rgba(0,0,0,0.3)', borderRadius: '12px', padding: '12px',
+                  border: '1px solid rgba(255,255,255,0.05)', display: 'flex', flexDirection: 'column', gap: '8px'
+                }}>
+                  {places.filter(p => (p.day ?? 0) === 0).length === 0 ? (
+                    <div style={{ color: '#8b7fa8', textAlign: 'center', fontSize: '13px', padding: '12px' }}>
+                      보관함에 담은 장소가 없습니다.
+                    </div>
+                  ) : (
+                    places.filter(p => (p.day ?? 0) === 0).map(p => (
+                      <div
+                        key={p.id}
+                        onClick={() => {
+                          handleChangePlaceDay(p.id, activeDayTab);
+                          setShowStorageDropdown(false);
+                        }}
+                        style={{
+                          background: 'rgba(255,255,255,0.05)', padding: '12px', borderRadius: '8px',
+                          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                          cursor: 'pointer', border: '1px solid transparent', transition: 'all 0.2s'
+                        }}
+                        onMouseEnter={(e) => e.currentTarget.style.borderColor = 'rgba(244,114,182,0.4)'}
+                        onMouseLeave={(e) => e.currentTarget.style.borderColor = 'transparent'}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <span style={{ fontSize: '18px' }}>{FACILITY_ICONS[parseCategoryToFacility(p.category)] || '📍'}</span>
+                          <span style={{ color: '#f5f0ff', fontSize: '14px', fontWeight: 500 }}>{p.title.replace(/<[^>]+>/g, '')}</span>
+                        </div>
+                        <div style={{ fontSize: '12px', color: '#f472b6', fontWeight: 600 }}>추가</div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
+          )}
 
 
           {!isRouteCreated && places.length >= 2 && (

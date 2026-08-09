@@ -546,6 +546,7 @@ export default function HomePage() {
         id: place.id || Math.random().toString(36).substring(2, 9),
         order: coursePlaces.length,
         memo: '',
+        day: 0,
       };
 
       const updated = [...coursePlaces, coursePlace];
