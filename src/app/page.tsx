@@ -26,7 +26,7 @@ import {
   encodeCourseToUrl,
   decodeCourseFromUrl,
 } from '@/lib/courseStorage';
-import { katechToWgs84, getStraightLineDistance } from '@/lib/utils';
+import { katechToWgs84, getStraightLineDistance, stripHtml } from '@/lib/utils';
 import { useSessionSync } from '@/lib/useSessionSync';
 
 export default function HomePage() {
@@ -579,38 +579,48 @@ export default function HomePage() {
   // ──── Place Actions (with server sync) ────
   const handleAddPlace = useCallback(
     async (place: Place) => {
-      const alreadyExists = coursePlaces.some((p) => p.title === place.title);
-      if (alreadyExists) {
+      let isDuplicate = false;
+      let newPlace: CoursePlace | null = null;
+      const cleanTitle = stripHtml(place.title);
+
+      setCoursePlaces((prev) => {
+        if (prev.some((p) => stripHtml(p.title) === cleanTitle)) {
+          isDuplicate = true;
+          return prev;
+        }
+
+        newPlace = {
+          ...place,
+          id: place.id || Math.random().toString(36).substring(2, 9),
+          order: prev.length,
+          memo: '',
+          day: 0,
+        };
+
+        return [...prev, newPlace];
+      });
+
+      if (isDuplicate) {
         showToastMsg('이미 코스에 추가된 장소입니다');
         return;
       }
 
-      const coursePlace: CoursePlace = {
-        ...place,
-        id: place.id || Math.random().toString(36).substring(2, 9),
-        order: coursePlaces.length,
-        memo: '',
-        day: 0,
-      };
-
-      const updated = [...coursePlaces, coursePlace];
-      setCoursePlaces(updated);
       setIsRouteCreated(false);
-      showToastMsg(`"${place.title.replace(/<[^>]+>/g, '')}" 추가됨`);
+      showToastMsg(`"${cleanTitle}" 추가됨`);
 
       // Sync to server
-      if (sessionId) {
+      if (sessionId && newPlace) {
         skipNextSSERef.current = true;
         try {
           await fetch(`/api/sessions/${sessionId}/places`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ place: coursePlace, userId: currentUser?.id }),
+            body: JSON.stringify({ place: newPlace, userId: currentUser?.id }),
           });
         } catch { /* ignore */ }
       }
     },
-    [coursePlaces, showToastMsg, sessionId, currentUser?.id]
+    [showToastMsg, sessionId, currentUser?.id]
   );
 
   const handleRemovePlace = useCallback(

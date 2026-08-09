@@ -14,6 +14,7 @@ export interface CoursePlace extends Place {
   order: number;
   memo: string;
   day?: number;
+  isHold?: boolean;
 }
 
 export interface DirectionLeg {

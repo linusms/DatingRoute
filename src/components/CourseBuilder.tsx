@@ -78,6 +78,10 @@ export default function CourseBuilder({
   const [editDescription, setEditDescription] = useState('');
   const [nameSaving, setNameSaving] = useState(false);
 
+  // Select mode state for storage
+  const [isSelectMode, setIsSelectMode] = useState(false);
+  const [selectedPlaceIds, setSelectedPlaceIds] = useState<Set<string>>(new Set());
+
   // Multi-day: calculate number of days from schedule
   const dayCount = useMemo(() => {
     if (!schedule?.startDate || !schedule?.endDate) return 1;
@@ -213,6 +217,26 @@ export default function CourseBuilder({
       });
       onReorderPlaces(updatedPlaces);
     }
+  };
+
+  const handleToggleHoldSelected = () => {
+    const updatedPlaces = places.map(p => {
+      if (selectedPlaceIds.has(p.id)) {
+        return { ...p, isHold: !p.isHold };
+      }
+      return p;
+    });
+    onReorderPlaces(updatedPlaces);
+    setSelectedPlaceIds(new Set());
+    setIsSelectMode(false);
+  };
+
+  const handleDeleteSelected = () => {
+    if (!confirm(`선택한 장소 ${selectedPlaceIds.size}개를 삭제하시겠습니까?`)) return;
+    const updatedPlaces = places.filter(p => !selectedPlaceIds.has(p.id));
+    onReorderPlaces(updatedPlaces);
+    setSelectedPlaceIds(new Set());
+    setIsSelectMode(false);
   };
 
   const isCollaborative = members && members.length > 1;
@@ -409,6 +433,60 @@ export default function CourseBuilder({
               </div>
             );
           })()}
+          
+          {/* Storage Actions */}
+          {activeDayTab === 0 && places.filter(p => (p.day ?? 0) === 0).length > 0 && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+              <div style={{ fontSize: '13px', color: '#8b7fa8' }}>
+                보관함 장소 ({places.filter(p => (p.day ?? 0) === 0).length}개)
+              </div>
+              {isSelectMode ? (
+                <div style={{ display: 'flex', gap: '6px' }}>
+                  <button
+                    onClick={handleDeleteSelected}
+                    disabled={selectedPlaceIds.size === 0}
+                    style={{
+                      padding: '6px 12px', borderRadius: '8px', border: 'none',
+                      background: selectedPlaceIds.size > 0 ? 'rgba(239, 68, 68, 0.2)' : 'rgba(255,255,255,0.05)',
+                      color: selectedPlaceIds.size > 0 ? '#ef4444' : '#6b7280', fontSize: '12px', cursor: 'pointer'
+                    }}
+                  >
+                    선택 삭제
+                  </button>
+                  <button
+                    onClick={handleToggleHoldSelected}
+                    disabled={selectedPlaceIds.size === 0}
+                    style={{
+                      padding: '6px 12px', borderRadius: '8px', border: 'none',
+                      background: selectedPlaceIds.size > 0 ? 'rgba(245, 158, 11, 0.2)' : 'rgba(255,255,255,0.05)',
+                      color: selectedPlaceIds.size > 0 ? '#f59e0b' : '#6b7280', fontSize: '12px', cursor: 'pointer'
+                    }}
+                  >
+                    보류/해제
+                  </button>
+                  <button
+                    onClick={() => setIsSelectMode(false)}
+                    style={{
+                      padding: '6px 12px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.2)',
+                      background: 'transparent', color: '#cbd5e1', fontSize: '12px', cursor: 'pointer'
+                    }}
+                  >
+                    취소
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setIsSelectMode(true)}
+                  style={{
+                    padding: '6px 12px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)',
+                    background: 'rgba(255,255,255,0.05)', color: '#8b7fa8', fontSize: '12px', cursor: 'pointer'
+                  }}
+                >
+                  선택 모드
+                </button>
+              )}
+            </div>
+          )}
 
           {/* Places DND timeline with optional day dividers */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0' }}>
@@ -464,24 +542,46 @@ export default function CourseBuilder({
                     </div>
                   )}
                   <div
-                    draggable={!isRouteCreated}
-                    onDragStart={(e) => handleDragStart(e, idx)}
-                    onDragEnter={(e) => handleDragEnter(e, idx)}
-                    onDragOver={handleDragOver}
-                    onDragEnd={handleDragEnd}
-                    onDrop={(e) => handleDrop(e, (newList) => {
+                    draggable={!isRouteCreated && !isSelectMode}
+                    onDragStart={!isSelectMode ? (e) => handleDragStart(e, idx) : undefined}
+                    onDragEnter={!isSelectMode ? (e) => handleDragEnter(e, idx) : undefined}
+                    onDragOver={!isSelectMode ? handleDragOver : undefined}
+                    onDragEnd={!isSelectMode ? handleDragEnd : undefined}
+                    onDrop={!isSelectMode ? (e) => handleDrop(e, (newList) => {
                       const updated = newList.map((p, i) => ({ ...p, order: i }));
                       handleFilteredReorder(updated);
-                    })}
-                    onMouseEnter={() => onHighlightPlace(place)}
-                    onMouseLeave={() => onHighlightPlace(null)}
+                    }) : undefined}
+                    onMouseEnter={() => !isSelectMode && onHighlightPlace(place)}
+                    onMouseLeave={() => !isSelectMode && onHighlightPlace(null)}
+                    onClick={() => {
+                      if (isSelectMode && place.day === 0) {
+                        setSelectedPlaceIds(prev => {
+                          const next = new Set(prev);
+                          if (next.has(place.id)) next.delete(place.id);
+                          else next.add(place.id);
+                          return next;
+                        });
+                        return;
+                      }
+                    }}
                     style={{
                       background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(244,114,182,0.1)',
                       borderRadius: '12px', padding: '16px', display: 'flex', gap: '12px', alignItems: 'center',
-                      cursor: isRouteCreated ? 'default' : 'grab'
+                      cursor: (isRouteCreated || isSelectMode) ? 'pointer' : 'grab',
+                      opacity: place.isHold ? 0.6 : 1,
                     }}
                   >
-                    {placeDay !== 0 && (
+                    {isSelectMode && place.day === 0 && (
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <input
+                          type="checkbox"
+                          checked={selectedPlaceIds.has(place.id)}
+                          readOnly
+                          style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: '#f472b6' }}
+                        />
+                      </div>
+                    )}
+                    {placeDay !== 0 && !isSelectMode && (
                       <div style={{
                         width: '28px', height: '28px', borderRadius: '50%', background: 'linear-gradient(135deg, #f472b6, #c084fc)',
                         display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 700, fontSize: '13px',
@@ -494,8 +594,12 @@ export default function CourseBuilder({
                       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '8px', marginBottom: '4px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', overflow: 'hidden' }}>
                           <div style={{ cursor: 'pointer', fontSize: '15px', fontWeight: 600, color: '#f5f0ff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-                               onClick={() => onShowReview(stripHtml(place.title))}>
+                               onClick={(e) => {
+                                 if (isSelectMode) return;
+                                 onShowReview(stripHtml(place.title));
+                               }}>
                             {stripHtml(place.title)}
+                            {place.isHold && <span style={{ marginLeft: '6px', fontSize: '11px', background: 'rgba(245, 158, 11, 0.2)', color: '#f59e0b', padding: '2px 6px', borderRadius: '4px' }}>보류됨</span>}
                           </div>
                           {/* Facility Type Badge */}
                           <span className="facility-badge" title={facilityLabel} style={{ flexShrink: 0 }}>

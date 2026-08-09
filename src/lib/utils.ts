@@ -211,9 +211,9 @@ export function autoDistributePlaces(places: CoursePlace[], dayCount: number): C
   const assigned = places.filter(p => (p.day ?? 0) > 0);
   const assignedTitles = new Set(assigned.map(p => p.title));
   
-  // Exclude storage places that are already assigned to a day
-  const storage = places.filter(p => (p.day ?? 0) === 0 && !assignedTitles.has(p.title));
-  const ignoredStorage = places.filter(p => (p.day ?? 0) === 0 && assignedTitles.has(p.title));
+  // Exclude storage places that are already assigned to a day or are marked as hold
+  const storage = places.filter(p => (p.day ?? 0) === 0 && !assignedTitles.has(p.title) && !p.isHold);
+  const ignoredStorage = places.filter(p => (p.day ?? 0) === 0 && (assignedTitles.has(p.title) || p.isHold));
 
   if (storage.length === 0 || dayCount < 1) return places;
 
