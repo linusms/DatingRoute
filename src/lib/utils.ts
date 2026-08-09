@@ -209,7 +209,11 @@ export function optimizeRouteTSP(places: CoursePlace[], startIdx = 0): CoursePla
  */
 export function autoDistributePlaces(places: CoursePlace[], dayCount: number): CoursePlace[] {
   const assigned = places.filter(p => (p.day ?? 0) > 0);
-  const storage = places.filter(p => (p.day ?? 0) === 0);
+  const assignedTitles = new Set(assigned.map(p => p.title));
+  
+  // Exclude storage places that are already assigned to a day
+  const storage = places.filter(p => (p.day ?? 0) === 0 && !assignedTitles.has(p.title));
+  const ignoredStorage = places.filter(p => (p.day ?? 0) === 0 && assignedTitles.has(p.title));
 
   if (storage.length === 0 || dayCount < 1) return places;
 
@@ -328,9 +332,9 @@ export function autoDistributePlaces(places: CoursePlace[], dayCount: number): C
     resultPlaces.push(...combined);
   }
 
-  // Add back any unassigned places (should not happen, but just in case)
+  // Add back any unassigned places (should not happen, but just in case) and ignored places
   const allResultIds = new Set(resultPlaces.map(p => p.id));
   const leftovers = storage.filter(p => !allResultIds.has(p.id));
   
-  return [...resultPlaces, ...leftovers].map((p, i) => ({ ...p, order: i }));
+  return [...resultPlaces, ...leftovers, ...ignoredStorage].map((p, i) => ({ ...p, order: i }));
 }
