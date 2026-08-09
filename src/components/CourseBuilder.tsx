@@ -133,6 +133,12 @@ export default function CourseBuilder({
   
   const filteredPlacesSource = useMemo(() => {
     if (activeDayTab === 'all') return places.filter(p => (p.day ?? 0) !== 0);
+    if (activeDayTab === 0) {
+      // Show unassigned first, then assigned
+      const unassigned = places.filter(p => (p.day ?? 0) === 0);
+      const assigned = places.filter(p => (p.day ?? 0) !== 0).sort((a, b) => (a.day ?? 0) - (b.day ?? 0));
+      return [...unassigned, ...assigned];
+    }
     return places.filter(p => (p.day ?? 0) === activeDayTab);
   }, [places, activeDayTab]);
 
@@ -435,10 +441,10 @@ export default function CourseBuilder({
           })()}
           
           {/* Storage Actions */}
-          {activeDayTab === 0 && places.filter(p => (p.day ?? 0) === 0).length > 0 && (
+          {activeDayTab === 0 && places.length > 0 && (
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
               <div style={{ fontSize: '13px', color: '#8b7fa8' }}>
-                보관함 장소 ({places.filter(p => (p.day ?? 0) === 0).length}개)
+                보관함 목록 ({places.length}개)
               </div>
               {isSelectMode ? (
                 <div style={{ display: 'flex', gap: '6px' }}>
@@ -565,10 +571,11 @@ export default function CourseBuilder({
                       }
                     }}
                     style={{
-                      background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(244,114,182,0.1)',
+                      background: (activeDayTab === 0 && placeDay !== 0) ? 'rgba(255,255,255,0.01)' : 'rgba(255,255,255,0.03)',
+                      border: '1px solid rgba(244,114,182,0.1)',
                       borderRadius: '12px', padding: '16px', display: 'flex', gap: '12px', alignItems: 'center',
-                      cursor: (isRouteCreated || isSelectMode) ? 'pointer' : 'grab',
-                      opacity: place.isHold ? 0.6 : 1,
+                      cursor: (isRouteCreated || isSelectMode || (activeDayTab === 0 && placeDay !== 0)) ? 'pointer' : 'grab',
+                      opacity: (place.isHold || (activeDayTab === 0 && placeDay !== 0)) ? 0.6 : 1,
                     }}
                   >
                     {isSelectMode && place.day === 0 && (
@@ -600,6 +607,11 @@ export default function CourseBuilder({
                                }}>
                             {stripHtml(place.title)}
                             {place.isHold && <span style={{ marginLeft: '6px', fontSize: '11px', background: 'rgba(245, 158, 11, 0.2)', color: '#f59e0b', padding: '2px 6px', borderRadius: '4px' }}>보류됨</span>}
+                            {activeDayTab === 0 && placeDay !== 0 && (
+                              <span style={{ marginLeft: '6px', fontSize: '11px', background: 'rgba(192, 132, 252, 0.2)', color: '#c084fc', padding: '2px 6px', borderRadius: '4px' }}>
+                                Day {placeDay}에 추가됨
+                              </span>
+                            )}
                           </div>
                           {/* Facility Type Badge */}
                           <span className="facility-badge" title={facilityLabel} style={{ flexShrink: 0 }}>
