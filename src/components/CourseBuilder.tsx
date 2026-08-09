@@ -160,11 +160,19 @@ export default function CourseBuilder({
   const handleFilteredReorder = (newFiltered: CoursePlace[]) => {
     if (activeDayTab === 'all') {
       const day0Places = places.filter(p => (p.day ?? 0) === 0);
-      onReorderPlaces([...day0Places, ...newFiltered]);
+      const newPlaces = [...day0Places, ...newFiltered];
+      newPlaces.sort((a, b) => (a.day ?? 0) - (b.day ?? 0));
+      onReorderPlaces(newPlaces);
+    } else if (activeDayTab === 0) {
+      const newPlaces = [...newFiltered];
+      newPlaces.sort((a, b) => (a.day ?? 0) - (b.day ?? 0));
+      onReorderPlaces(newPlaces);
     } else {
       const otherPlaces = places.filter(p => (p.day ?? 0) !== activeDayTab);
       const updatedFilteredPlaces = newFiltered.map(p => ({ ...p, day: activeDayTab }));
-      onReorderPlaces([...otherPlaces, ...updatedFilteredPlaces]);
+      const newPlaces = [...otherPlaces, ...updatedFilteredPlaces];
+      newPlaces.sort((a, b) => (a.day ?? 0) - (b.day ?? 0));
+      onReorderPlaces(newPlaces);
     }
   };
 
@@ -548,7 +556,7 @@ export default function CourseBuilder({
                     </div>
                   )}
                   <div
-                    draggable={!isRouteCreated && !isSelectMode}
+                    draggable={!isRouteCreated && !isSelectMode && !(activeDayTab === 0 && placeDay !== 0)}
                     onDragStart={!isSelectMode ? (e) => handleDragStart(e, idx) : undefined}
                     onDragEnter={!isSelectMode ? (e) => handleDragEnter(e, idx) : undefined}
                     onDragOver={!isSelectMode ? handleDragOver : undefined}
