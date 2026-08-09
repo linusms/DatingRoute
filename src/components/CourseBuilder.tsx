@@ -127,6 +127,23 @@ export default function CourseBuilder({
 
   // Change a place's day assignment
   const handleChangePlaceDay = (placeId: string, newDay: number) => {
+    const place = places.find(p => p.id === placeId);
+    if (!place) return;
+
+    if (newDay === 0) {
+      // Check if a master day 0 copy already exists
+      const hasMaster = places.some(p => (p.day ?? 0) === 0 && stripHtml(p.title) === stripHtml(place.title));
+      if (hasMaster) {
+        onRemovePlace(placeId);
+      } else {
+        const updated = places.map(p =>
+          p.id === placeId ? { ...p, day: 0 } : p
+        );
+        onReorderPlaces(updated);
+      }
+      return;
+    }
+
     const updated = places.map(p =>
       p.id === placeId ? { ...p, day: newDay } : p
     );
@@ -136,10 +153,8 @@ export default function CourseBuilder({
   const filteredPlacesSource = useMemo(() => {
     if (activeDayTab === 'all') return places.filter(p => (p.day ?? 0) !== 0);
     if (activeDayTab === 0) {
-      // Show unassigned first, then assigned
-      const unassigned = places.filter(p => (p.day ?? 0) === 0);
-      const assigned = places.filter(p => (p.day ?? 0) !== 0).sort((a, b) => (a.day ?? 0) - (b.day ?? 0));
-      return [...unassigned, ...assigned];
+      // Storage tab only shows day 0 master copies.
+      return places.filter(p => (p.day ?? 0) === 0);
     }
     return places.filter(p => (p.day ?? 0) === activeDayTab);
   }, [places, activeDayTab]);
@@ -690,26 +705,38 @@ export default function CourseBuilder({
                         {/* Day selector: inline buttons for Storage tab, select for other tabs */}
                         {isMultiDay && !isRouteCreated && activeDayTab === 0 && (
                           <div style={{ display: 'flex', gap: '4px', marginTop: '6px', flexWrap: 'wrap' }} onClick={e => e.stopPropagation()}>
-                            {Array.from({ length: dayCount }, (_, i) => i + 1).map(d => (
-                              <button
-                                key={d}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleChangePlaceDay(place.id, d);
-                                  onShowToast?.(`"${stripHtml(place.title)}" Day ${d}에 추가됨`);
-                                }}
-                                style={{
-                                  fontSize: '11px', padding: '4px 8px', borderRadius: '4px',
-                                  background: placeDay === d ? 'rgba(192,132,252,0.2)' : 'rgba(255,255,255,0.06)',
-                                  color: placeDay === d ? '#c084fc' : '#cbd5e1',
-                                  border: `1px solid ${placeDay === d ? 'rgba(192,132,252,0.5)' : 'rgba(255,255,255,0.2)'}`,
-                                  cursor: 'pointer', transition: 'all 0.2s',
-                                }}
-                                title={`Day ${d}에 추가하기`}
-                              >
-                                {placeDay === d ? `✅ D${d}` : `D${d}`}
-                              </button>
-                            ))}
+                            {Array.from({ length: dayCount }, (_, i) => i + 1).map(d => {
+                              const isAssignedToDay = places.some(p => p.day === d && stripHtml(p.title) === stripHtml(place.title));
+                              return (
+                                <button
+                                  key={d}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (isAssignedToDay) {
+                                      // Remove clone
+                                      const clone = places.find(p => p.day === d && stripHtml(p.title) === stripHtml(place.title));
+                                      if (clone) onRemovePlace(clone.id);
+                                      onShowToast?.(`"${stripHtml(place.title)}" Day ${d}에서 제거됨`);
+                                    } else {
+                                      // Create clone
+                                      const newPlace = { ...place, id: Math.random().toString(36).substring(2, 9), day: d };
+                                      onReorderPlaces([...places, newPlace]);
+                                      onShowToast?.(`"${stripHtml(place.title)}" Day ${d}에 추가됨`);
+                                    }
+                                  }}
+                                  style={{
+                                    fontSize: '11px', padding: '4px 8px', borderRadius: '4px',
+                                    background: isAssignedToDay ? 'rgba(192,132,252,0.2)' : 'rgba(255,255,255,0.06)',
+                                    color: isAssignedToDay ? '#c084fc' : '#cbd5e1',
+                                    border: `1px solid ${isAssignedToDay ? 'rgba(192,132,252,0.5)' : 'rgba(255,255,255,0.2)'}`,
+                                    cursor: 'pointer', transition: 'all 0.2s',
+                                  }}
+                                  title={`Day ${d}에 추가하기`}
+                                >
+                                  {isAssignedToDay ? `✅ D${d}` : `D${d}`}
+                                </button>
+                              );
+                            })}
                           </div>
                         )}
                         {isMultiDay && !isRouteCreated && activeDayTab !== 0 && (
