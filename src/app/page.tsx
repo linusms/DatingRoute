@@ -578,13 +578,14 @@ export default function HomePage() {
 
   // ──── Place Actions (with server sync) ────
   const handleAddPlace = useCallback(
-    async (place: Place) => {
+    async (place: Place & { day?: number }) => {
       let isDuplicate = false;
       let newPlace: CoursePlace | null = null;
       const cleanTitle = stripHtml(place.title);
+      const targetDay = place.day ?? 0;
 
       setCoursePlaces((prev) => {
-        if (prev.some((p) => stripHtml(p.title) === cleanTitle)) {
+        if (prev.some((p) => stripHtml(p.title) === cleanTitle && (p.day ?? 0) === targetDay)) {
           isDuplicate = true;
           return prev;
         }
@@ -594,7 +595,7 @@ export default function HomePage() {
           id: place.id || Math.random().toString(36).substring(2, 9),
           order: prev.length,
           memo: '',
-          day: 0,
+          day: targetDay,
         };
 
         return [...prev, newPlace];
@@ -886,6 +887,7 @@ export default function HomePage() {
                 places={coursePlaces}
                 directions={directions}
                 onRemovePlace={handleRemovePlace}
+                onAddPlace={handleAddPlace}
                 onReorderPlaces={handleReorderPlaces}
                 onShowReview={(name) => setReviewPlace(name)}
                 onHighlightPlace={setHighlightPlace}

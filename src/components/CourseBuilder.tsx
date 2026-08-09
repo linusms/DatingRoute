@@ -9,6 +9,7 @@ interface CourseBuilderProps {
   places: CoursePlace[];
   directions: DirectionResult | null;
   onRemovePlace: (id: string) => void;
+  onAddPlace?: (place: CoursePlace & { day?: number }) => void;
   onReorderPlaces: (newPlaces: CoursePlace[]) => void;
   onShowReview: (placeName: string) => void;
   onHighlightPlace: (place: CoursePlace | null) => void;
@@ -42,6 +43,7 @@ export default function CourseBuilder({
   places,
   directions,
   onRemovePlace,
+  onAddPlace,
   onReorderPlaces,
   onShowReview,
   onHighlightPlace,
@@ -470,10 +472,10 @@ export default function CourseBuilder({
           })()}
           
           {/* Storage Actions */}
-          {activeDayTab === 0 && places.length > 0 && (
+          {activeDayTab === 0 && filteredPlaces.length > 0 && (
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
               <div style={{ fontSize: '13px', color: '#8b7fa8' }}>
-                보관함 목록 ({places.length}개)
+                보관함 목록 ({filteredPlaces.length}개)
               </div>
               {isSelectMode ? (
                 <div style={{ display: 'flex', gap: '6px' }}>
@@ -723,9 +725,13 @@ export default function CourseBuilder({
                                       onShowToast?.(`"${stripHtml(place.title)}" Day ${d}에서 제거됨`);
                                     } else {
                                       // Create clone
-                                      const newPlace = { ...place, id: Math.random().toString(36).substring(2, 9), day: d };
-                                      onReorderPlaces([...places, newPlace]);
-                                      onShowToast?.(`"${stripHtml(place.title)}" Day ${d}에 추가됨`);
+                                      if (onAddPlace) {
+                                        onAddPlace({ ...place, day: d });
+                                      } else {
+                                        const newPlace = { ...place, id: Math.random().toString(36).substring(2, 9), day: d };
+                                        onReorderPlaces([...places, newPlace]);
+                                        onShowToast?.(`"${stripHtml(place.title)}" Day ${d}에 추가됨`);
+                                      }
                                     }
                                   }}
                                   style={{
@@ -862,8 +868,12 @@ export default function CourseBuilder({
                           <div
                             key={p.id}
                             onClick={() => {
-                              const newPlace = { ...p, id: p.id + '-' + Date.now(), day: activeDayTab as number, order: places.length };
-                              onReorderPlaces([...places, newPlace]);
+                              if (onAddPlace) {
+                                onAddPlace({ ...p, day: activeDayTab as number });
+                              } else {
+                                const newPlace = { ...p, id: p.id + '-' + Date.now(), day: activeDayTab as number, order: places.length };
+                                onReorderPlaces([...places, newPlace]);
+                              }
                               setShowStoragePins?.(false);
                             }}
                             style={{
