@@ -54,6 +54,7 @@ export default function AIRecommendPanel({
   const [expandedEventId, setExpandedEventId] = useState<string | null>(null);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [showPopup, setShowPopup] = useState(false);
+  const [showCategory, setShowCategory] = useState(true);
 
   // Resize state
   const panelRef = useRef<HTMLDivElement>(null);
@@ -366,38 +367,91 @@ export default function AIRecommendPanel({
         background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(244,114,182,0.15)',
         borderRadius: '12px', padding: '14px', marginBottom: '12px',
       }}>
-        <div style={{ fontSize: '12px', color: '#8b7fa8', marginBottom: '10px', fontWeight: 600, letterSpacing: '0.5px' }}>
-          🏷️ 추천 카테고리
+        <div 
+          onClick={() => setShowCategory(!showCategory)}
+          style={{ fontSize: '12px', color: '#8b7fa8', marginBottom: showCategory ? '10px' : '0', fontWeight: 600, letterSpacing: '0.5px', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+        >
+          <span>🏷️ 추천 카테고리</span>
+          <span>{showCategory ? '▲' : '▼'}</span>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-          {AI_CATEGORIES.map(cat => {
-            const isActive = selectedCategories.includes(cat.id);
-            return (
-              <button
-                key={cat.id}
-                onClick={() => toggleCategory(cat.id)}
-                style={{
-                  padding: '8px 10px', borderRadius: '8px', cursor: 'pointer',
-                  border: isActive ? '1px solid rgba(244,114,182,0.5)' : '1px solid rgba(255,255,255,0.08)',
-                  background: isActive ? 'rgba(244,114,182,0.12)' : 'rgba(255,255,255,0.04)',
-                  color: isActive ? '#f472b6' : '#8b7fa8',
-                  fontSize: '12px', fontWeight: isActive ? 600 : 400,
-                  transition: 'all 0.2s', textAlign: 'left',
-                  display: 'flex', flexDirection: 'column', gap: '2px',
-                }}
-              >
-                <span>{cat.label}</span>
-                <span style={{ fontSize: '10px', opacity: 0.7 }}>{cat.desc}</span>
-              </button>
-            );
-          })}
-        </div>
-        {selectedCategories.length === 0 && (
-          <div style={{ fontSize: '11px', color: '#ef4444', marginTop: '8px' }}>
-            ⚠️ 최소 1개 이상 카테고리를 선택해주세요
-          </div>
+        {showCategory && (
+          <>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+              {AI_CATEGORIES.map(cat => {
+                const isActive = selectedCategories.includes(cat.id);
+                return (
+                  <button
+                    key={cat.id}
+                    onClick={() => toggleCategory(cat.id)}
+                    style={{
+                      padding: '8px 10px', borderRadius: '8px', cursor: 'pointer',
+                      border: isActive ? '1px solid rgba(244,114,182,0.5)' : '1px solid rgba(255,255,255,0.08)',
+                      background: isActive ? 'rgba(244,114,182,0.12)' : 'rgba(255,255,255,0.04)',
+                      color: isActive ? '#f472b6' : '#8b7fa8',
+                      fontSize: '12px', fontWeight: isActive ? 600 : 400,
+                      transition: 'all 0.2s', textAlign: 'left',
+                      display: 'flex', flexDirection: 'column', gap: '2px',
+                    }}
+                  >
+                    <span>{cat.label}</span>
+                    <span style={{ fontSize: '10px', opacity: 0.7 }}>{cat.desc}</span>
+                  </button>
+                );
+              })}
+            </div>
+            {selectedCategories.length === 0 && (
+              <div style={{ fontSize: '11px', color: '#ef4444', marginTop: '8px' }}>
+                ⚠️ 최소 1개 이상 카테고리를 선택해주세요
+              </div>
+            )}
+          </>
         )}
       </div>
+
+      {/* Sidebar Results Summary */}
+      {hasSearched && !isLoading && !showPopup && (
+        <div 
+          onClick={() => setShowPopup(true)}
+          className="animate-fade-in"
+          style={{
+            width: '100%', padding: '16px', borderRadius: '12px', cursor: 'pointer',
+            background: 'rgba(255,255,255,0.03)', border: '1px dashed rgba(244,114,182,0.4)',
+            color: '#8b7fa8', display: 'flex', flexDirection: 'column', gap: '10px',
+            marginTop: '16px', transition: 'all 0.2s'
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = 'rgba(244,114,182,0.08)';
+            e.currentTarget.style.borderColor = 'rgba(244,114,182,0.6)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = 'rgba(255,255,255,0.03)';
+            e.currentTarget.style.borderColor = 'rgba(244,114,182,0.4)';
+          }}
+        >
+          <div style={{ fontSize: '14px', color: '#f5f0ff', fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span>✨ AI 추천 완료!</span>
+            <span style={{ fontSize: '12px', background: 'rgba(244,114,182,0.2)', padding: '2px 8px', borderRadius: '12px', color: '#f472b6' }}>열기 ↗</span>
+          </div>
+          <div style={{ fontSize: '12px', color: '#c084fc', marginBottom: '4px' }}>
+            핫플 {recommendations.length}개, 행사 {events.length}개 발견
+          </div>
+          
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            {recommendations.slice(0, 3).map((rec, idx) => (
+              <div key={idx} style={{ fontSize: '12px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: '#e2e8f0', display: 'flex', gap: '6px' }}>
+                <span style={{ opacity: 0.6 }}>📍</span>
+                <span>{rec.name}</span>
+              </div>
+            ))}
+          </div>
+
+          {recommendations.length > 3 && (
+            <div style={{ fontSize: '11px', textAlign: 'center', marginTop: '6px', color: '#94a3b8', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '10px' }}>
+              + {recommendations.length - 3}개 더보기 (클릭)
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Search Results Popup Overlay */}
       {showPopup && (
@@ -418,7 +472,6 @@ export default function AIRecommendPanel({
               border: '1px solid rgba(244,114,182,0.3)',
               boxShadow: '0 20px 40px rgba(0,0,0,0.5)',
               display: 'flex', flexDirection: 'column', overflow: 'hidden',
-              maxHeight: '90vh', maxWidth: '95vw'
             }}
           >
             {/* Header */}
