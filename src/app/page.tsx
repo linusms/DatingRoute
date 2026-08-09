@@ -323,6 +323,15 @@ export default function HomePage() {
             setCourseName(data.courseDetails.displayName || '');
             setCourseDescription(data.courseDetails.description || '');
           }
+          
+          try {
+            const savedSchedule = localStorage.getItem(`datingroute_schedule_${course.roomId}`);
+            if (savedSchedule) {
+              setSchedule(JSON.parse(savedSchedule));
+            } else {
+              setSchedule(null);
+            }
+          } catch { setSchedule(null); }
 
           // Use live places from the room (latest state)
           if (data.coursePlaces && data.coursePlaces.length > 0) {
@@ -419,6 +428,15 @@ export default function HomePage() {
           setCourseDescription(placesData.courseDetails.description || '');
         }
 
+        try {
+          const savedSchedule = localStorage.getItem(`datingroute_schedule_${data.room.id}`);
+          if (savedSchedule) {
+            setSchedule(JSON.parse(savedSchedule));
+          } else {
+            setSchedule(null);
+          }
+        } catch { setSchedule(null); }
+
         if (placesData.coursePlaces?.length > 0) {
           setCoursePlaces(placesData.coursePlaces);
           setActiveTab('route');
@@ -445,6 +463,12 @@ export default function HomePage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(() => {
+    if (schedule && sessionId) {
+      localStorage.setItem(`datingroute_schedule_${sessionId}`, JSON.stringify(schedule));
+    }
+  }, [schedule, sessionId]);
+
   const handleGoToDashboard = useCallback(() => {
     setSessionMode(null);
     setSessionId(null);
@@ -456,6 +480,7 @@ export default function HomePage() {
     setDirections(null);
     setRoutePath(null);
     setIsRouteCreated(false);
+    setSchedule(null);
   }, []);
 
   const handleSessionInvalidatedLogout = useCallback(() => {
@@ -642,7 +667,7 @@ export default function HomePage() {
           const res = await fetch(`/api/sessions/${sessionId}/courses`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name, description, userId: currentUser?.id, nickname: currentUser?.nickname }),
+            body: JSON.stringify({ name, description, userId: currentUser?.id, nickname: currentUser?.nickname, schedule }),
           });
           if (!res.ok) {
             throw new Error('Save failed');
@@ -778,6 +803,8 @@ export default function HomePage() {
         nickname={nickname}
         members={members}
         isConnected={isConnected}
+        courseName={courseName}
+        onUpdateCourseName={(name) => handleUpdateCourseName(name, courseDescription)}
         onCopyInviteCode={handleCopyInviteCode}
         onCopyInviteLink={handleCopyInviteLink}
         onDisconnect={handleGoToDashboard}
@@ -816,15 +843,16 @@ export default function HomePage() {
             </button>
           </div>
 
-          <div className="sidebar-content">
-            <div style={{ display: activeTab === 'search' ? 'block' : 'none', height: '100%' }}>
+          <div className="sidebar-content" style={{ display: 'flex', flexDirection: 'column' }}>
+            <div style={{ display: activeTab === 'search' ? 'flex' : 'none', flexDirection: 'column', flex: 1, minHeight: 0 }}>
               <SearchPanel
+                coursePlaces={coursePlaces}
                 onAddPlace={handleAddPlace}
                 onShowReview={(name) => setReviewPlace(name)}
                 onHighlightPlace={setHighlightPlace}
               />
             </div>
-            <div style={{ display: activeTab === 'ai' ? 'block' : 'none', height: '100%' }}>
+            <div style={{ display: activeTab === 'ai' ? 'flex' : 'none', flexDirection: 'column', flex: 1, minHeight: 0 }}>
               <AIRecommendPanel
                 coursePlaces={coursePlaces}
                 schedule={schedule}
@@ -833,7 +861,7 @@ export default function HomePage() {
                 onHighlightPlace={setHighlightPlace}
               />
             </div>
-            <div style={{ display: activeTab === 'route' ? 'block' : 'none', height: '100%' }}>
+            <div style={{ display: activeTab === 'route' ? 'flex' : 'none', flexDirection: 'column', flex: 1, overflowY: 'auto' }}>
               <CourseBuilder
                 places={coursePlaces}
                 directions={directions}

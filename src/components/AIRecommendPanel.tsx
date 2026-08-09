@@ -324,7 +324,7 @@ export default function AIRecommendPanel({
           }}
         >
           <option value="all" style={{ background: '#1a1520' }}>🌏 전체 코스 장소 기준</option>
-          {coursePlaces.map(p => (
+          {Array.from(new Map(coursePlaces.map(p => [p.title, p])).values()).map(p => (
             <option key={p.id} value={p.id} style={{ background: '#1a1520' }}>
               📍 {stripHtml(p.title)}
             </option>

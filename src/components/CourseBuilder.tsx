@@ -124,35 +124,36 @@ export default function CourseBuilder({
     onReorderPlaces(updated);
   };
   
+  const filteredPlacesSource = useMemo(() => {
+    if (activeDayTab === 'all') return places.filter(p => (p.day ?? 0) !== 0);
+    return places.filter(p => (p.day ?? 0) === activeDayTab);
+  }, [places, activeDayTab]);
+
   const {
-    list: draggablePlaces,
+    list: filteredPlaces,
     updateList,
     handleDragStart,
     handleDragEnter,
     handleDragOver,
     handleDrop,
     handleDragEnd,
-  } = useDragAndDrop(places);
+  } = useDragAndDrop(filteredPlacesSource);
+
+  // Sync internal drag list when external filtered places change
+  React.useEffect(() => {
+    updateList(filteredPlacesSource);
+  }, [filteredPlacesSource, updateList]);
 
   const handleFilteredReorder = (newFiltered: CoursePlace[]) => {
     if (activeDayTab === 'all') {
-      onReorderPlaces(newFiltered);
+      const day0Places = places.filter(p => (p.day ?? 0) === 0);
+      onReorderPlaces([...day0Places, ...newFiltered]);
     } else {
       const otherPlaces = places.filter(p => (p.day ?? 0) !== activeDayTab);
       const updatedFilteredPlaces = newFiltered.map(p => ({ ...p, day: activeDayTab }));
       onReorderPlaces([...otherPlaces, ...updatedFilteredPlaces]);
     }
   };
-
-  const filteredPlaces = useMemo(() => {
-    if (activeDayTab === 'all') return draggablePlaces.filter(p => (p.day ?? 0) !== 0);
-    return draggablePlaces.filter(p => (p.day ?? 0) === activeDayTab);
-  }, [draggablePlaces, activeDayTab]);
-
-  // Sync internal drag list when external places change
-  React.useEffect(() => {
-    updateList(places);
-  }, [places, updateList]);
 
   const handleCopyCode = () => {
     onCopyInviteCode?.();
@@ -200,167 +201,7 @@ export default function CourseBuilder({
   return (
     <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
 
-      {/* ── 경로 이름/설명 편집 영역 ── */}
-      <div style={{
-        background: 'rgba(255,255,255,0.04)', borderRadius: '12px',
-        border: '1px solid rgba(244,114,182,0.15)', padding: '14px',
-      }}>
-        {isEditingName ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            <input
-              type="text"
-              value={editName}
-              onChange={e => setEditName(e.target.value)}
-              placeholder="경로 이름 (예: 홍대 데이트 코스)"
-              autoFocus
-              style={{
-                width: '100%', padding: '8px 12px', borderRadius: '8px',
-                background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(244,114,182,0.4)',
-                color: '#f5f0ff', fontSize: '15px', fontWeight: 600, outline: 'none',
-              }}
-              onKeyDown={e => { if (e.key === 'Enter') handleSaveName(); if (e.key === 'Escape') setIsEditingName(false); }}
-            />
-            <input
-              type="text"
-              value={editDescription}
-              onChange={e => setEditDescription(e.target.value)}
-              placeholder="설명 (선택사항)"
-              style={{
-                width: '100%', padding: '6px 12px', borderRadius: '8px',
-                background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.15)',
-                color: '#b4a9c9', fontSize: '13px', outline: 'none',
-              }}
-            />
-            <div style={{ display: 'flex', gap: '6px' }}>
-              <button
-                onClick={handleSaveName}
-                disabled={nameSaving}
-                style={{
-                  padding: '6px 16px', borderRadius: '8px', fontSize: '13px',
-                  background: 'linear-gradient(135deg, #f472b6, #c084fc)',
-                  color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 600,
-                }}
-              >
-                {nameSaving ? '저장 중...' : '✓ 저장'}
-              </button>
-              <button
-                onClick={() => setIsEditingName(false)}
-                style={{
-                  padding: '6px 12px', borderRadius: '8px', fontSize: '13px',
-                  background: 'rgba(255,255,255,0.08)', color: '#8b7fa8',
-                  border: '1px solid rgba(255,255,255,0.1)', cursor: 'pointer',
-                }}
-              >
-                취소
-              </button>
-            </div>
-          </div>
-        ) : (
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '2px' }}>
-                <span style={{ fontSize: '15px', fontWeight: 700, color: '#f5f0ff' }}>
-                  {courseName || '이름 없는 경로'}
-                </span>
-                <span style={{
-                  fontSize: '10px', padding: '1px 6px', borderRadius: '4px',
-                  background: 'rgba(244,114,182,0.15)', color: '#f472b6',
-                  border: '1px solid rgba(244,114,182,0.3)', fontWeight: 600,
-                }}>자동저장</span>
-              </div>
-              {courseDescription && (
-                <div style={{ fontSize: '12px', color: '#8b7fa8' }}>{courseDescription}</div>
-              )}
-              {!courseDescription && !courseName && (
-                <div style={{ fontSize: '12px', color: '#6b5f85', fontStyle: 'italic' }}>이름과 설명을 설정해보세요</div>
-              )}
-            </div>
-            {onUpdateCourseName && (
-              <button
-                onClick={handleStartEditName}
-                title="이름 편집"
-                style={{
-                  background: 'rgba(244,114,182,0.1)', color: '#f472b6',
-                  border: 'none', width: '32px', height: '32px', borderRadius: '8px',
-                  cursor: 'pointer', display: 'flex', alignItems: 'center',
-                  justifyContent: 'center', fontSize: '15px', flexShrink: 0,
-                }}
-              >
-                ✏️
-              </button>
-            )}
-          </div>
-        )}
-      </div>
 
-
-      <div>
-        <div className="invite-section">
-          <button
-            className={`invite-section-btn ${showInvitePanel === 'create' ? 'active' : ''}`}
-            onClick={() => {
-              if (showInvitePanel === 'create') {
-                setShowInvitePanel(null);
-              } else {
-                setShowInvitePanel('create');
-                if (!inviteCode && onCreateInviteCode) {
-                  onCreateInviteCode();
-                }
-              }
-            }}
-          >
-            🔗 초대코드 {inviteCode ? '보기' : '만들기'}
-          </button>
-          <button
-            className={`invite-section-btn ${showInvitePanel === 'join' ? 'active' : ''}`}
-            onClick={() => setShowInvitePanel(showInvitePanel === 'join' ? null : 'join')}
-          >
-            🎟️ 초대코드 입력
-          </button>
-        </div>
-
-        {/* Create invite code panel */}
-        {showInvitePanel === 'create' && inviteCode && (
-          <div className="invite-code-display">
-            <div className="invite-code-value">
-              <span className="invite-code-text">{inviteCode}</span>
-              <button className="invite-copy-btn" onClick={handleCopyCode}>
-                {codeCopied ? '✅ 복사됨' : '📋 복사'}
-              </button>
-            </div>
-            <button className="invite-link-btn" onClick={onCopyInviteLink}>
-              🔗 초대 링크 복사
-            </button>
-            {isCollaborative && (
-              <div style={{ fontSize: '12px', color: 'var(--color-text-tertiary)', textAlign: 'center' }}>
-                👥 현재 {members!.length}명 참여 중
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Join invite code panel */}
-        {showInvitePanel === 'join' && (
-          <div className="invite-join-form">
-            <input
-              className="invite-join-input"
-              type="text"
-              placeholder="6자리 코드"
-              value={joinCode}
-              onChange={(e) => setJoinCode(e.target.value.toUpperCase().slice(0, 6))}
-              maxLength={6}
-              onKeyDown={(e) => e.key === 'Enter' && handleJoinSubmit()}
-            />
-            <button
-              className="invite-join-submit"
-              onClick={handleJoinSubmit}
-              disabled={joinLoading || joinCode.length < 6}
-            >
-              {joinLoading ? '⏳' : '참가'}
-            </button>
-          </div>
-        )}
-      </div>
 
       {/* Empty state */}
       {places.length === 0 && (
@@ -384,6 +225,15 @@ export default function CourseBuilder({
               onScheduleChange={onScheduleChange || (() => {})}
             />
           </div>
+
+          <button
+            className="btn btn-primary animate-slide-up"
+            style={{ width: '100%', padding: '16px', fontSize: '16px', marginBottom: '16px' }}
+            onClick={onCreateRoute}
+            disabled={places.length < 2 && !isRouteCreated}
+          >
+            {isRouteCreated ? '🔄 경로 다시 생성하기' : '✨ 경로 생성하기'}
+          </button>
 
           {/* Day Tabs */}
           <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', marginBottom: '16px', paddingBottom: '4px' }} className="custom-scrollbar">
@@ -710,35 +560,50 @@ export default function CourseBuilder({
                 <span>+</span> 담은 장소 목록에서 추가
               </button>
               
-              {showStorageDropdown && (
-                <div className="animate-fade-in" style={{
-                  marginTop: '8px', background: 'rgba(0,0,0,0.3)', borderRadius: '12px', padding: '12px',
-                  border: '1px solid rgba(255,255,255,0.05)', display: 'flex', flexDirection: 'column', gap: '8px'
-                }}>
-                  {places.filter(p => (p.day ?? 0) === 0).length === 0 ? (
-                    <div style={{ color: '#8b7fa8', textAlign: 'center', fontSize: '13px', padding: '12px' }}>
-                      보관함에 담은 장소가 없습니다.
-                    </div>
-                  ) : (
-                    places.filter(p => (p.day ?? 0) === 0).map(p => {
-                      const fac = parseCategoryToFacility(p.category);
-                      const fIcon = FACILITY_ICONS[fac];
-                      const fLabel = FACILITY_LABELS[fac];
-                      return (
-                        <div
-                          key={p.id}
-                          onClick={() => {
-                            handleChangePlaceDay(p.id, activeDayTab as number);
-                            setShowStorageDropdown(false);
-                          }}
-                          style={{
-                            background: 'rgba(255,255,255,0.05)', padding: '12px', borderRadius: '8px',
-                            display: 'flex', alignItems: 'center', gap: '12px',
-                            cursor: 'pointer', border: '1px solid transparent', transition: 'all 0.2s'
-                          }}
-                          onMouseEnter={(e) => e.currentTarget.style.borderColor = 'rgba(244,114,182,0.4)'}
-                          onMouseLeave={(e) => e.currentTarget.style.borderColor = 'transparent'}
-                        >
+              {showStorageDropdown && (() => {
+                const storagePlaces = places.filter(p => (p.day ?? 0) === 0);
+                const assignedTitles = new Set(places.filter(p => (p.day ?? 0) > 0).map(p => p.title));
+                const sortedStoragePlaces = [...storagePlaces].sort((a, b) => {
+                  const aAssigned = assignedTitles.has(a.title);
+                  const bAssigned = assignedTitles.has(b.title);
+                  if (aAssigned && !bAssigned) return 1;
+                  if (!aAssigned && bAssigned) return -1;
+                  return 0;
+                });
+                
+                return (
+                  <div className="animate-fade-in" style={{
+                    marginTop: '8px', background: 'rgba(0,0,0,0.3)', borderRadius: '12px', padding: '12px',
+                    border: '1px solid rgba(255,255,255,0.05)', display: 'flex', flexDirection: 'column', gap: '8px'
+                  }}>
+                    {sortedStoragePlaces.length === 0 ? (
+                      <div style={{ color: '#8b7fa8', textAlign: 'center', fontSize: '13px', padding: '12px' }}>
+                        보관함에 담은 장소가 없습니다.
+                      </div>
+                    ) : (
+                      sortedStoragePlaces.map(p => {
+                        const fac = parseCategoryToFacility(p.category);
+                        const fIcon = FACILITY_ICONS[fac];
+                        const fLabel = FACILITY_LABELS[fac];
+                        const isAssigned = assignedTitles.has(p.title);
+                        return (
+                          <div
+                            key={p.id}
+                            onClick={() => {
+                              if (isAssigned) return;
+                              const newPlace = { ...p, id: p.id + '-' + Date.now(), day: activeDayTab as number, order: places.length };
+                              onReorderPlaces([...places, newPlace]);
+                              setShowStorageDropdown(false);
+                            }}
+                            style={{
+                              background: 'rgba(255,255,255,0.05)', padding: '12px', borderRadius: '8px',
+                              display: 'flex', alignItems: 'center', gap: '12px',
+                              cursor: isAssigned ? 'default' : 'pointer', border: '1px solid transparent', transition: 'all 0.2s',
+                              opacity: isAssigned ? 0.6 : 1
+                            }}
+                            onMouseEnter={(e) => !isAssigned && (e.currentTarget.style.borderColor = 'rgba(244,114,182,0.4)')}
+                            onMouseLeave={(e) => e.currentTarget.style.borderColor = 'transparent'}
+                          >
                           <div style={{ flex: 1, minWidth: 0 }}>
                             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '8px', marginBottom: '4px' }}>
                               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', overflow: 'hidden' }}>
@@ -788,32 +653,13 @@ export default function CourseBuilder({
                       );
                     })
                   )}
-                </div>
-              )}
+                  </div>
+                );
+              })()}
             </div>
           )}
-
-
-          {!isRouteCreated && places.length >= 2 && (
-            <button
-              className="btn btn-primary"
-              style={{ width: '100%', marginTop: '10px' }}
-              onClick={onCreateRoute}
-            >
-              🚗 경로 만들기
-            </button>
-          )}
-          
           {isRouteCreated && (
             <>
-              <button
-                className="btn btn-ghost"
-                style={{ width: '100%', marginTop: '10px' }}
-                onClick={() => onReorderPlaces([...places])}
-              >
-                ✏️ 장소 순서 수정하기
-              </button>
-
               {/* Share section */}
               <div className="route-share-section">
                 <div className="route-share-label">📤 코스 공유하기</div>

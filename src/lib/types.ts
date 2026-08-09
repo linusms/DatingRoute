@@ -49,6 +49,7 @@ export interface Course {
   displayName?: string;   // user-set label for live courses
   description: string;
   places: CoursePlace[];
+  schedule?: DateSchedule;
   roomId?: string;
   isCollaborative?: boolean;
   isLive?: boolean;       // true = live (auto-saved) course, false = named snapshot
