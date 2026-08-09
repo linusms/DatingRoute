@@ -118,8 +118,7 @@ export default function AIRecommendPanel({
     } else {
       setIsLoading(true);
       setError(null);
-      setHasSearched(true);
-      setShowPopup(true);
+      setHasSearched(false);
       setProgressStep(1);
       setStatusMessage('🚀 AI 데이터 분석 준비 중...');
     }
@@ -198,6 +197,8 @@ export default function AIRecommendPanel({
                   setRecommendations(data.recommendations || []);
                   setEvents(data.events || []);
                   setSummary(data.summary || '');
+                  setHasSearched(true);
+                  setShowPopup(true);
                 }
               } else if (data.type === 'error') {
                 setError(data.message);
@@ -290,9 +291,9 @@ export default function AIRecommendPanel({
           onClick={() => handleAIRecommend()}
           disabled={isLoading}
           className="btn btn-primary"
-          style={{ padding: '10px 24px', fontSize: '14px', flex: 1 }}
+          style={{ padding: '10px 24px', fontSize: '14px', flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
         >
-          {isLoading ? '분석 중...' : '🔍 추천 검색'}
+          {isLoading ? (statusMessage || '분석 중...') : '🔍 추천 검색'}
         </button>
         {isLoading && (
           <button 
@@ -417,7 +418,8 @@ export default function AIRecommendPanel({
               borderRadius: '24px',
               border: '1px solid rgba(244,114,182,0.3)',
               boxShadow: '0 20px 40px rgba(0,0,0,0.5)',
-              display: 'flex', flexDirection: 'column', overflow: 'hidden'
+              display: 'flex', flexDirection: 'column', overflow: 'hidden',
+              maxHeight: '90vh', maxWidth: '95vw'
             }}
           >
             {/* Header */}

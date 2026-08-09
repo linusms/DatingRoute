@@ -590,7 +590,6 @@ export default function CourseBuilder({
                           <div
                             key={p.id}
                             onClick={() => {
-                              if (isAssigned) return;
                               const newPlace = { ...p, id: p.id + '-' + Date.now(), day: activeDayTab as number, order: places.length };
                               onReorderPlaces([...places, newPlace]);
                               setShowStorageDropdown(false);
@@ -598,10 +597,9 @@ export default function CourseBuilder({
                             style={{
                               background: 'rgba(255,255,255,0.05)', padding: '12px', borderRadius: '8px',
                               display: 'flex', alignItems: 'center', gap: '12px',
-                              cursor: isAssigned ? 'default' : 'pointer', border: '1px solid transparent', transition: 'all 0.2s',
-                              opacity: isAssigned ? 0.6 : 1
+                              cursor: 'pointer', border: '1px solid transparent', transition: 'all 0.2s',
                             }}
-                            onMouseEnter={(e) => !isAssigned && (e.currentTarget.style.borderColor = 'rgba(244,114,182,0.4)')}
+                            onMouseEnter={(e) => e.currentTarget.style.borderColor = 'rgba(244,114,182,0.4)'}
                             onMouseLeave={(e) => e.currentTarget.style.borderColor = 'transparent'}
                           >
                           <div style={{ flex: 1, minWidth: 0 }}>
