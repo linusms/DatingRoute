@@ -171,6 +171,27 @@ export default function CourseBuilder({
 
   const isCollaborative = members && members.length > 1;
 
+  // Calculate per-day stats (distance and duration)
+  const dayStats = useMemo(() => {
+    const stats: Record<number, { distance: number, durationMs: number }> = {};
+    if (!isRouteCreated || !directions || !directions.legs) return stats;
+
+    for (let i = 0; i < places.length - 1; i++) {
+      const p1 = places[i];
+      const p2 = places[i + 1];
+      if ((p1.day ?? 1) === (p2.day ?? 1)) {
+        const day = p1.day ?? 1;
+        if (!stats[day]) stats[day] = { distance: 0, durationMs: 0 };
+        const leg = directions.legs[i];
+        if (leg) {
+          stats[day].distance += leg.distance;
+          stats[day].durationMs += leg.duration;
+        }
+      }
+    }
+    return stats;
+  }, [places, directions, isRouteCreated]);
+
   return (
     <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
 
@@ -464,17 +485,31 @@ export default function CourseBuilder({
                   {/* Day divider header */}
                   {showDayHeader && (
                     <div style={{
-                      display: 'flex', alignItems: 'center', gap: '10px',
-                      margin: idx === 0 ? '0 0 10px 0' : '16px 0 10px 0',
+                      display: 'flex', flexDirection: 'column',
+                      margin: idx === 0 ? '0 0 10px 0' : '24px 0 10px 0',
                     }}>
-                      <div style={{
-                        background: 'linear-gradient(135deg, #f472b6, #c084fc)',
-                        borderRadius: '8px', padding: '4px 14px',
-                        fontSize: '13px', fontWeight: 700, color: '#fff', flexShrink: 0,
-                      }}>
-                        📅 {getDayLabel(placeDay)}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <div style={{
+                          background: 'linear-gradient(135deg, #f472b6, #c084fc)',
+                          borderRadius: '8px', padding: '4px 14px',
+                          fontSize: '13px', fontWeight: 700, color: '#fff', flexShrink: 0,
+                        }}>
+                          📅 {getDayLabel(placeDay)}
+                        </div>
+                        <div style={{ flex: 1, height: '1px', background: 'linear-gradient(to right, rgba(244,114,182,0.3), transparent)' }} />
                       </div>
-                      <div style={{ flex: 1, height: '1px', background: 'linear-gradient(to right, rgba(244,114,182,0.3), transparent)' }} />
+                      
+                      {/* Day Stats summary */}
+                      {isRouteCreated && dayStats[placeDay] && (
+                        <div style={{
+                          marginTop: '8px', marginLeft: '4px', fontSize: '13px', color: '#f472b6', fontWeight: 600
+                        }}>
+                          전체 이동거리 {(dayStats[placeDay].distance / 1000).toFixed(1)}km, 
+                          이동 시간 {transitMode === 'driving' 
+                            ? formatDuration(dayStats[placeDay].durationMs)
+                            : formatDuration(getWalkingTimeMs(dayStats[placeDay].distance))}
+                        </div>
+                      )}
                     </div>
                   )}
                   <div

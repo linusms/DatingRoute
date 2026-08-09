@@ -99,6 +99,17 @@ export default function DateSchedulePicker({
     return `${sdStr} ~ ${ed.getMonth() + 1}/${ed.getDate()}`;
   };
 
+  const handleApply = () => {
+    if (!startDate) return;
+    onScheduleChange({
+      startDate,
+      endDate: endDate || startDate,
+      startTime,
+      endTime,
+    });
+    setIsCollapsed(true);
+  };
+
   return (
     <div className="date-schedule-picker">
       {/* Selected Range Info (Always Visible, Acts as Toggle) */}
@@ -191,6 +202,25 @@ export default function DateSchedulePicker({
                 className="input dsp-time-field"
               />
             </div>
+          </div>
+          <div style={{ marginTop: '16px', display: 'flex', justifyContent: 'center' }}>
+            <button
+              onClick={handleApply}
+              disabled={!startDate}
+              style={{
+                width: '100%',
+                padding: '10px',
+                borderRadius: '8px',
+                background: !startDate ? 'rgba(255,255,255,0.05)' : 'linear-gradient(135deg, #f472b6, #c084fc)',
+                color: !startDate ? '#8b7fa8' : '#fff',
+                border: 'none',
+                fontWeight: 600,
+                cursor: !startDate ? 'not-allowed' : 'pointer',
+                transition: 'all 0.2s',
+              }}
+            >
+              확인
+            </button>
           </div>
         </div>
       )}
