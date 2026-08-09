@@ -3,6 +3,7 @@ import { CoursePlace, DateSchedule, DirectionResult, TransitMode, FACILITY_ICONS
 import { formatDuration, formatDistance, getWalkingTimeMs, stripHtml, parseCategoryToFacility } from '@/lib/utils';
 import { useDragAndDrop } from '@/lib/useDragAndDrop';
 import ShareCard from './ShareCard';
+import DateSchedulePicker from './DateSchedulePicker';
 
 interface CourseBuilderProps {
   places: CoursePlace[];
@@ -26,6 +27,7 @@ interface CourseBuilderProps {
   members?: { nickname?: string; isOwner?: boolean }[];
   // Course naming (auto-save)
   schedule?: DateSchedule | null;
+  onScheduleChange?: (schedule: DateSchedule | null) => void;
   courseName?: string;       // current display name (from DB)
   courseDescription?: string; // current description (from DB)
   onUpdateCourseName?: (displayName: string, description: string) => Promise<void>;
@@ -51,11 +53,13 @@ export default function CourseBuilder({
   onCopyInviteLink,
   members,
   schedule,
+  onScheduleChange,
   courseName = '',
   courseDescription = '',
   onUpdateCourseName,
 }: CourseBuilderProps) {
   const [showShareCard, setShowShareCard] = useState(false);
+  const [activeDayTab, setActiveDayTab] = useState<'all' | number>('all');
   const [showInvitePanel, setShowInvitePanel] = useState<'create' | 'join' | null>(null);
   const [joinCode, setJoinCode] = useState('');
   const [joinLoading, setJoinLoading] = useState(false);
@@ -124,6 +128,21 @@ export default function CourseBuilder({
     handleDrop,
     handleDragEnd,
   } = useDragAndDrop(places);
+
+  const handleFilteredReorder = (newFiltered: CoursePlace[]) => {
+    if (activeDayTab === 'all') {
+      onReorderPlaces(newFiltered);
+    } else {
+      const otherPlaces = places.filter(p => (p.day || 1) !== activeDayTab);
+      const updatedFilteredPlaces = newFiltered.map(p => ({ ...p, day: activeDayTab }));
+      onReorderPlaces([...otherPlaces, ...updatedFilteredPlaces]);
+    }
+  };
+
+  const filteredPlaces = useMemo(() => {
+    if (activeDayTab === 'all') return draggablePlaces;
+    return draggablePlaces.filter(p => (p.day || 1) === activeDayTab);
+  }, [draggablePlaces, activeDayTab]);
 
   // Sync internal drag list when external places change
   React.useEffect(() => {
@@ -332,6 +351,42 @@ export default function CourseBuilder({
 
       {places.length > 0 && (
         <>
+          {/* Calendar Date Picker */}
+          <div style={{ marginBottom: '16px' }}>
+            <DateSchedulePicker
+              schedule={schedule || null}
+              onScheduleChange={onScheduleChange || (() => {})}
+            />
+          </div>
+
+          {/* Day Tabs */}
+          {isMultiDay && (
+            <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', marginBottom: '16px', paddingBottom: '4px' }} className="custom-scrollbar">
+              <button
+                onClick={() => setActiveDayTab('all')}
+                style={{
+                  padding: '6px 12px', borderRadius: '12px', fontSize: '13px', whiteSpace: 'nowrap',
+                  background: activeDayTab === 'all' ? 'linear-gradient(135deg, #f472b6, #c084fc)' : 'rgba(255,255,255,0.05)',
+                  color: activeDayTab === 'all' ? '#fff' : '#8b7fa8', border: 'none', cursor: 'pointer'
+                }}
+              >
+                전체
+              </button>
+              {Array.from({ length: dayCount }).map((_, i) => (
+                <button
+                  key={i}
+                  onClick={() => setActiveDayTab(i + 1)}
+                  style={{
+                    padding: '6px 12px', borderRadius: '12px', fontSize: '13px', whiteSpace: 'nowrap',
+                    background: activeDayTab === i + 1 ? 'linear-gradient(135deg, #f472b6, #c084fc)' : 'rgba(255,255,255,0.05)',
+                    color: activeDayTab === i + 1 ? '#fff' : '#8b7fa8', border: 'none', cursor: 'pointer'
+                  }}
+                >
+                  {getDayLabel(i + 1)}
+                </button>
+              ))}
+            </div>
+          )}
           {/* Route Mode & Stats (Only if route is created) */}
           {isRouteCreated && directions && (() => {
             let walkingDuration = 0;
@@ -388,19 +443,20 @@ export default function CourseBuilder({
             {(() => {
               // When multi-day: group by day and show day headers
               const seenDays = new Set<number>();
-              return draggablePlaces.map((place, idx) => {
+              return filteredPlaces.map((place, idx) => {
               const facility = parseCategoryToFacility(place.category);
               const facilityIcon = FACILITY_ICONS[facility];
               const facilityLabel = FACILITY_LABELS[facility];
               const placeDay = place.day ?? 1;
 
-              // Get leg info for the segment AFTER this place
+              // Get leg info for the segment AFTER this place (using global index)
+              const globalIdx = places.findIndex(p => p.id === place.id);
               const legs = directions?.legs || [];
-              const legAfter = (isRouteCreated && legs.length > 0 && idx < draggablePlaces.length - 1)
-                ? legs[idx] : null;
+              const legAfter = (isRouteCreated && legs.length > 0 && globalIdx < places.length - 1)
+                ? legs[globalIdx] : null;
 
-              // Day divider: show header when day changes
-              const showDayHeader = isMultiDay && !seenDays.has(placeDay);
+              // Day divider: show header when day changes (only in 'all' tab if multi-day)
+              const showDayHeader = isMultiDay && activeDayTab === 'all' && !seenDays.has(placeDay);
               if (showDayHeader) seenDays.add(placeDay);
 
               return (
@@ -429,7 +485,7 @@ export default function CourseBuilder({
                     onDragEnd={handleDragEnd}
                     onDrop={(e) => handleDrop(e, (newList) => {
                       const updated = newList.map((p, i) => ({ ...p, order: i }));
-                      onReorderPlaces(updated);
+                      handleFilteredReorder(updated);
                     })}
                     onMouseEnter={() => onHighlightPlace(place)}
                     onMouseLeave={() => onHighlightPlace(null)}

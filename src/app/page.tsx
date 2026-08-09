@@ -835,6 +835,7 @@ export default function HomePage() {
                 onCopyInviteLink={handleCopyInviteLink}
                 members={members}
                 schedule={schedule}
+                onScheduleChange={setSchedule}
                 courseName={courseName}
                 courseDescription={courseDescription}
                 onUpdateCourseName={handleUpdateCourseName}

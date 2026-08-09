@@ -91,7 +91,7 @@ export default function DateSchedulePicker({
   const MONTH_NAMES = ['1월', '2월', '3월', '4월', '5월', '6월', '7월', '8월', '9월', '10월', '11월', '12월'];
 
   const formatSelectedRange = () => {
-    if (!startDate) return '날짜를 선택하세요';
+    if (!startDate) return '';
     const sd = new Date(startDate);
     const sdStr = `${sd.getMonth() + 1}/${sd.getDate()}`;
     if (!endDate || endDate === startDate) return sdStr;

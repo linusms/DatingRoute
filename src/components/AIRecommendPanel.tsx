@@ -44,6 +44,9 @@ export default function AIRecommendPanel({
   const [progressStep, setProgressStep] = useState(0);
   const [totalSteps, setTotalSteps] = useState(4);
   const [statusMessage, setStatusMessage] = useState('');
+  
+  // For cancellation
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   const [error, setError] = useState<string | null>(null);
   const [hasSearched, setHasSearched] = useState(false);
@@ -126,10 +129,14 @@ export default function AIRecommendPanel({
       ? null
       : coursePlaces.find(p => p.id === selectedPlaceId) || null;
 
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
     try {
       const response = await fetch('/api/ai-recommend', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal,
         body: JSON.stringify({
           places: coursePlaces.map(p => ({
             title: p.title,
@@ -202,8 +209,13 @@ export default function AIRecommendPanel({
         }
       }
     } catch (err: any) {
-      setError(err.message || '오류가 발생했습니다.');
+      if (err.name === 'AbortError') {
+        setError('검색이 취소되었습니다.');
+      } else {
+        setError(err.message || '오류가 발생했습니다.');
+      }
     } finally {
+      abortControllerRef.current = null;
       if (loadMore) {
         setIsLoadingMore(false);
       } else {
@@ -211,6 +223,15 @@ export default function AIRecommendPanel({
       }
     }
   }, [coursePlaces, schedule, recommendations, selectedPlaceId, radiusKm, selectedCategories]);
+
+  const handleCancelSearch = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    setIsLoading(false);
+    setIsLoadingMore(false);
+    setShowPopup(false);
+  };
 
   const recToPlace = (rec: RecommendedPlace): Place => ({
     id: Math.random().toString(36).slice(2, 9),
@@ -264,14 +285,24 @@ export default function AIRecommendPanel({
         />
       </div>
       
-      <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '16px' }}>
+      <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', marginBottom: '16px' }}>
         <button 
           onClick={() => handleAIRecommend()}
           disabled={isLoading}
-          className="ai-search-button"
+          className="btn btn-primary"
+          style={{ padding: '10px 24px', fontSize: '14px', flex: 1 }}
         >
           {isLoading ? '분석 중...' : '🔍 추천 검색'}
         </button>
+        {isLoading && (
+          <button 
+            onClick={handleCancelSearch}
+            className="btn btn-secondary"
+            style={{ padding: '10px 16px', fontSize: '14px', background: 'rgba(239, 68, 68, 0.2)', color: '#ef4444', border: '1px solid rgba(239, 68, 68, 0.5)' }}
+          >
+            취소
+          </button>
+        )}
       </div>
 
       {/* ── 기준 장소 선택 ── */}

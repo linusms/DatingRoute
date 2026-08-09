@@ -258,10 +258,7 @@ export default function DashboardScreen({
                             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                               <span className="dashboard-course-name">
                                 {isUnsaved ? (
-                                  <>
-                                    <span style={{ color: '#f5f0ff' }}>{course.displayName || '이름 없는 경로'}</span>
-                                    <span className="dashboard-unsaved-label" style={{ marginLeft: '8px' }}>(자동저장)</span>
-                                  </>
+                                  <span style={{ color: '#f5f0ff' }}>{course.displayName || '이름 없는 경로'}</span>
                                 ) : course.name}
                               </span>
                               {course.memberCount && course.memberCount > 1 && (
@@ -280,21 +277,19 @@ export default function DashboardScreen({
                       {/* 액션 버튼 (편집/삭제) */}
                       {!isEditing && (
                         <div style={{ display: 'flex', gap: '4px', flexShrink: 0, alignItems: 'flex-start' }}>
-                          {!isUnsaved && (
-                            <button
-                              className="dashboard-course-edit"
-                              onClick={(e) => handleEditStart(e, course)}
-                              title="이름/설명 편집"
-                              style={{
-                                background: 'rgba(244,114,182,0.1)', color: '#f472b6',
-                                border: 'none', width: '30px', height: '30px', borderRadius: '6px',
-                                cursor: 'pointer', display: 'flex', alignItems: 'center',
-                                justifyContent: 'center', fontSize: '14px',
-                              }}
-                            >
-                              ✏️
-                            </button>
-                          )}
+                          <button
+                            className="dashboard-course-edit"
+                            onClick={(e) => handleEditStart(e, course)}
+                            title="이름/설명 편집"
+                            style={{
+                              background: 'rgba(244,114,182,0.1)', color: '#f472b6',
+                              border: 'none', width: '30px', height: '30px', borderRadius: '6px',
+                              cursor: 'pointer', display: 'flex', alignItems: 'center',
+                              justifyContent: 'center', fontSize: '14px',
+                            }}
+                          >
+                            ✏️
+                          </button>
                           <button
                             className="dashboard-course-delete"
                             onClick={(e) => handleDelete(e, course.id)}
