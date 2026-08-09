@@ -256,10 +256,10 @@ export async function getLivePlaces(roomId: string, ownerId: string): Promise<Co
   return (rows || []).map(mapDbPlaceToCoursePlace);
 }
 
-export async function getLiveCourseDetails(roomId: string): Promise<{ displayName: string; description: string; id: string; schedule: any | null } | null> {
+export async function getLiveCourseDetails(roomId: string): Promise<{ displayName: string; description: string; id: string; schedule: any | null; aiHistory: any | null } | null> {
   const { data } = await supabase
     .from('courses')
-    .select('id, display_name, description, schedule')
+    .select('id, display_name, description, schedule, ai_history')
     .eq('name', '__live__')
     .eq('room_id', roomId)
     .maybeSingle();
@@ -269,6 +269,7 @@ export async function getLiveCourseDetails(roomId: string): Promise<{ displayNam
       displayName: data.display_name || '',
       description: data.description || '',
       schedule: data.schedule ?? null,
+      aiHistory: data.ai_history ?? null,
     };
   }
   return null;
@@ -281,6 +282,15 @@ export async function saveLiveSchedule(roomId: string, schedule: any): Promise<v
     .eq('room_id', roomId)
     .eq('name', '__live__');
   if (error) console.error('Save schedule error:', error);
+}
+
+export async function saveLiveAiHistory(roomId: string, aiHistory: any): Promise<void> {
+  const { error } = await supabase
+    .from('courses')
+    .update({ ai_history: aiHistory, updated_at: new Date().toISOString() })
+    .eq('room_id', roomId)
+    .eq('name', '__live__');
+  if (error) console.error('Save AI history error:', error);
 }
 
 export async function addLivePlace(roomId: string, ownerId: string, placeData: Partial<CoursePlace>): Promise<CoursePlace> {

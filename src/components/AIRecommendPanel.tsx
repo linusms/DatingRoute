@@ -92,44 +92,42 @@ export default function AIRecommendPanel({
     }
   }, []);
 
-  // 로컬 스토리지에 캐싱 (경로(룸) 별로 AI 추천 유지, 없으면 로컬 전용)
-  const storageKey = roomId ? `ai-recommend-history-${roomId}` : 'ai-recommend-history-local';
-
+  // DB 기반 AI 히스토리 동기화 (다기기 지원)
   useEffect(() => {
-    if (!storageKey || typeof window === 'undefined') return;
-    try {
-      const cached = localStorage.getItem(storageKey);
-      if (cached) {
-        const data = JSON.parse(cached);
-        if (data.history && Array.isArray(data.history)) {
-          setSearchHistory(data.history);
-          if (data.activeId) {
-            setActiveHistoryId(data.activeId);
-            const activeItem = data.history.find((h: SearchHistoryItem) => h.id === data.activeId);
-            if (activeItem) {
-              loadHistoryItem(activeItem);
+    if (!roomId) return;
+    // Load from DB
+    fetch(`/api/sessions/${roomId}/ai-history`)
+      .then(r => r.json())
+      .then(data => {
+        if (data.aiHistory) {
+          const parsed = data.aiHistory;
+          if (parsed.history && Array.isArray(parsed.history)) {
+            setSearchHistory(parsed.history);
+            if (parsed.activeId) {
+              setActiveHistoryId(parsed.activeId);
+              const activeItem = parsed.history.find((h: SearchHistoryItem) => h.id === parsed.activeId);
+              if (activeItem) loadHistoryItem(activeItem);
             }
           }
         }
-      }
-    } catch (e) {
-      console.error('Failed to load AI recommend cache', e);
-    }
-  }, [storageKey]);
+      })
+      .catch(e => console.error('Failed to load AI history from DB', e));
+  }, [roomId]);
 
   useEffect(() => {
-    if (!storageKey || typeof window === 'undefined') return;
+    if (!roomId) return;
     if (searchHistory.length === 0) return;
-    try {
-      const data = {
-        history: searchHistory,
-        activeId: activeHistoryId
-      };
-      localStorage.setItem(storageKey, JSON.stringify(data));
-    } catch (e) {
-      console.error('Failed to save AI recommend cache', e);
-    }
-  }, [storageKey, searchHistory, activeHistoryId]);
+    const data = { history: searchHistory, activeId: activeHistoryId };
+    // Save to DB (debounce)
+    const timer = setTimeout(() => {
+      fetch(`/api/sessions/${roomId}/ai-history`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ aiHistory: data }),
+      }).catch(e => console.error('Failed to save AI history to DB', e));
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [roomId, searchHistory, activeHistoryId]);
 
   // 진행 중이거나 더 불러오기 한 결과를 현재 활성화된 History Item에 동기화
   useEffect(() => {

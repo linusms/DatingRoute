@@ -50,6 +50,7 @@ CREATE TABLE courses (
   display_name TEXT NOT NULL DEFAULT '',
   description TEXT NOT NULL DEFAULT '',
   schedule JSONB,  -- 일정 기간 설정 (다기기 동기화)
+  ai_history JSONB, -- AI 추천 검색 히스토리 (다기기 동기화)
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
