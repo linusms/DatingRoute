@@ -859,6 +859,7 @@ export default function HomePage() {
                 onScheduleChange={setSchedule}
                 onAddPlace={handleAddPlace}
                 onHighlightPlace={setHighlightPlace}
+                roomId={sessionId}
               />
             </div>
             <div style={{ display: activeTab === 'route' ? 'flex' : 'none', flexDirection: 'column', flex: 1, overflowY: 'auto' }}>

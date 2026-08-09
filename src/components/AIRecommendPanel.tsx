@@ -11,6 +11,7 @@ interface AIRecommendPanelProps {
   onScheduleChange: (s: DateSchedule | null) => void;
   onAddPlace: (place: Place) => void;
   onHighlightPlace?: (place: Place | null) => void;
+  roomId?: string | null;
 }
 
 // 카테고리 정의
@@ -27,6 +28,7 @@ export default function AIRecommendPanel({
   onScheduleChange,
   onAddPlace,
   onHighlightPlace,
+  roomId,
 }: AIRecommendPanelProps) {
   const [recommendations, setRecommendations] = useState<RecommendedPlace[]>([]);
   const [events, setEvents] = useState<RegionEvent[]>([]);
@@ -68,6 +70,45 @@ export default function AIRecommendPanel({
       setPanelSize({ width: 600, height: Math.round(window.innerHeight * 0.85) });
     }
   }, []);
+
+  // 로컬 스토리지에 캐싱 (경로(룸) 별로 AI 추천 유지)
+  const storageKey = roomId ? `ai-recommend-${roomId}` : null;
+
+  useEffect(() => {
+    if (!storageKey || typeof window === 'undefined') return;
+    try {
+      const cached = localStorage.getItem(storageKey);
+      if (cached) {
+        const data = JSON.parse(cached);
+        if (data.recommendations) setRecommendations(data.recommendations);
+        if (data.events) setEvents(data.events);
+        if (data.summary) setSummary(data.summary);
+        if (data.hasSearched) setHasSearched(data.hasSearched);
+        if (data.selectedCategories) setSelectedCategories(data.selectedCategories);
+        if (data.sortOrder) setSortOrder(data.sortOrder);
+      }
+    } catch (e) {
+      console.error('Failed to load AI recommend cache', e);
+    }
+  }, [storageKey]);
+
+  useEffect(() => {
+    if (!storageKey || typeof window === 'undefined') return;
+    if (!hasSearched) return; // 검색 전 초기 상태 덮어쓰기 방지
+    try {
+      const data = {
+        recommendations,
+        events,
+        summary,
+        hasSearched,
+        selectedCategories,
+        sortOrder
+      };
+      localStorage.setItem(storageKey, JSON.stringify(data));
+    } catch (e) {
+      console.error('Failed to save AI recommend cache', e);
+    }
+  }, [storageKey, recommendations, events, summary, hasSearched, selectedCategories, sortOrder]);
 
   const isResizingRef = useRef(false);
   const resizeStartRef = useRef({ x: 0, y: 0, w: 0, h: 0 });
