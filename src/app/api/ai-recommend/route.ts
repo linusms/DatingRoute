@@ -149,41 +149,51 @@ export async function POST(request: NextRequest) {
         // ── Step 2: Naver Local API를 통한 장소 대량 확보 (DB First) ──
         sendProgress(2, 5, '🗺️ 해당 지역의 관련 장소 대량 검색 중...');
 
-        const categorySearchTerms = categories.map((c: string) => CATEGORY_LABELS[c] || c);
+        // 더 불러오기를 위한 키워드 확장 (네이버 지역 API는 start 최대값이 1이므로 키워드로 우회)
+        const EXPANDED_TERMS: Record<string, string[]> = {
+          restaurant: ['맛집', '점심 맛집', '데이트 맛집', '인스타 맛집', '분위기 좋은 맛집', '가성비 맛집', '저녁 맛집', '핫플 맛집', '고기집', '파스타'],
+          cafe: ['카페', '디저트 카페', '예쁜 카페', '오션뷰 카페', '대형 카페', '감성 카페', '인스타 카페', '핫플 카페', '베이커리', '브런치'],
+          activity: ['가볼만한곳', '데이트코스', '체험', '전시회', '소품샵', '공원', '명소', '볼거리', '드라이브', '산책'],
+          accommodation: ['숙소', '호텔', '펜션', '게스트하우스', '감성숙소', '오션뷰 숙소', '풀빌라', '리조트', '글램핑', '캠핑'],
+        };
+
+        const offsetMultiplier = Math.floor(excludePlaces.length / 5); 
+        
+        // 카테고리별로 사용할 키워드 3개씩 추출 (offset에 따라 다른 키워드 선택)
+        const categorySearchTerms = categories.flatMap((c: string) => {
+          const terms = EXPANDED_TERMS[c] || [c];
+          const startIndex = (offsetMultiplier * 3) % terms.length;
+          // 배열을 순환하며 3개 선택
+          return [
+            terms[startIndex % terms.length],
+            terms[(startIndex + 1) % terms.length],
+            terms[(startIndex + 2) % terms.length]
+          ];
+        });
+
         const searchTargets = uniqueRegions.slice(0, 2).flatMap((r) =>
           categorySearchTerms.map((term: string) => `${r} ${term}`)
         );
 
         let basePlaces: any[] = [];
         if (naverClientId && naverClientSecret) {
-          // 페이징 오프셋 계산: excludePlaces 개수를 기반으로 대략적인 다음 페이지를 유추
-          // 20개 정도 로드되었다면 offset은 4.
-          const offsetMultiplier = Math.floor(excludePlaces.length / 5); 
-          const startIndices = [
-            offsetMultiplier * 15 + 1,
-            offsetMultiplier * 15 + 6,
-            offsetMultiplier * 15 + 11
-          ];
-
-          const localPromises = searchTargets.flatMap((target: string) => 
-            startIndices.map(async (startIndex) => {
-              try {
-                // Naver Local API는 2020년부터 display 최대값이 5로 제한됨. start 파라미터로 페이지네이션 구현.
-                const searchUrl = `https://openapi.naver.com/v1/search/local.json?query=${encodeURIComponent(target)}&display=5&start=${startIndex}&sort=random`;
-                const searchRes = await fetch(searchUrl, {
-                  headers: {
-                    'X-Naver-Client-Id': naverClientId,
-                    'X-Naver-Client-Secret': naverClientSecret,
-                  },
-                });
-                if (searchRes.ok) {
-                  const sData = await searchRes.json();
-                  return sData.items || [];
-                }
-              } catch {}
-              return [];
-            })
-          );
+          const localPromises = searchTargets.map(async (target: string) => {
+            try {
+              // Naver Local API는 2020년부터 display 최대값이 5로, start 최대값이 1로 제한됨. (다양한 키워드로 우회)
+              const searchUrl = `https://openapi.naver.com/v1/search/local.json?query=${encodeURIComponent(target)}&display=5&start=1&sort=random`;
+              const searchRes = await fetch(searchUrl, {
+                headers: {
+                  'X-Naver-Client-Id': naverClientId,
+                  'X-Naver-Client-Secret': naverClientSecret,
+                },
+              });
+              if (searchRes.ok) {
+                const sData = await searchRes.json();
+                return sData.items || [];
+              }
+            } catch {}
+            return [];
+          });
           const results = await Promise.all(localPromises);
           
           results.flat().forEach((item: any) => {
