@@ -497,7 +497,7 @@ export default function AIRecommendPanel({
             </div>
 
             {/* Content Area */}
-            <div style={{ flex: 1, overflowY: 'auto', padding: '20px' }} className="custom-scrollbar">
+            <div style={{ overflowY: 'auto', padding: '20px', minHeight: '300px' }} className="custom-scrollbar">
               {isLoading && (
                 <div className="ai-realtime-loading-card animate-scale-in" style={{ margin: '40px auto' }}>
                   <div className="ai-loading-spinner-wrapper">
