@@ -323,16 +323,9 @@ export default function HomePage() {
           if (data.courseDetails) {
             setCourseName(data.courseDetails.displayName || '');
             setCourseDescription(data.courseDetails.description || '');
+            // Load schedule from DB (cross-device sync)
+            setSchedule(data.courseDetails.schedule ?? null);
           }
-          
-          try {
-            const savedSchedule = localStorage.getItem(`datingroute_schedule_${course.roomId}`);
-            if (savedSchedule) {
-              setSchedule(JSON.parse(savedSchedule));
-            } else {
-              setSchedule(null);
-            }
-          } catch { setSchedule(null); }
 
           // Use live places from the room (latest state)
           if (data.coursePlaces && data.coursePlaces.length > 0) {
@@ -427,16 +420,9 @@ export default function HomePage() {
         if (placesData.courseDetails) {
           setCourseName(placesData.courseDetails.displayName || '');
           setCourseDescription(placesData.courseDetails.description || '');
+          // Load schedule from DB (cross-device sync)
+          setSchedule(placesData.courseDetails.schedule ?? null);
         }
-
-        try {
-          const savedSchedule = localStorage.getItem(`datingroute_schedule_${data.room.id}`);
-          if (savedSchedule) {
-            setSchedule(JSON.parse(savedSchedule));
-          } else {
-            setSchedule(null);
-          }
-        } catch { setSchedule(null); }
 
         if (placesData.coursePlaces?.length > 0) {
           setCoursePlaces(placesData.coursePlaces);
@@ -464,9 +450,14 @@ export default function HomePage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Save schedule to DB (cross-device sync) instead of localStorage
   useEffect(() => {
-    if (schedule && sessionId) {
-      localStorage.setItem(`datingroute_schedule_${sessionId}`, JSON.stringify(schedule));
+    if (schedule !== undefined && sessionId) {
+      fetch(`/api/sessions/${sessionId}/schedule`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ schedule }),
+      }).catch(() => {/* ignore */});
     }
   }, [schedule, sessionId]);
 

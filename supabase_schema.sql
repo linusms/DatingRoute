@@ -47,7 +47,9 @@ CREATE TABLE courses (
   owner_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   room_id TEXT REFERENCES rooms(id) ON DELETE CASCADE, -- __live__ 코스용
   name TEXT NOT NULL DEFAULT '',
+  display_name TEXT NOT NULL DEFAULT '',
   description TEXT NOT NULL DEFAULT '',
+  schedule JSONB,  -- 일정 기간 설정 (다기기 동기화)
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -66,6 +68,7 @@ CREATE TABLE course_places (
   description TEXT NOT NULL DEFAULT '',
   memo TEXT NOT NULL DEFAULT '',
   order_index INTEGER NOT NULL DEFAULT 0,
+  day_index INTEGER NOT NULL DEFAULT 1,
   added_by TEXT NOT NULL DEFAULT '' -- 유저 닉네임
 );
 
