@@ -612,11 +612,19 @@ export default function HomePage() {
       if (sessionId && newPlace) {
         skipNextSSERef.current = true;
         try {
-          await fetch(`/api/sessions/${sessionId}/places`, {
+          const res = await fetch(`/api/sessions/${sessionId}/places`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ place: newPlace, userId: currentUser?.id }),
           });
+          if (res.ok) {
+            const data = await res.json();
+            if (data.place && data.place.id) {
+              setCoursePlaces((prev) =>
+                prev.map((p) => (p.id === newPlace!.id ? { ...p, id: data.place.id } : p))
+              );
+            }
+          }
         } catch { /* ignore */ }
       }
     },
@@ -902,6 +910,7 @@ export default function HomePage() {
                 setActiveDayTab={setActiveDayTab}
                 showStoragePins={showStoragePins}
                 setShowStoragePins={setShowStoragePins}
+                onShowToast={showToastMsg}
               />
             </div>
           </div>

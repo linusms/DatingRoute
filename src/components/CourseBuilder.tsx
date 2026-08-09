@@ -35,6 +35,7 @@ interface CourseBuilderProps {
   setActiveDayTab: (tab: 'all' | number) => void;
   showStoragePins?: boolean;
   setShowStoragePins?: (show: boolean) => void;
+  onShowToast?: (msg: string) => void;
 }
 
 export default function CourseBuilder({
@@ -65,6 +66,7 @@ export default function CourseBuilder({
   setActiveDayTab,
   showStoragePins = false,
   setShowStoragePins,
+  onShowToast,
 }: CourseBuilderProps) {
   const [showShareCard, setShowShareCard] = useState(false);
   const [showInvitePanel, setShowInvitePanel] = useState<'create' | 'join' | null>(null);
@@ -685,8 +687,32 @@ export default function CourseBuilder({
                         >
                           🗺️ 네이버맵
                         </a>
-                        {/* Day selector: only show when multi-day & not in route mode */}
-                        {isMultiDay && !isRouteCreated && (
+                        {/* Day selector: inline buttons for Storage tab, select for other tabs */}
+                        {isMultiDay && !isRouteCreated && activeDayTab === 0 && (
+                          <div style={{ display: 'flex', gap: '4px', marginTop: '6px', flexWrap: 'wrap' }} onClick={e => e.stopPropagation()}>
+                            {Array.from({ length: dayCount }, (_, i) => i + 1).map(d => (
+                              <button
+                                key={d}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleChangePlaceDay(place.id, d);
+                                  onShowToast?.(`"${stripHtml(place.title)}" Day ${d}에 추가됨`);
+                                }}
+                                style={{
+                                  fontSize: '11px', padding: '4px 8px', borderRadius: '4px',
+                                  background: placeDay === d ? 'rgba(192,132,252,0.2)' : 'rgba(255,255,255,0.06)',
+                                  color: placeDay === d ? '#c084fc' : '#cbd5e1',
+                                  border: `1px solid ${placeDay === d ? 'rgba(192,132,252,0.5)' : 'rgba(255,255,255,0.2)'}`,
+                                  cursor: 'pointer', transition: 'all 0.2s',
+                                }}
+                                title={`Day ${d}에 추가하기`}
+                              >
+                                {placeDay === d ? `✅ D${d}` : `D${d}`}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                        {isMultiDay && !isRouteCreated && activeDayTab !== 0 && (
                           <select
                             value={placeDay}
                             onChange={e => handleChangePlaceDay(place.id, Number(e.target.value))}
