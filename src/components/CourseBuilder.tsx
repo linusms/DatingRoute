@@ -199,6 +199,22 @@ export default function CourseBuilder({
     onReorderPlaces(distributed);
   };
 
+  const handleResetRoute = () => {
+    if (activeDayTab === 0) return;
+    
+    if (confirm(activeDayTab === 'all' ? "모든 일정을 보관함으로 되돌리시겠습니까?" : "이 일정의 장소들을 보관함으로 되돌리시겠습니까?")) {
+      const updatedPlaces = places.map(p => {
+        if (activeDayTab === 'all') {
+          if ((p.day ?? 0) !== 0) return { ...p, day: 0 };
+        } else {
+          if (p.day === activeDayTab) return { ...p, day: 0 };
+        }
+        return p;
+      });
+      onReorderPlaces(updatedPlaces);
+    }
+  };
+
   const isCollaborative = members && members.length > 1;
 
   // Calculate per-day stats (distance and duration)
@@ -285,6 +301,21 @@ export default function CourseBuilder({
                 onClick={handleAutoDistribute}
               >
                 🤖 자동 분배
+              </button>
+            )}
+            {activeDayTab !== 0 && filteredPlaces.length > 0 && (
+              <button
+                className="btn animate-slide-up"
+                style={{
+                  flex: '0 0 auto', padding: '16px 20px', fontSize: '14px',
+                  background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.4)',
+                  color: '#ef4444', fontWeight: 600, cursor: 'pointer', borderRadius: '12px',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center'
+                }}
+                onClick={handleResetRoute}
+                title="이 탭의 장소를 보관함으로 되돌립니다"
+              >
+                🗑️ 경로 초기화
               </button>
             )}
           </div>
@@ -555,16 +586,22 @@ export default function CourseBuilder({
                     </div>
                     {!isRouteCreated && (
                       <button
-                        onClick={() => onRemovePlace(place.id)}
+                        onClick={() => {
+                          if (placeDay !== 0) {
+                            handleChangePlaceDay(place.id, 0); // Send back to storage
+                          } else {
+                            onRemovePlace(place.id); // Permanently delete from storage
+                          }
+                        }}
                         style={{
                           background: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', border: 'none',
                           width: '32px', height: '32px', borderRadius: '8px', cursor: 'pointer',
                           display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '16px',
                           flexShrink: 0,
                         }}
-                        title="삭제"
+                        title={placeDay !== 0 ? "보관함으로 되돌리기" : "완전 삭제"}
                       >
-                        ✕
+                        {placeDay !== 0 ? '⬇️' : '✕'}
                       </button>
                     )}
                   </div>
