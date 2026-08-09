@@ -156,23 +156,34 @@ export async function POST(request: NextRequest) {
 
         let basePlaces: any[] = [];
         if (naverClientId && naverClientSecret) {
-          const localPromises = searchTargets.map(async (target: string) => {
-            try {
-              // 각 검색어 당 15개 요청
-              const searchUrl = `https://openapi.naver.com/v1/search/local.json?query=${encodeURIComponent(target)}&display=15&sort=random`;
-              const searchRes = await fetch(searchUrl, {
-                headers: {
-                  'X-Naver-Client-Id': naverClientId,
-                  'X-Naver-Client-Secret': naverClientSecret,
-                },
-              });
-              if (searchRes.ok) {
-                const sData = await searchRes.json();
-                return sData.items || [];
-              }
-            } catch {}
-            return [];
-          });
+          // 페이징 오프셋 계산: excludePlaces 개수를 기반으로 대략적인 다음 페이지를 유추
+          // 20개 정도 로드되었다면 offset은 4.
+          const offsetMultiplier = Math.floor(excludePlaces.length / 5); 
+          const startIndices = [
+            offsetMultiplier * 15 + 1,
+            offsetMultiplier * 15 + 6,
+            offsetMultiplier * 15 + 11
+          ];
+
+          const localPromises = searchTargets.flatMap((target: string) => 
+            startIndices.map(async (startIndex) => {
+              try {
+                // Naver Local API는 2020년부터 display 최대값이 5로 제한됨. start 파라미터로 페이지네이션 구현.
+                const searchUrl = `https://openapi.naver.com/v1/search/local.json?query=${encodeURIComponent(target)}&display=5&start=${startIndex}&sort=random`;
+                const searchRes = await fetch(searchUrl, {
+                  headers: {
+                    'X-Naver-Client-Id': naverClientId,
+                    'X-Naver-Client-Secret': naverClientSecret,
+                  },
+                });
+                if (searchRes.ok) {
+                  const sData = await searchRes.json();
+                  return sData.items || [];
+                }
+              } catch {}
+              return [];
+            })
+          );
           const results = await Promise.all(localPromises);
           
           results.flat().forEach((item: any) => {
