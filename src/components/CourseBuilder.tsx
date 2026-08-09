@@ -674,7 +674,7 @@ export default function CourseBuilder({
                           </a>
                         )}
                         <a
-                          href={`https://www.instagram.com/explore/tags/${encodeURIComponent(stripHtml(place.title).replace(/\s/g, ''))}`}
+                          href={`https://www.instagram.com/explore/tags/${encodeURIComponent(stripHtml(place.title).replace(/[^가-힣a-zA-Z0-9]/g, ''))}`}
                           target="_blank"
                           rel="noreferrer"
                           onClick={(e) => e.stopPropagation()}
