@@ -453,6 +453,15 @@ export async function deleteCourse(courseId: string, userId: string): Promise<vo
   await supabase.from('courses').delete().eq('id', courseId).eq('owner_id', userId);
 }
 
+export async function updateCourse(courseId: string, userId: string, name: string, description: string): Promise<boolean> {
+  const { error } = await supabase
+    .from('courses')
+    .update({ name, description, updated_at: new Date().toISOString() })
+    .eq('id', courseId)
+    .eq('owner_id', userId);
+  return !error;
+}
+
 /* ─────────── Realtime Events ─────────── */
 
 export async function broadcastSSE(roomId: string, type: string, payload: any, sender: string) {

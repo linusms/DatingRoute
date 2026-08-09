@@ -12,6 +12,12 @@ interface DashboardScreenProps {
   onJoinByInviteCode?: (code: string) => void;
 }
 
+interface EditState {
+  courseId: string;
+  name: string;
+  description: string;
+}
+
 export default function DashboardScreen({
   currentUser,
   onCreateNew,
@@ -22,6 +28,8 @@ export default function DashboardScreen({
 }: DashboardScreenProps) {
   const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
+  const [editState, setEditState] = useState<EditState | null>(null);
+  const [editSaving, setEditSaving] = useState(false);
 
   useEffect(() => {
     if (!currentUser?.id) return;
@@ -47,6 +55,50 @@ export default function DashboardScreen({
       await fetch(`/api/users/${currentUser.id}/courses/delete?id=${courseId}`, { method: 'DELETE' });
       setCourses((prev) => prev.filter((c) => c.id !== courseId));
     } catch { /* ignore */ }
+  };
+
+  const handleEditStart = (e: React.MouseEvent, course: Course) => {
+    e.stopPropagation();
+    // '저장되지 않은 경로'는 편집 불가
+    if (course.name === '저장되지 않은 경로') return;
+    setEditState({
+      courseId: course.id,
+      name: course.name,
+      description: course.description || '',
+    });
+  };
+
+  const handleEditSave = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!editState || !currentUser?.id) return;
+    if (!editState.name.trim()) return;
+
+    setEditSaving(true);
+    try {
+      const res = await fetch(`/api/users/${currentUser.id}/courses/${editState.courseId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: editState.name, description: editState.description }),
+      });
+      if (res.ok) {
+        setCourses(prev =>
+          prev.map(c =>
+            c.id === editState.courseId
+              ? { ...c, name: editState.name, description: editState.description }
+              : c
+          )
+        );
+        setEditState(null);
+      }
+    } catch { /* ignore */ }
+    finally {
+      setEditSaving(false);
+    }
+  };
+
+  const handleEditCancel = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setEditState(null);
   };
 
   const formatDate = (dateStr: string) => {
@@ -110,58 +162,156 @@ export default function DashboardScreen({
             </div>
           ) : (
             <div className="dashboard-course-list">
-              {courses.map((course) => (
-                <div
-                  key={course.id}
-                  className="dashboard-course-card"
-                  onClick={() => onLoadCourse(course)}
-                >
-                  <div className="dashboard-course-header">
-                    <div className="dashboard-course-name-row">
-                      {course.isCollaborative && (
-                        <span className="dashboard-collab-badge" title="협업 경로">👥</span>
-                      )}
-                      <span className="dashboard-course-name">
-                        {course.name === '저장되지 않은 경로' ? (
-                          <span className="dashboard-unsaved-label">{course.name}</span>
-                        ) : course.name}
-                      </span>
-                      {course.memberCount && course.memberCount > 1 && (
-                        <span className="dashboard-member-count">{course.memberCount}명 참여</span>
+              {courses.map((course) => {
+                const isEditing = editState?.courseId === course.id;
+                const isUnsaved = course.name === '저장되지 않은 경로';
+
+                return (
+                  <div
+                    key={course.id}
+                    className="dashboard-course-card"
+                    onClick={() => !isEditing && onLoadCourse(course)}
+                    style={{ cursor: isEditing ? 'default' : 'pointer' }}
+                  >
+                    <div className="dashboard-course-header">
+                      <div className="dashboard-course-name-row" style={{ flex: 1, minWidth: 0 }}>
+                        {course.isCollaborative && (
+                          <span className="dashboard-collab-badge" title="협업 경로">👥</span>
+                        )}
+
+                        {/* 편집 모드 */}
+                        {isEditing ? (
+                          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '6px' }} onClick={e => e.stopPropagation()}>
+                            <input
+                              type="text"
+                              value={editState!.name}
+                              onChange={e => setEditState(prev => prev ? { ...prev, name: e.target.value } : null)}
+                              placeholder="경로 이름"
+                              style={{
+                                width: '100%', padding: '6px 10px', borderRadius: '6px',
+                                background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(244,114,182,0.4)',
+                                color: '#f5f0ff', fontSize: '14px', outline: 'none',
+                              }}
+                              autoFocus
+                              onKeyDown={e => {
+                                if (e.key === 'Enter') handleEditSave(e as any);
+                                if (e.key === 'Escape') setEditState(null);
+                              }}
+                            />
+                            <input
+                              type="text"
+                              value={editState!.description}
+                              onChange={e => setEditState(prev => prev ? { ...prev, description: e.target.value } : null)}
+                              placeholder="설명 (선택사항)"
+                              style={{
+                                width: '100%', padding: '6px 10px', borderRadius: '6px',
+                                background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)',
+                                color: '#b4a9c9', fontSize: '12px', outline: 'none',
+                              }}
+                            />
+                            <div style={{ display: 'flex', gap: '6px' }}>
+                              <button
+                                onClick={handleEditSave}
+                                disabled={editSaving || !editState!.name.trim()}
+                                style={{
+                                  padding: '4px 12px', borderRadius: '6px', fontSize: '12px',
+                                  background: 'linear-gradient(135deg, #f472b6, #c084fc)',
+                                  color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 600,
+                                  opacity: (!editState!.name.trim() || editSaving) ? 0.5 : 1,
+                                }}
+                              >
+                                {editSaving ? '저장 중...' : '✓ 저장'}
+                              </button>
+                              <button
+                                onClick={handleEditCancel}
+                                style={{
+                                  padding: '4px 10px', borderRadius: '6px', fontSize: '12px',
+                                  background: 'rgba(255,255,255,0.08)', color: '#8b7fa8',
+                                  border: '1px solid rgba(255,255,255,0.1)', cursor: 'pointer',
+                                }}
+                              >
+                                취소
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              <span className="dashboard-course-name">
+                                {isUnsaved ? (
+                                  <span className="dashboard-unsaved-label">{course.name}</span>
+                                ) : course.name}
+                              </span>
+                              {course.memberCount && course.memberCount > 1 && (
+                                <span className="dashboard-member-count">{course.memberCount}명 참여</span>
+                              )}
+                            </div>
+                            {course.description && (
+                              <div style={{ fontSize: '12px', color: '#8b7fa8', marginTop: '2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                {course.description}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* 액션 버튼 (편집/삭제) */}
+                      {!isEditing && (
+                        <div style={{ display: 'flex', gap: '4px', flexShrink: 0, alignItems: 'flex-start' }}>
+                          {!isUnsaved && (
+                            <button
+                              className="dashboard-course-edit"
+                              onClick={(e) => handleEditStart(e, course)}
+                              title="이름/설명 편집"
+                              style={{
+                                background: 'rgba(244,114,182,0.1)', color: '#f472b6',
+                                border: 'none', width: '30px', height: '30px', borderRadius: '6px',
+                                cursor: 'pointer', display: 'flex', alignItems: 'center',
+                                justifyContent: 'center', fontSize: '14px',
+                              }}
+                            >
+                              ✏️
+                            </button>
+                          )}
+                          <button
+                            className="dashboard-course-delete"
+                            onClick={(e) => handleDelete(e, course.id)}
+                            title="삭제"
+                          >
+                            🗑️
+                          </button>
+                        </div>
                       )}
                     </div>
-                    <button
-                      className="dashboard-course-delete"
-                      onClick={(e) => handleDelete(e, course.id)}
-                      title="삭제"
-                    >
-                      🗑️
-                    </button>
-                  </div>
 
-                  {/* Places preview */}
-                  <div className="dashboard-course-places">
-                    {course.places.length === 0 ? (
-                      <span className="dashboard-no-places">장소 없음</span>
-                    ) : (
-                      course.places.slice(0, 5).map((p, i) => (
-                        <span key={p.id || i} className="dashboard-place-chip">
-                          📍 {(p.title || '').replace(/<[^>]+>/g, '')}
-                        </span>
-                      ))
-                    )}
-                    {course.places.length > 5 && (
-                      <span className="dashboard-place-more">+{course.places.length - 5}곳</span>
-                    )}
-                  </div>
+                    {/* Places preview */}
+                    {!isEditing && (
+                      <>
+                        <div className="dashboard-course-places">
+                          {course.places.length === 0 ? (
+                            <span className="dashboard-no-places">장소 없음</span>
+                          ) : (
+                            course.places.slice(0, 5).map((p, i) => (
+                              <span key={p.id || i} className="dashboard-place-chip">
+                                📍 {(p.title || '').replace(/<[^>]+>/g, '')}
+                              </span>
+                            ))
+                          )}
+                          {course.places.length > 5 && (
+                            <span className="dashboard-place-more">+{course.places.length - 5}곳</span>
+                          )}
+                        </div>
 
-                  {/* Footer info */}
-                  <div className="dashboard-course-footer">
-                    <span className="dashboard-course-date">{formatDate(course.updatedAt)}</span>
-                    <span className="dashboard-course-count">📍 {course.places.length}곳</span>
+                        {/* Footer info */}
+                        <div className="dashboard-course-footer">
+                          <span className="dashboard-course-date">{formatDate(course.updatedAt)}</span>
+                          <span className="dashboard-course-count">📍 {course.places.length}곳</span>
+                        </div>
+                      </>
+                    )}
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>

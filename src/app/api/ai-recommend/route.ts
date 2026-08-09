@@ -2,6 +2,14 @@ import { NextRequest } from 'next/server';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { katechToWgs84, getStraightLineDistance } from '@/lib/utils';
 
+// 카테고리 ID → 한국어 라벨 매핑
+const CATEGORY_LABELS: Record<string, string> = {
+  restaurant: '식당/맛집',
+  cafe: '카페/디저트',
+  activity: '액티비티/문화공간/전시',
+  accommodation: '숙박시설/호텔/펜션',
+};
+
 export async function POST(request: NextRequest) {
   const encoder = new TextEncoder();
 
@@ -12,7 +20,16 @@ export async function POST(request: NextRequest) {
     body = {};
   }
 
-  const { places = [], excludePlaces = [], schedule } = body;
+  const {
+    places = [],
+    centerPlace = null,
+    radiusKm = 5,
+    categories = ['restaurant', 'cafe', 'activity', 'accommodation'],
+    excludePlaces = [],
+    schedule,
+  } = body;
+
+  const radiusMeters = (radiusKm || 5) * 1000;
 
   const stream = new ReadableStream({
     async start(controller) {
@@ -36,9 +53,14 @@ export async function POST(request: NextRequest) {
 
         const regions = new Set<string>();
 
+        // 기준 장소가 있으면 기준 장소만, 없으면 전체 코스 장소 기준
+        const geocodeTargets = centerPlace
+          ? [centerPlace]
+          : places.slice(0, 5);
+
         // Run all reverse-geocodes in parallel
-        if (places.length > 0 && ncpClientId && ncpClientSecret) {
-          const rgPromises = places.slice(0, 5).map(async (place: any) => {
+        if (geocodeTargets.length > 0 && ncpClientId && ncpClientSecret) {
+          const rgPromises = geocodeTargets.map(async (place: any) => {
             try {
               const mapx = typeof place.mapx === 'string' ? parseFloat(place.mapx) : place.mapx;
               const mapy = typeof place.mapy === 'string' ? parseFloat(place.mapy) : place.mapy;
@@ -74,7 +96,7 @@ export async function POST(request: NextRequest) {
           });
         }
 
-        // TourAPI fetch with 3.5s timeout abort controller & optimized payload (numOfRows=15)
+        // TourAPI fetch
         const tourEvents: any[] = [];
         if (tourApiKey && tourApiKey !== 'your_tour_api_key' && schedule?.startDate) {
           const startDate = schedule.startDate.replace(/-/g, '');
@@ -139,13 +161,26 @@ export async function POST(request: NextRequest) {
         if (regionNames.length === 0 && regions.size > 0) {
           regionNames.push(...Array.from(regions));
         }
-        
+
         // Remove duplicates
         const uniqueRegions = Array.from(new Set(regionNames));
 
+        // 카테고리 기반 검색어 생성
+        const categorySearchTerms: string[] = [];
+        if (categories.includes('restaurant')) categorySearchTerms.push('맛집');
+        if (categories.includes('cafe')) categorySearchTerms.push('카페');
+        if (categories.includes('activity')) categorySearchTerms.push('핫플 데이트');
+        if (categories.includes('accommodation')) categorySearchTerms.push('숙박 펜션');
+
+        const defaultTerms = categorySearchTerms.length > 0
+          ? categorySearchTerms
+          : ['팝업스토어', '핫플 데이트'];
+
         const searchTargets = uniqueRegions.length > 0
-          ? uniqueRegions.slice(0, 2).flatMap((r) => [`${r} 팝업스토어`, `${r} 핫플 데이트`])
-          : ['서울 데이트 팝업스토어', '성수 데이트 핫플', '홍대 데이트 코스'];
+          ? uniqueRegions.slice(0, 2).flatMap((r) =>
+              defaultTerms.map(term => `${r} ${term}`)
+            )
+          : defaultTerms.map(term => `서울 ${term}`);
 
         const ytTargets = uniqueRegions.length > 0
           ? uniqueRegions.slice(0, 2).map((r) => `${r} 데이트 핫플`)
@@ -227,7 +262,10 @@ export async function POST(request: NextRequest) {
 
             const placeNames = places.map((p: any) => (p.title || '').replace(/<[^>]+>/g, ''));
             const regionList = Array.from(regions).join(', ') || '서울/수도권';
-            
+            const centerName = centerPlace
+              ? (centerPlace.title || '').replace(/<[^>]+>/g, '')
+              : null;
+
             let blogContext = '';
             for (const [name, blogs] of Object.entries(blogData)) {
               if (blogs.length > 0) {
@@ -260,10 +298,22 @@ export async function POST(request: NextRequest) {
               ? `${schedule.startDate} ~ ${schedule.endDate || schedule.startDate}`
               : '미정';
 
+            // 선택된 카테고리 한국어 라벨
+            const categoryLabels = categories.map((c: string) => CATEGORY_LABELS[c] || c).join(', ');
+            const categoryInstruction = categories.length > 0
+              ? `반드시 다음 카테고리에서만 추천하세요: ${categoryLabels}`
+              : '맛집, 카페, 문화장소, 숙박 등 다양하게 추천하세요.';
+
+            // 기준 장소 기반 프롬프트
+            const locationContext = centerName
+              ? `기준 장소: ${centerName} (반경 ${radiusKm}km 이내)`
+              : `데이트 지역/장소: ${placeNames.length > 0 ? placeNames.join(', ') : regionList}`;
+
             const prompt = `당신은 한국 데이트 장소 및 핫플레이스 전문가입니다.
 
-선택된 데이트 지역/장소: ${placeNames.length > 0 ? placeNames.join(', ') : regionList}
+${locationContext}
 데이트 예정 기간: ${dateRange}
+추천 카테고리 제한: ${categoryInstruction}
 
 수집된 데이터:
 ${blogContext}
@@ -271,12 +321,13 @@ ${ytContext}
 ${eventContext}
 
 위 정보를 종합하여:
-1. 유튜브, 블로그, 주변 축제 정보를 바탕으로 이 시기에 데이트하기 좋은 핫플레이스, 팝업스토어, 추천 장소를 최대 10곳 제안해주세요. (맛집, 문화장소, 카페 카테고리별로 골고루 추천해주세요.)
-2. 사용자가 이미 코스에 추가한 다음 장소들은 추천 목록에서 반드시 제외해주세요: [${[...placeNames, ...excludePlaces].join(', ')}]
-3. 각 장소마다 출처(유튜브 인기/블로그 핫플/팝업 행사/축제 등) 및 핵심 추천 이유를 작성해주세요.
-4. 각 장소의 'category'는 반드시 "맛집", "문화장소", "카페" 중 하나로 분류해주세요.
-5. 각 추천 이유를 표현하는 2~3개의 간략한 키워드 태그를 생성해주세요.
-6. 전체 데이트 코스에 대한 매력적인 한 줄 요약 멘트를 작성해주세요.
+1. 유튜브, 블로그, 주변 축제 정보를 바탕으로 이 시기에 데이트하기 좋은 핫플레이스, 팝업스토어, 추천 장소를 최대 10곳 제안해주세요.
+2. ${categoryInstruction}
+3. 사용자가 이미 코스에 추가한 다음 장소들은 추천 목록에서 반드시 제외해주세요: [${[...placeNames, ...excludePlaces].join(', ')}]
+4. 각 장소마다 출처(유튜브 인기/블로그 핫플/팝업 행사/축제 등) 및 핵심 추천 이유를 작성해주세요.
+5. 각 장소의 'category'는 반드시 "맛집", "카페", "액티비티/문화공간", "숙박시설" 중 하나로 분류해주세요.
+6. 각 추천 이유를 표현하는 2~3개의 간략한 키워드 태그를 생성해주세요.
+7. 전체 데이트 코스에 대한 매력적인 한 줄 요약 멘트를 작성해주세요.
 
 반드시 아래 JSON 스키마로만 응답하세요:
 {
@@ -284,7 +335,7 @@ ${eventContext}
   "places": [
     {
       "name": "정확한 실제 장소명 또는 상호명",
-      "category": "맛집 / 문화장소 / 카페 중 택1",
+      "category": "맛집 / 카페 / 액티비티/문화공간 / 숙박시설 중 택1",
       "reason": "추천 이유 1문장 (유튜브/블로그/팝업 출처 언급)",
       "keywords": ["키워드1", "키워드2", "키워드3"],
       "sourceType": "youtube / blog / event / popup 중 택1"
@@ -298,7 +349,7 @@ ${eventContext}
               text = result.response.text();
             } catch (error: any) {
               if (error?.message?.includes('503') || error?.status === 503) {
-                console.warn('Gemini 3.6-flash is overloaded (503). Falling back to gemini-1.5-flash.');
+                console.warn('Gemini 2.5-flash is overloaded (503). Falling back to gemini-1.5-flash.');
                 const fallbackModel = genAI.getGenerativeModel({
                   model: 'gemini-1.5-flash',
                   generationConfig: { responseMimeType: 'application/json' },
@@ -355,20 +406,25 @@ ${eventContext}
               });
 
               const resolvedPlaces = await Promise.all(placeSearchPromises);
-              
-              // 5km 반경 필터링 적용 (기존 장소가 있을 때만)
-              if (places.length > 0) {
+
+              // 반경 필터링 적용
+              // centerPlace가 있으면 centerPlace 기준, 없으면 전체 코스 장소 기준
+              const filterCenter = centerPlace
+                ? [centerPlace]
+                : places;
+
+              if (filterCenter.length > 0) {
                 const filteredPlaces = resolvedPlaces.filter(Boolean).filter((recPlace: any) => {
                   const { lng: recLng, lat: recLat } = katechToWgs84(recPlace.mapx, recPlace.mapy);
-                  
-                  // 기존 코스 장소 중 하나라도 5km(5000m) 이내에 있으면 통과
-                  return places.some((coursePlace: any) => {
+
+                  // 기준 장소 중 하나라도 반경 이내에 있으면 통과
+                  return filterCenter.some((coursePlace: any) => {
                     const { lng: courseLng, lat: courseLat } = katechToWgs84(coursePlace.mapx, coursePlace.mapy);
                     const distance = getStraightLineDistance(recLat, recLng, courseLat, courseLng);
-                    return distance <= 5000;
+                    return distance <= radiusMeters;
                   });
                 });
-                
+
                 recommendations = filteredPlaces;
               } else {
                 recommendations = resolvedPlaces.filter(Boolean);

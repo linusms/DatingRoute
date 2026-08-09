@@ -288,6 +288,56 @@ export default function CourseBuilder({
                       <div style={{ fontSize: '12px', color: '#8b7fa8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {place.roadAddress || place.address}
                       </div>
+                      {/* External links: homepage & instagram */}
+                      <div style={{ display: 'flex', gap: '6px', marginTop: '6px', flexWrap: 'wrap' }}>
+                        {place.link && (
+                          <a
+                            href={place.link}
+                            target="_blank"
+                            rel="noreferrer"
+                            onClick={(e) => e.stopPropagation()}
+                            style={{
+                              display: 'inline-flex', alignItems: 'center', gap: '4px',
+                              fontSize: '11px', padding: '2px 8px', borderRadius: '4px',
+                              background: 'rgba(255,255,255,0.06)', color: '#93c5fd',
+                              textDecoration: 'none', border: '1px solid rgba(147,197,253,0.2)',
+                              fontWeight: 500, cursor: 'pointer', whiteSpace: 'nowrap',
+                            }}
+                          >
+                            🌐 홈페이지
+                          </a>
+                        )}
+                        <a
+                          href={`https://www.instagram.com/explore/tags/${encodeURIComponent(stripHtml(place.title).replace(/\s/g, ''))}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          style={{
+                            display: 'inline-flex', alignItems: 'center', gap: '4px',
+                            fontSize: '11px', padding: '2px 8px', borderRadius: '4px',
+                            background: 'rgba(255,255,255,0.06)', color: '#f472b6',
+                            textDecoration: 'none', border: '1px solid rgba(244,114,182,0.2)',
+                            fontWeight: 500, cursor: 'pointer', whiteSpace: 'nowrap',
+                          }}
+                        >
+                          📷 인스타그램
+                        </a>
+                        <a
+                          href={`https://map.naver.com/v5/search/${encodeURIComponent(stripHtml(place.title))}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          style={{
+                            display: 'inline-flex', alignItems: 'center', gap: '4px',
+                            fontSize: '11px', padding: '2px 8px', borderRadius: '4px',
+                            background: 'rgba(255,255,255,0.06)', color: '#4ade80',
+                            textDecoration: 'none', border: '1px solid rgba(74,222,128,0.2)',
+                            fontWeight: 500, cursor: 'pointer', whiteSpace: 'nowrap',
+                          }}
+                        >
+                          🗺️ 네이버맵
+                        </a>
+                      </div>
                     </div>
                     {!isRouteCreated && (
                       <button

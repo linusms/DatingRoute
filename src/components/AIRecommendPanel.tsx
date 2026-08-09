@@ -11,6 +11,14 @@ interface AIRecommendPanelProps {
   onHighlightPlace?: (place: Place | null) => void;
 }
 
+// 카테고리 정의
+const AI_CATEGORIES = [
+  { id: 'restaurant', label: '🍽️ 식당', desc: '맛집/음식점' },
+  { id: 'cafe', label: '☕ 카페', desc: '카페/디저트' },
+  { id: 'activity', label: '🎯 액티비티/문화', desc: '체험/전시/공연' },
+  { id: 'accommodation', label: '🏨 숙박시설', desc: '호텔/펜션/게스트하우스' },
+];
+
 export default function AIRecommendPanel({
   coursePlaces,
   onAddPlace,
@@ -20,19 +28,33 @@ export default function AIRecommendPanel({
   const [recommendations, setRecommendations] = useState<RecommendedPlace[]>([]);
   const [events, setEvents] = useState<RegionEvent[]>([]);
   const [summary, setSummary] = useState<string>('');
-  
+
+  // 기준 장소 및 반경
+  const [selectedPlaceId, setSelectedPlaceId] = useState<string>('all');
+  const [radiusKm, setRadiusKm] = useState<number>(5);
+
+  // 카테고리 필터
+  const [selectedCategories, setSelectedCategories] = useState<string[]>(['restaurant', 'cafe', 'activity', 'accommodation']);
+
   // Real-time status state
   const [isLoading, setIsLoading] = useState(false);
   const [progressStep, setProgressStep] = useState(0);
   const [totalSteps, setTotalSteps] = useState(4);
   const [statusMessage, setStatusMessage] = useState('');
-  
+
   const [error, setError] = useState<string | null>(null);
   const [hasSearched, setHasSearched] = useState(false);
   const [activeSection, setActiveSection] = useState<'recommend' | 'events'>('recommend');
   const [expandedEventId, setExpandedEventId] = useState<string | null>(null);
-  const [isPlacesSummaryExpanded, setIsPlacesSummaryExpanded] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
+
+  const toggleCategory = (catId: string) => {
+    setSelectedCategories(prev =>
+      prev.includes(catId)
+        ? prev.filter(c => c !== catId)
+        : [...prev, catId]
+    );
+  };
 
   const handleAIRecommend = useCallback(async (isLoadMore?: boolean) => {
     const loadMore = isLoadMore === true;
@@ -46,6 +68,11 @@ export default function AIRecommendPanel({
       setStatusMessage('🚀 AI 데이터 분석 준비 중...');
     }
 
+    // 기준 장소 결정
+    const centerPlace = selectedPlaceId === 'all'
+      ? null
+      : coursePlaces.find(p => p.id === selectedPlaceId) || null;
+
     try {
       const response = await fetch('/api/ai-recommend', {
         method: 'POST',
@@ -58,6 +85,14 @@ export default function AIRecommendPanel({
             mapx: p.mapx,
             mapy: p.mapy,
           })),
+          centerPlace: centerPlace ? {
+            title: centerPlace.title,
+            address: centerPlace.address,
+            mapx: centerPlace.mapx,
+            mapy: centerPlace.mapy,
+          } : null,
+          radiusKm,
+          categories: selectedCategories,
           excludePlaces: loadMore ? recommendations.map(r => r.name) : [],
           schedule: schedule ? {
             startDate: schedule.startDate,
@@ -122,7 +157,7 @@ export default function AIRecommendPanel({
         setIsLoading(false);
       }
     }
-  }, [coursePlaces, schedule, recommendations]);
+  }, [coursePlaces, schedule, recommendations, selectedPlaceId, radiusKm, selectedCategories]);
 
   const recToPlace = (rec: RecommendedPlace): Place => ({
     id: Math.random().toString(36).slice(2, 9),
@@ -164,6 +199,8 @@ export default function AIRecommendPanel({
     return '📝 네이버 블로그';
   };
 
+  const selectedCenterPlace = coursePlaces.find(p => p.id === selectedPlaceId);
+
   return (
     <div className="ai-recommend-panel">
       {/* Calendar Date Picker with Single Search Button */}
@@ -174,28 +211,98 @@ export default function AIRecommendPanel({
         isLoading={isLoading}
       />
 
-      {/* Selected Places Hint */}
-      {coursePlaces.length > 0 && (
-        <div className="ai-places-summary">
-          <div 
-            className="ai-places-summary-label" 
-            style={{ cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
-            onClick={() => setIsPlacesSummaryExpanded(!isPlacesSummaryExpanded)}
-          >
-            <span>📍 코스 추가된 장소 ({coursePlaces.length}곳)</span>
-            <span style={{ transform: isPlacesSummaryExpanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s', display: 'inline-block' }}>▼</span>
-          </div>
-          {isPlacesSummaryExpanded && (
-            <div className="ai-places-chips" style={{ marginTop: '12px' }}>
-              {coursePlaces.map((p, i) => (
-                <span key={p.id} className="ai-place-chip">
-                  {i + 1}. {stripHtml(p.title)}
-                </span>
-              ))}
-            </div>
-          )}
+      {/* ── 기준 장소 선택 ── */}
+      <div style={{
+        background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(244,114,182,0.15)',
+        borderRadius: '12px', padding: '14px', marginBottom: '12px',
+      }}>
+        <div style={{ fontSize: '12px', color: '#8b7fa8', marginBottom: '8px', fontWeight: 600, letterSpacing: '0.5px' }}>
+          📍 기준 장소 선택
         </div>
-      )}
+        <select
+          value={selectedPlaceId}
+          onChange={e => setSelectedPlaceId(e.target.value)}
+          style={{
+            width: '100%', padding: '8px 10px', borderRadius: '8px',
+            background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(244,114,182,0.2)',
+            color: '#f5f0ff', fontSize: '13px', cursor: 'pointer', outline: 'none',
+            marginBottom: coursePlaces.length > 0 ? '10px' : '0',
+          }}
+        >
+          <option value="all" style={{ background: '#1a1520' }}>🌏 전체 코스 장소 기준</option>
+          {coursePlaces.map(p => (
+            <option key={p.id} value={p.id} style={{ background: '#1a1520' }}>
+              📍 {stripHtml(p.title)}
+            </option>
+          ))}
+        </select>
+
+        {selectedPlaceId !== 'all' && (
+          <div>
+            <div style={{ fontSize: '12px', color: '#8b7fa8', marginBottom: '6px' }}>
+              반경: <strong style={{ color: '#f472b6' }}>{radiusKm}km</strong>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <span style={{ fontSize: '11px', color: '#6b5f85' }}>1km</span>
+              <input
+                type="range"
+                min={1}
+                max={20}
+                step={1}
+                value={radiusKm}
+                onChange={e => setRadiusKm(Number(e.target.value))}
+                style={{
+                  flex: 1, accentColor: '#f472b6', cursor: 'pointer',
+                }}
+              />
+              <span style={{ fontSize: '11px', color: '#6b5f85' }}>20km</span>
+            </div>
+            {selectedCenterPlace && (
+              <div style={{ fontSize: '11px', color: '#8b7fa8', marginTop: '6px' }}>
+                📌 <strong style={{ color: '#c084fc' }}>{stripHtml(selectedCenterPlace.title)}</strong> 반경 {radiusKm}km 내 추천
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* ── 카테고리 필터 ── */}
+      <div style={{
+        background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(244,114,182,0.15)',
+        borderRadius: '12px', padding: '14px', marginBottom: '12px',
+      }}>
+        <div style={{ fontSize: '12px', color: '#8b7fa8', marginBottom: '10px', fontWeight: 600, letterSpacing: '0.5px' }}>
+          🏷️ 추천 카테고리
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+          {AI_CATEGORIES.map(cat => {
+            const isActive = selectedCategories.includes(cat.id);
+            return (
+              <button
+                key={cat.id}
+                onClick={() => toggleCategory(cat.id)}
+                style={{
+                  padding: '8px 10px', borderRadius: '8px', cursor: 'pointer',
+                  border: isActive ? '1px solid rgba(244,114,182,0.5)' : '1px solid rgba(255,255,255,0.08)',
+                  background: isActive ? 'rgba(244,114,182,0.12)' : 'rgba(255,255,255,0.04)',
+                  color: isActive ? '#f472b6' : '#8b7fa8',
+                  fontSize: '12px', fontWeight: isActive ? 600 : 400,
+                  transition: 'all 0.2s', textAlign: 'left',
+                  display: 'flex', flexDirection: 'column', gap: '2px',
+                }}
+              >
+                <span>{cat.label}</span>
+                <span style={{ fontSize: '10px', opacity: 0.7 }}>{cat.desc}</span>
+              </button>
+            );
+          })}
+        </div>
+        {selectedCategories.length === 0 && (
+          <div style={{ fontSize: '11px', color: '#ef4444', marginTop: '8px' }}>
+            ⚠️ 최소 1개 이상 카테고리를 선택해주세요
+          </div>
+        )}
+      </div>
 
       {/* Real-time Loading Status Modal / Card */}
       {isLoading && (
@@ -225,11 +332,13 @@ export default function AIRecommendPanel({
           <div className="ai-empty-icon">📅</div>
           <h4>데이트 일정에 맞는 AI 추천</h4>
           <p>
-            위 달력에서 데이트할 기간을 선택한 후
+            기준 장소와 반경을 설정하고
             <br />
-            <strong>[🔍 검색]</strong> 버튼을 누르면 YouTube, 네이버 블로그,
+            카테고리를 선택한 후
             <br />
-            한국관광공사의 핫플, 팝업스토어, 축제가 자동으로 정리됩니다!
+            <strong>[🔍 검색]</strong> 버튼을 누르면
+            <br />
+            핫플, 팝업스토어, 축제가 자동으로 정리됩니다!
           </p>
         </div>
       )}
@@ -243,9 +352,6 @@ export default function AIRecommendPanel({
             </div>
           )}
 
-          {/* AI Summary Removed */}
-
-          {/* Section Tabs */}
           {!error && (
             <>
               <div className="ai-section-tabs">
@@ -292,7 +398,7 @@ export default function AIRecommendPanel({
                           </h3>
                           <span className="ai-rec-category">{rec.category}</span>
                         </div>
-                        <div style={{ marginBottom: '6px' }}>
+                        <div style={{ marginBottom: '6px', display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
                           <span style={{
                             fontSize: '11px', padding: '2px 6px', borderRadius: '4px',
                             background: 'rgba(255,255,255,0.06)', color: '#f472b6', fontWeight: 600,
@@ -307,6 +413,27 @@ export default function AIRecommendPanel({
                           }}>
                             {getSourceIcon((rec as any).sourceType)}
                           </span>
+                          {/* Instagram & NaverMap quick links */}
+                          <a
+                            href={`https://www.instagram.com/explore/tags/${encodeURIComponent(rec.name.replace(/\s/g, ''))}`}
+                            target="_blank" rel="noreferrer"
+                            onClick={e => e.stopPropagation()}
+                            style={{
+                              fontSize: '11px', padding: '2px 6px', borderRadius: '4px',
+                              background: 'rgba(255,255,255,0.06)', color: '#c084fc',
+                              textDecoration: 'none', border: '1px solid rgba(192,132,252,0.2)',
+                            }}
+                          >📷 인스타</a>
+                          <a
+                            href={`https://map.naver.com/v5/search/${encodeURIComponent(rec.name)}`}
+                            target="_blank" rel="noreferrer"
+                            onClick={e => e.stopPropagation()}
+                            style={{
+                              fontSize: '11px', padding: '2px 6px', borderRadius: '4px',
+                              background: 'rgba(255,255,255,0.06)', color: '#4ade80',
+                              textDecoration: 'none', border: '1px solid rgba(74,222,128,0.2)',
+                            }}
+                          >🗺️ 네이버맵</a>
                         </div>
                         <p className="ai-rec-reason">{rec.reason}</p>
                         {rec.keywords && rec.keywords.length > 0 && (
@@ -331,8 +458,8 @@ export default function AIRecommendPanel({
                     ))
                   )}
                   {recommendations.length > 0 && (
-                    <button 
-                      className="btn btn-secondary" 
+                    <button
+                      className="btn btn-secondary"
                       style={{ width: '100%', marginTop: '16px', padding: '12px', borderRadius: '8px', background: 'rgba(255,255,255,0.1)', color: 'white', border: 'none', cursor: 'pointer' }}
                       onClick={() => handleAIRecommend(true)}
                       disabled={isLoadingMore}
@@ -374,7 +501,7 @@ export default function AIRecommendPanel({
                           </div>
                           <span style={{ transform: expandedEventId === event.contentId ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s', display: 'inline-block' }}>▼</span>
                         </div>
-                        
+
                         {expandedEventId === event.contentId && (
                           <div className="ai-event-details" style={{ padding: '0 16px 16px 16px', borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '16px' }} onClick={(e) => e.stopPropagation()}>
                             {event.imageUrl && (
