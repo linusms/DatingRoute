@@ -151,7 +151,11 @@ export default function CourseBuilder({
   };
   
   const filteredPlacesSource = useMemo(() => {
-    if (activeDayTab === 'all') return places.filter(p => (p.day ?? 0) !== 0);
+    if (activeDayTab === 'all') {
+      return [...places]
+        .filter(p => (p.day ?? 0) !== 0)
+        .sort((a, b) => (a.day ?? 0) - (b.day ?? 0));
+    }
     if (activeDayTab === 0) {
       // Storage tab only shows day 0 master copies.
       return places.filter(p => (p.day ?? 0) === 0);
