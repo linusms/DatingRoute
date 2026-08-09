@@ -90,8 +90,8 @@ export default function AIRecommendPanel({
     }
   }, []);
 
-  // 로컬 스토리지에 캐싱 (경로(룸) 별로 AI 추천 유지)
-  const storageKey = roomId ? `ai-recommend-history-${roomId}` : null;
+  // 로컬 스토리지에 캐싱 (경로(룸) 별로 AI 추천 유지, 없으면 로컬 전용)
+  const storageKey = roomId ? `ai-recommend-history-${roomId}` : 'ai-recommend-history-local';
 
   useEffect(() => {
     if (!storageKey || typeof window === 'undefined') return;
@@ -165,6 +165,18 @@ export default function AIRecommendPanel({
     setSummary('');
   };
 
+  const handleDeleteHistory = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setSearchHistory(prev => {
+      const updated = prev.filter(h => h.id !== id);
+      if (activeHistoryId === id) {
+        // If deleting the currently active one, reset view
+        handleNewSearch();
+      }
+      return updated;
+    });
+  };
+
   const isResizingRef = useRef(false);
   const resizeStartRef = useRef({ x: 0, y: 0, w: 0, h: 0 });
 
@@ -216,6 +228,7 @@ export default function AIRecommendPanel({
     if (loadMore) {
       setIsLoadingMore(true);
     } else {
+      handleNewSearch();
       setIsLoading(true);
       setError(null);
       setHasSearched(false);
@@ -433,36 +446,51 @@ export default function AIRecommendPanel({
               </button>
             )}
           </div>
-          <select
-            value={activeHistoryId || ''}
-            onChange={e => {
-              const id = e.target.value;
-              if (id) {
-                setActiveHistoryId(id);
-                const item = searchHistory.find(h => h.id === id);
-                if (item) loadHistoryItem(item);
-              } else {
-                handleNewSearch();
-              }
-            }}
-            style={{
-              width: '100%', padding: '8px 10px', borderRadius: '8px',
-              background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(244,114,182,0.2)',
-              color: '#f5f0ff', fontSize: '13px', cursor: 'pointer', outline: 'none'
-            }}
-          >
-            <option value="" style={{ background: '#1a1520' }}>새로운 조건으로 검색하기...</option>
-            {searchHistory.map(h => {
-              const date = new Date(h.timestamp);
-              const timeStr = `${date.getMonth()+1}/${date.getDate()} ${date.getHours()}:${String(date.getMinutes()).padStart(2, '0')}`;
-              const cats = h.conditions.categories.map(c => AI_CATEGORIES.find(ac => ac.id === c)?.label.split(' ')[1] || c).join(', ');
-              return (
-                <option key={h.id} value={h.id} style={{ background: '#1a1520' }}>
-                  [{timeStr}] 반경 {h.conditions.radiusKm}km / {cats || '전체'}
-                </option>
-              );
-            })}
-          </select>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            <select
+              value={activeHistoryId || ''}
+              onChange={e => {
+                const id = e.target.value;
+                if (id) {
+                  setActiveHistoryId(id);
+                  const item = searchHistory.find(h => h.id === id);
+                  if (item) loadHistoryItem(item);
+                } else {
+                  handleNewSearch();
+                }
+              }}
+              style={{
+                flex: 1, padding: '8px 10px', borderRadius: '8px',
+                background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(244,114,182,0.2)',
+                color: '#f5f0ff', fontSize: '13px', cursor: 'pointer', outline: 'none'
+              }}
+            >
+              <option value="" style={{ background: '#1a1520' }}>새로운 조건으로 검색하기...</option>
+              {searchHistory.map(h => {
+                const date = new Date(h.timestamp);
+                const timeStr = `${date.getMonth()+1}/${date.getDate()} ${date.getHours()}:${String(date.getMinutes()).padStart(2, '0')}`;
+                const cats = h.conditions.categories.map(c => AI_CATEGORIES.find(ac => ac.id === c)?.label.split(' ')[1] || c).join(', ');
+                return (
+                  <option key={h.id} value={h.id} style={{ background: '#1a1520' }}>
+                    [{timeStr}] 반경 {h.conditions.radiusKm}km / {cats || '전체'}
+                  </option>
+                );
+              })}
+            </select>
+            {activeHistoryId && (
+              <button
+                onClick={(e) => handleDeleteHistory(activeHistoryId, e)}
+                style={{
+                  background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.4)',
+                  color: '#ef4444', padding: '8px', borderRadius: '8px', cursor: 'pointer',
+                  flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center'
+                }}
+                title="현재 기록 삭제"
+              >
+                🗑️
+              </button>
+            )}
+          </div>
         </div>
       )}
 
