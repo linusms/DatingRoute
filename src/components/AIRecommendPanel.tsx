@@ -30,6 +30,7 @@ export type SearchHistoryItem = {
     radiusKm: number;
     categories: string[];
     sortOrder: string;
+    searchKeyword?: string;
   };
   results: {
     recommendations: RecommendedPlace[];
@@ -57,8 +58,9 @@ export default function AIRecommendPanel({
   const [selectedPlaceId, setSelectedPlaceId] = useState<string>('all');
   const [radiusKm, setRadiusKm] = useState<number>(5);
 
-  // 카테고리 필터
+  // 카테고리 필터 및 키워드
   const [selectedCategories, setSelectedCategories] = useState<string[]>(['restaurant', 'cafe', 'activity', 'accommodation']);
+  const [searchKeyword, setSearchKeyword] = useState<string>('');
 
   // Real-time status state
   const [isLoading, setIsLoading] = useState(false);
@@ -148,6 +150,7 @@ export default function AIRecommendPanel({
     setRadiusKm(item.conditions.radiusKm);
     setSelectedCategories(item.conditions.categories);
     setSortOrder(item.conditions.sortOrder as any);
+    setSearchKeyword(item.conditions.searchKeyword || '');
     
     setRecommendations(item.results.recommendations);
     setEvents(item.results.events);
@@ -265,6 +268,7 @@ export default function AIRecommendPanel({
           } : null,
           radiusKm,
           categories: selectedCategories,
+          searchKeyword: searchKeyword.trim(),
           excludePlaces: loadMore ? recommendations.map(r => r.name) : [],
           schedule: schedule ? {
             startDate: schedule.startDate,
@@ -321,7 +325,8 @@ export default function AIRecommendPanel({
                       selectedPlaceId,
                       radiusKm,
                       categories: selectedCategories,
-                      sortOrder
+                      sortOrder,
+                      searchKeyword: searchKeyword.trim(),
                     },
                     results: {
                       recommendations: data.recommendations || [],
@@ -470,9 +475,10 @@ export default function AIRecommendPanel({
                 const date = new Date(h.timestamp);
                 const timeStr = `${date.getMonth()+1}/${date.getDate()} ${date.getHours()}:${String(date.getMinutes()).padStart(2, '0')}`;
                 const cats = h.conditions.categories.map(c => AI_CATEGORIES.find(ac => ac.id === c)?.label.split(' ')[1] || c).join(', ');
+                const kw = h.conditions.searchKeyword ? ` "${h.conditions.searchKeyword}"` : '';
                 return (
                   <option key={h.id} value={h.id} style={{ background: '#1a1520' }}>
-                    [{timeStr}] 반경 {h.conditions.radiusKm}km / {cats || '전체'}
+                    [{timeStr}] 반경 {h.conditions.radiusKm}km / {cats || '전체'}{kw}
                   </option>
                 );
               })}
@@ -619,6 +625,29 @@ export default function AIRecommendPanel({
                 ⚠️ 최소 1개 이상 카테고리를 선택해주세요
               </div>
             )}
+            
+            <div style={{ marginTop: '12px' }}>
+              <div style={{ fontSize: '12px', color: '#8b7fa8', marginBottom: '6px' }}>
+                맞춤 키워드 추가 (선택)
+              </div>
+              <input
+                type="text"
+                value={searchKeyword}
+                onChange={e => setSearchKeyword(e.target.value)}
+                placeholder="예) 오션뷰, 떡볶이, 분위기 좋은"
+                style={{
+                  width: '100%', padding: '10px', borderRadius: '8px',
+                  background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(244,114,182,0.2)',
+                  color: '#f5f0ff', fontSize: '13px', outline: 'none'
+                }}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleAIRecommend();
+                  }
+                }}
+              />
+            </div>
           </>
         )}
       </div>

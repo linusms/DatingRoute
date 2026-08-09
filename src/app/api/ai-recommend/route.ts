@@ -27,6 +27,7 @@ export async function POST(request: NextRequest) {
     categories = ['restaurant', 'cafe', 'activity', 'accommodation'],
     excludePlaces = [],
     schedule,
+    searchKeyword = '',
   } = body;
 
   const radiusMeters = (radiusKm || 5) * 1000;
@@ -172,7 +173,12 @@ export async function POST(request: NextRequest) {
         });
 
         const searchTargets = uniqueRegions.slice(0, 2).flatMap((r) =>
-          categorySearchTerms.map((term: string) => `${r} ${term}`)
+          categorySearchTerms.map((term: string) => {
+            if (searchKeyword && searchKeyword.trim() !== '') {
+              return `${r} ${searchKeyword.trim()} ${term}`;
+            }
+            return `${r} ${term}`;
+          })
         );
 
         let basePlaces: any[] = [];
@@ -305,6 +311,8 @@ export async function POST(request: NextRequest) {
 ${placeListText}
 
 작업 지시:
+0. 사용자가 특별히 요청한 키워드: ${searchKeyword ? searchKeyword : '없음'}
+(키워드가 있다면 해당 키워드와 연관된 장소를 우선적으로 추천하고, 추천 이유에 반영해주세요.)
 1. 위 목록에 있는 장소들에 대해서만 응답을 생성하세요. 새로운 장소를 임의로 지어내지 마세요.
 2. 각 장소마다 이 시기에 데이트하기 좋은 '매력적인 이유(1문장)'를 작성해주세요.
 3. 각 장소를 표현하는 트렌디한 '해시태그 키워드(2~3개)'를 생성해주세요.
