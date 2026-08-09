@@ -99,8 +99,26 @@ export default function AIRecommendPanel({
     fetch(`/api/sessions/${roomId}/ai-history`)
       .then(r => r.json())
       .then(data => {
-        if (data.aiHistory) {
-          const parsed = data.aiHistory;
+        let parsed = data.aiHistory;
+        
+        // 마이그레이션: DB에 없고 로컬 스토리지에만 있다면 가져와서 덮어쓰기
+        if (!parsed) {
+          const storageKey = `ai-recommend-history-${roomId}`;
+          try {
+            const cached = localStorage.getItem(storageKey);
+            if (cached) {
+              parsed = JSON.parse(cached);
+              // Save to DB immediately so it migrates
+              fetch(`/api/sessions/${roomId}/ai-history`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ aiHistory: parsed }),
+              }).catch(()=>null);
+            }
+          } catch(e) {}
+        }
+
+        if (parsed) {
           if (parsed.history && Array.isArray(parsed.history)) {
             setSearchHistory(parsed.history);
             if (parsed.activeId) {

@@ -803,7 +803,7 @@ export default function HomePage() {
     <div className="app-layout">
       <Header
         onGoToDashboard={handleGoToDashboard}
-        courseCount={coursePlaces.length}
+        courseCount={coursePlaces.filter(p => (p.day || 0) > 0).length || coursePlaces.length}
         currentUser={currentUser}
         onLogout={handleLogout}
       />

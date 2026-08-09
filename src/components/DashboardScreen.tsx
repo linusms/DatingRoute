@@ -184,6 +184,9 @@ export default function DashboardScreen({
               {courses.map((course) => {
                 const isEditing = editState?.courseId === course.id;
                 const isUnsaved = course.name === '저장되지 않은 경로';
+                
+                const assignedPlaces = course.places.filter(p => (p.day || 0) > 0);
+                const displayPlaces = assignedPlaces.length > 0 ? assignedPlaces : course.places;
 
                 return (
                   <div
@@ -305,24 +308,24 @@ export default function DashboardScreen({
                     {!isEditing && (
                       <>
                         <div className="dashboard-course-places">
-                          {course.places.length === 0 ? (
+                          {displayPlaces.length === 0 ? (
                             <span className="dashboard-no-places">장소 없음</span>
                           ) : (
-                            course.places.slice(0, 5).map((p, i) => (
+                            displayPlaces.slice(0, 5).map((p, i) => (
                               <span key={p.id || i} className="dashboard-place-chip">
                                 📍 {(p.title || '').replace(/<[^>]+>/g, '')}
                               </span>
                             ))
                           )}
-                          {course.places.length > 5 && (
-                            <span className="dashboard-place-more">+{course.places.length - 5}곳</span>
+                          {displayPlaces.length > 5 && (
+                            <span className="dashboard-place-more">+{displayPlaces.length - 5}곳</span>
                           )}
                         </div>
 
                         {/* Footer info */}
                         <div className="dashboard-course-footer">
                           <span className="dashboard-course-date">{formatDate(course.updatedAt)}</span>
-                          <span className="dashboard-course-count">📍 {course.places.length}곳</span>
+                          <span className="dashboard-course-count">📍 {displayPlaces.length}곳</span>
                         </div>
                       </>
                     )}

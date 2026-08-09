@@ -48,20 +48,42 @@ export default function ShareCard({ places, directions, courseName }: ShareCardP
         </div>
 
         <div className="share-card-places">
-          {places.map((place, idx) => (
-            <div key={place.id} className="share-card-place">
-              <div className="share-card-number">{idx + 1}</div>
-              <div className="share-card-place-info">
-                <div className="share-card-place-name">{stripHtml(place.title)}</div>
-                <div className="share-card-place-addr">{place.roadAddress || place.address}</div>
+          {(() => {
+            const assignedPlaces = places.filter(p => (p.day || 0) > 0);
+            const displayPlaces = assignedPlaces.length > 0 ? assignedPlaces : places;
+            
+            // Group by day
+            const grouped: Record<number, CoursePlace[]> = {};
+            displayPlaces.forEach(p => {
+              const d = p.day || 1;
+              if (!grouped[d]) grouped[d] = [];
+              grouped[d].push(p);
+            });
+            const days = Object.keys(grouped).map(Number).sort((a,b) => a-b);
+            
+            return days.map(day => (
+              <div key={`day-${day}`} className="share-card-day-section">
+                {days.length > 1 && (
+                  <div className="share-card-day-header" style={{
+                    fontSize: '14px', fontWeight: 'bold', color: '#f472b6', 
+                    padding: '8px 0 4px', borderBottom: '1px dashed rgba(244,114,182,0.3)',
+                    marginBottom: '8px'
+                  }}>
+                    Day {day}
+                  </div>
+                )}
+                {grouped[day].map((place, idx) => (
+                  <div key={place.id} className="share-card-place">
+                    <div className="share-card-number">{idx + 1}</div>
+                    <div className="share-card-place-info">
+                      <div className="share-card-place-name">{stripHtml(place.title)}</div>
+                      <div className="share-card-place-addr">{place.roadAddress || place.address}</div>
+                    </div>
+                  </div>
+                ))}
               </div>
-              {idx < places.length - 1 && directions?.legs?.[idx] && (
-                <div className="share-card-leg">
-                  🚗 {formatDistance(directions.legs[idx].distance)} · {formatDuration(directions.legs[idx].duration)}
-                </div>
-              )}
-            </div>
-          ))}
+            ));
+          })()}
         </div>
 
         {directions && (
