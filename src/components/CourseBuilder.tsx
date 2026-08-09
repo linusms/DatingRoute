@@ -31,6 +31,8 @@ interface CourseBuilderProps {
   courseName?: string;       // current display name (from DB)
   courseDescription?: string; // current description (from DB)
   onUpdateCourseName?: (displayName: string, description: string) => Promise<void>;
+  activeDayTab: 'all' | number;
+  setActiveDayTab: (tab: 'all' | number) => void;
 }
 
 export default function CourseBuilder({
@@ -57,9 +59,10 @@ export default function CourseBuilder({
   courseName = '',
   courseDescription = '',
   onUpdateCourseName,
+  activeDayTab,
+  setActiveDayTab,
 }: CourseBuilderProps) {
   const [showShareCard, setShowShareCard] = useState(false);
-  const [activeDayTab, setActiveDayTab] = useState<'all' | number>('all');
   const [showInvitePanel, setShowInvitePanel] = useState<'create' | 'join' | null>(null);
   const [joinCode, setJoinCode] = useState('');
   const [joinLoading, setJoinLoading] = useState(false);
@@ -142,7 +145,7 @@ export default function CourseBuilder({
   };
 
   const filteredPlaces = useMemo(() => {
-    if (activeDayTab === 'all') return draggablePlaces;
+    if (activeDayTab === 'all') return draggablePlaces.filter(p => (p.day ?? 0) !== 0);
     return draggablePlaces.filter(p => (p.day ?? 0) === activeDayTab);
   }, [draggablePlaces, activeDayTab]);
 
@@ -394,19 +397,32 @@ export default function CourseBuilder({
             >
               전체
             </button>
-            {Array.from({ length: dayCount + 1 }).map((_, i) => (
-              <button
-                key={i}
-                onClick={() => setActiveDayTab(i)}
-                style={{
-                  padding: '6px 12px', borderRadius: '12px', fontSize: '13px', whiteSpace: 'nowrap',
-                  background: activeDayTab === i ? 'linear-gradient(135deg, #f472b6, #c084fc)' : 'rgba(255,255,255,0.05)',
-                  color: activeDayTab === i ? '#fff' : '#8b7fa8', border: 'none', cursor: 'pointer'
-                }}
-              >
-                {getDayLabel(i)}
-              </button>
-            ))}
+            {Array.from({ length: dayCount }).map((_, i) => {
+              const day = i + 1;
+              return (
+                <button
+                  key={day}
+                  onClick={() => setActiveDayTab(day)}
+                  style={{
+                    padding: '6px 12px', borderRadius: '12px', fontSize: '13px', whiteSpace: 'nowrap',
+                    background: activeDayTab === day ? 'linear-gradient(135deg, #f472b6, #c084fc)' : 'rgba(255,255,255,0.05)',
+                    color: activeDayTab === day ? '#fff' : '#8b7fa8', border: 'none', cursor: 'pointer'
+                  }}
+                >
+                  {getDayLabel(day)}
+                </button>
+              );
+            })}
+            <button
+              onClick={() => setActiveDayTab(0)}
+              style={{
+                padding: '6px 12px', borderRadius: '12px', fontSize: '13px', whiteSpace: 'nowrap',
+                background: activeDayTab === 0 ? 'linear-gradient(135deg, #f472b6, #c084fc)' : 'rgba(255,255,255,0.05)',
+                color: activeDayTab === 0 ? '#fff' : '#8b7fa8', border: 'none', cursor: 'pointer'
+              }}
+            >
+              {getDayLabel(0)}
+            </button>
           </div>
           {/* Route Mode & Stats (Only if route is created) */}
           {isRouteCreated && directions && (() => {
@@ -530,13 +546,15 @@ export default function CourseBuilder({
                       cursor: isRouteCreated ? 'default' : 'grab'
                     }}
                   >
-                    <div style={{
-                      width: '28px', height: '28px', borderRadius: '50%', background: 'linear-gradient(135deg, #f472b6, #c084fc)',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 700, fontSize: '13px',
-                      flexShrink: 0,
-                    }}>
-                      {idx + 1}
-                    </div>
+                    {placeDay !== 0 && (
+                      <div style={{
+                        width: '28px', height: '28px', borderRadius: '50%', background: 'linear-gradient(135deg, #f472b6, #c084fc)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 700, fontSize: '13px',
+                        flexShrink: 0,
+                      }}>
+                        {idx + 1}
+                      </div>
+                    )}
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '8px', marginBottom: '4px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', overflow: 'hidden' }}>
@@ -702,28 +720,73 @@ export default function CourseBuilder({
                       보관함에 담은 장소가 없습니다.
                     </div>
                   ) : (
-                    places.filter(p => (p.day ?? 0) === 0).map(p => (
-                      <div
-                        key={p.id}
-                        onClick={() => {
-                          handleChangePlaceDay(p.id, activeDayTab);
-                          setShowStorageDropdown(false);
-                        }}
-                        style={{
-                          background: 'rgba(255,255,255,0.05)', padding: '12px', borderRadius: '8px',
-                          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                          cursor: 'pointer', border: '1px solid transparent', transition: 'all 0.2s'
-                        }}
-                        onMouseEnter={(e) => e.currentTarget.style.borderColor = 'rgba(244,114,182,0.4)'}
-                        onMouseLeave={(e) => e.currentTarget.style.borderColor = 'transparent'}
-                      >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          <span style={{ fontSize: '18px' }}>{FACILITY_ICONS[parseCategoryToFacility(p.category)] || '📍'}</span>
-                          <span style={{ color: '#f5f0ff', fontSize: '14px', fontWeight: 500 }}>{p.title.replace(/<[^>]+>/g, '')}</span>
+                    places.filter(p => (p.day ?? 0) === 0).map(p => {
+                      const fac = parseCategoryToFacility(p.category);
+                      const fIcon = FACILITY_ICONS[fac];
+                      const fLabel = FACILITY_LABELS[fac];
+                      return (
+                        <div
+                          key={p.id}
+                          onClick={() => {
+                            handleChangePlaceDay(p.id, activeDayTab as number);
+                            setShowStorageDropdown(false);
+                          }}
+                          style={{
+                            background: 'rgba(255,255,255,0.05)', padding: '12px', borderRadius: '8px',
+                            display: 'flex', alignItems: 'center', gap: '12px',
+                            cursor: 'pointer', border: '1px solid transparent', transition: 'all 0.2s'
+                          }}
+                          onMouseEnter={(e) => e.currentTarget.style.borderColor = 'rgba(244,114,182,0.4)'}
+                          onMouseLeave={(e) => e.currentTarget.style.borderColor = 'transparent'}
+                        >
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '8px', marginBottom: '4px' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', overflow: 'hidden' }}>
+                                <div style={{ fontSize: '15px', fontWeight: 600, color: '#f5f0ff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                  {stripHtml(p.title)}
+                                </div>
+                                <span className="facility-badge" title={fLabel} style={{ flexShrink: 0 }}>
+                                  {fIcon}
+                                </span>
+                              </div>
+                              {p.category && (
+                                <span style={{ fontSize: '11px', color: '#f472b6', flexShrink: 0, textAlign: 'right' }}>
+                                  {p.category}
+                                </span>
+                              )}
+                            </div>
+                            <div style={{ fontSize: '12px', color: '#8b7fa8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {p.roadAddress || p.address}
+                            </div>
+                            <div style={{ display: 'flex', gap: '6px', marginTop: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
+                              {p.link && (
+                                <span style={{
+                                  display: 'inline-flex', alignItems: 'center', gap: '4px',
+                                  fontSize: '11px', padding: '2px 8px', borderRadius: '4px',
+                                  background: 'rgba(255,255,255,0.06)', color: '#93c5fd',
+                                  border: '1px solid rgba(147,197,253,0.2)', fontWeight: 500, whiteSpace: 'nowrap',
+                                }}>🌐 홈페이지</span>
+                              )}
+                              <span style={{
+                                display: 'inline-flex', alignItems: 'center', gap: '4px',
+                                fontSize: '11px', padding: '2px 8px', borderRadius: '4px',
+                                background: 'rgba(255,255,255,0.06)', color: '#f472b6',
+                                border: '1px solid rgba(244,114,182,0.2)', fontWeight: 500, whiteSpace: 'nowrap',
+                              }}>📷 인스타그램</span>
+                              <span style={{
+                                display: 'inline-flex', alignItems: 'center', gap: '4px',
+                                fontSize: '11px', padding: '2px 8px', borderRadius: '4px',
+                                background: 'rgba(255,255,255,0.06)', color: '#4ade80',
+                                border: '1px solid rgba(74,222,128,0.2)', fontWeight: 500, whiteSpace: 'nowrap',
+                              }}>🗺️ 네이버맵</span>
+                            </div>
+                          </div>
+                          <div style={{ fontSize: '13px', color: '#f472b6', fontWeight: 700, padding: '6px 12px', background: 'rgba(244,114,182,0.1)', borderRadius: '8px' }}>
+                            추가 +
+                          </div>
                         </div>
-                        <div style={{ fontSize: '12px', color: '#f472b6', fontWeight: 600 }}>추가</div>
-                      </div>
-                    ))
+                      );
+                    })
                   )}
                 </div>
               )}

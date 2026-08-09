@@ -15,8 +15,9 @@ declare global {
 interface NaverMapProps {
   coursePlaces: CoursePlace[];
   highlightPlace: Place | null;
-  routePath: Array<[number, number]> | null;
+  routePath: Record<number, Array<[number, number]>> | null;
   transitMode: TransitMode;
+  activeDayTab: 'all' | number;
 }
 
 export default function NaverMap({
@@ -24,6 +25,7 @@ export default function NaverMap({
   highlightPlace,
   routePath,
   transitMode,
+  activeDayTab,
 }: NaverMapProps) {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapObjRef = useRef<any>(null);
@@ -39,10 +41,12 @@ export default function NaverMap({
   }, []);
 
   const clearPolyline = useCallback(() => {
-    if (polylineRef.current) {
+    if (polylineRef.current && Array.isArray(polylineRef.current)) {
+      polylineRef.current.forEach((p: any) => p.setMap(null));
+    } else if (polylineRef.current) {
       polylineRef.current.setMap(null);
-      polylineRef.current = null;
     }
+    polylineRef.current = [];
   }, []);
 
   const clearHighlight = useCallback(() => {
@@ -73,6 +77,9 @@ export default function NaverMap({
     mapObjRef.current = map;
   }, []);
 
+  const DAY_COLORS = ['#f472b6', '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ef4444'];
+  const getDayColor = (day: number) => DAY_COLORS[(day - 1) % DAY_COLORS.length] || '#f472b6';
+
   // Update course markers + polyline
   useEffect(() => {
     const map = mapObjRef.current;
@@ -85,26 +92,51 @@ export default function NaverMap({
 
     const bounds = new window.naver.maps.LatLngBounds();
 
-    coursePlaces.forEach((place, idx) => {
+    const placesToShow = coursePlaces.filter(p => {
+      if (activeDayTab === 'all') return (p.day ?? 0) !== 0;
+      return (p.day ?? 0) === activeDayTab;
+    });
+
+    if (placesToShow.length === 0) return;
+
+    placesToShow.forEach((place, idx) => {
       const { lng, lat } = katechToWgs84(place.mapx, place.mapy);
       const pos = new window.naver.maps.LatLng(lat, lng);
       bounds.extend(pos);
+
+      const placeDay = place.day ?? 1;
+      
+      let iconContent = '';
+      if (placeDay === 0) {
+        iconContent = `
+          <div style="
+            width:16px;height:16px;
+            border-radius:50%;
+            background:#8b7fa8;
+            border:2px solid white;
+            box-shadow:0 2px 4px rgba(0,0,0,0.3);
+          "></div>
+        `;
+      } else {
+        const bg = getDayColor(placeDay);
+        iconContent = `
+          <div style="
+            width:32px;height:32px;
+            display:flex;align-items:center;justify-content:center;
+            border-radius:50%;
+            background:${bg};
+            color:white;font-weight:700;font-size:13px;
+            box-shadow:0 2px 8px ${bg}80;
+            border:2px solid white;
+          ">${idx + 1}</div>
+        `;
+      }
 
       const marker = new window.naver.maps.Marker({
         map,
         position: pos,
         icon: {
-          content: `
-            <div style="
-              width:32px;height:32px;
-              display:flex;align-items:center;justify-content:center;
-              border-radius:50%;
-              background:linear-gradient(135deg,#f472b6,#c084fc);
-              color:white;font-weight:700;font-size:13px;
-              box-shadow:0 2px 8px rgba(244,114,182,0.5);
-              border:2px solid white;
-            ">${idx + 1}</div>
-          `,
+          content: iconContent,
           size: new window.naver.maps.Size(32, 32),
           anchor: new window.naver.maps.Point(16, 16),
         },
@@ -146,48 +178,58 @@ export default function NaverMap({
     });
 
     // Draw route polyline
-    if (routePath && routePath.length > 1) {
-      const path = routePath.map(
-        ([lng, lat]: [number, number]) => new window.naver.maps.LatLng(lat, lng)
-      );
+    const pathsToDraw: Array<{ day: number, path: Array<[number, number]> }> = [];
 
-      polylineRef.current = new window.naver.maps.Polyline({
-        map,
-        path,
-        strokeColor: '#f472b6',
-        strokeOpacity: 0.95,
-        strokeWeight: 6,
-        strokeStyle: 'solid',
-        strokeLineCap: 'round',
-        strokeLineJoin: 'round',
+    if (routePath && Object.keys(routePath).length > 0) {
+      Object.entries(routePath).forEach(([d, p]) => {
+        const day = Number(d);
+        if (activeDayTab === 'all' || activeDayTab === day) {
+          pathsToDraw.push({ day, path: p as Array<[number, number]> });
+        }
       });
     } else if (coursePlaces.length > 1) {
-      const path = coursePlaces.map((place) => {
+      const byDay: Record<number, Array<[number, number]>> = {};
+      coursePlaces.forEach((place) => {
+        const d = place.day ?? 1;
+        if (d === 0) return;
+        if (!byDay[d]) byDay[d] = [];
         const { lng, lat } = katechToWgs84(place.mapx, place.mapy);
-        return new window.naver.maps.LatLng(lat, lng);
+        byDay[d].push([lng, lat]);
       });
 
-      polylineRef.current = new window.naver.maps.Polyline({
-        map,
-        path,
-        strokeColor: '#f472b6',
-        strokeOpacity: 0.8,
-        strokeWeight: 5,
-        strokeStyle: 'dash',
-        strokeLineCap: 'round',
-        strokeLineJoin: 'round',
+      Object.entries(byDay).forEach(([d, p]) => {
+        const day = Number(d);
+        if (activeDayTab === 'all' || activeDayTab === day) {
+          if (p.length > 1) {
+            pathsToDraw.push({ day, path: p });
+          }
+        }
       });
     }
 
+    pathsToDraw.forEach(({ day, path }) => {
+      const polyline = new window.naver.maps.Polyline({
+        map,
+        path: path.map(([lng, lat]) => new window.naver.maps.LatLng(lat, lng)),
+        strokeColor: getDayColor(day),
+        strokeOpacity: 0.95,
+        strokeWeight: routePath ? 6 : 5,
+        strokeStyle: routePath ? 'solid' : 'dash',
+        strokeLineCap: 'round',
+        strokeLineJoin: 'round',
+      });
+      polylineRef.current.push(polyline);
+    });
+
     // Fit bounds
-    if (coursePlaces.length === 1) {
-      const { lng, lat } = katechToWgs84(coursePlaces[0].mapx, coursePlaces[0].mapy);
+    if (placesToShow.length === 1) {
+      const { lng, lat } = katechToWgs84(placesToShow[0].mapx, placesToShow[0].mapy);
       map.setCenter(new window.naver.maps.LatLng(lat, lng));
       map.setZoom(15);
     } else {
       map.fitBounds(bounds, { top: 60, right: 60, bottom: 60, left: 60 });
     }
-  }, [coursePlaces, routePath, transitMode, clearMarkers, clearPolyline]);
+  }, [coursePlaces, routePath, transitMode, activeDayTab, clearMarkers, clearPolyline]);
 
   // Highlight place on hover from search results
   useEffect(() => {

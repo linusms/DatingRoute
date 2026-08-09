@@ -46,6 +46,7 @@ export default function HomePage() {
   // Route features state
   const [isRouteCreated, setIsRouteCreated] = useState(false);
   const [transitMode, setTransitMode] = useState<TransitMode>('driving');
+  const [activeDayTab, setActiveDayTab] = useState<'all' | number>('all');
 
   const [highlightPlace, setHighlightPlace] = useState<Place | null>(null);
   const [reviewPlace, setReviewPlace] = useState<string | null>(null);
@@ -466,61 +467,78 @@ export default function HomePage() {
 
   // ──── Directions ────
   const fetchDirections = useCallback(async (places: CoursePlace[]) => {
-    if (places.length < 2) {
+    const validPlaces = places.filter((p) => (p.day ?? 0) !== 0);
+    if (validPlaces.length < 2) {
       setDirections(null);
       setRoutePath(null);
       return;
     }
 
-    try {
-      const coords = places.map((p) => {
-        const { lng, lat } = katechToWgs84(p.mapx, p.mapy);
-        return `${lng},${lat}`;
-      });
+    const byDay: Record<number, CoursePlace[]> = {};
+    validPlaces.forEach(p => {
+      const d = p.day ?? 1;
+      if (!byDay[d]) byDay[d] = [];
+      byDay[d].push(p);
+    });
 
-      const start = coords[0];
-      const goal = coords[coords.length - 1];
-      const waypoints = coords.length > 2 ? coords.slice(1, -1).join('|') : undefined;
+    let totalDist = 0;
+    let totalDur = 0;
+    const allLegs: any[] = [];
+    const newRoutePath: Record<number, Array<[number, number]>> = {};
+    let globalLegIndex = 0;
 
-      let url = `/api/directions?start=${start}&goal=${goal}`;
-      if (waypoints) url += `&waypoints=${encodeURIComponent(waypoints)}`;
+    for (const d of Object.keys(byDay)) {
+      const day = Number(d);
+      const dPlaces = byDay[day];
+      if (dPlaces.length < 2) continue;
 
-      const res = await fetch(url);
-      const data = await res.json();
-
-      if (!res.ok || data.error) throw new Error(data.error || 'API Error');
-
-      if (data._fullPath && data._fullPath.length > 0) {
-        setDirections({
-          totalDistance: data._totalDistance || 0,
-          totalDuration: data._totalDuration || 0,
-          legs: data._parsedLegs || [],
-          fullPath: data._fullPath,
+      try {
+        const coords = dPlaces.map((p) => {
+          const { lng, lat } = katechToWgs84(p.mapx, p.mapy);
+          return `${lng},${lat}`;
         });
-        setRoutePath(data._fullPath);
-      } else {
-        throw new Error('No path data');
-      }
-    } catch {
-      // Fallback: straight-line distance
-      let totalDistMeters = 0;
-      const fullPath: Array<[number, number]> = [];
-      const coords = places.map((p) => {
-        const { lng, lat } = katechToWgs84(p.mapx, p.mapy);
-        fullPath.push([lng, lat]);
-        return { lng, lat };
-      });
 
-      const fallbackLegs = [];
-      for (let i = 0; i < coords.length - 1; i++) {
-        const dist = getStraightLineDistance(coords[i].lat, coords[i].lng, coords[i + 1].lat, coords[i + 1].lng);
-        totalDistMeters += dist;
-        fallbackLegs.push({ index: i, distance: dist, duration: (dist / 40000) * 3600000, name: '' });
-      }
+        const start = coords[0];
+        const goal = coords[coords.length - 1];
+        const waypoints = coords.length > 2 ? coords.slice(1, -1).join('|') : undefined;
 
-      setDirections({ totalDistance: totalDistMeters, totalDuration: (totalDistMeters / 40000) * 3600000, legs: fallbackLegs, fullPath });
-      setRoutePath(fullPath);
+        let url = `/api/directions?start=${start}&goal=${goal}`;
+        if (waypoints) url += `&waypoints=${encodeURIComponent(waypoints)}`;
+
+        const res = await fetch(url);
+        const data = await res.json();
+
+        if (!res.ok || data.error || !data._fullPath) throw new Error(data.error || 'API Error');
+
+        totalDist += data._totalDistance || 0;
+        totalDur += data._totalDuration || 0;
+        data._parsedLegs?.forEach((leg: any) => {
+          allLegs.push({ ...leg, index: globalLegIndex++ });
+        });
+        newRoutePath[day] = data._fullPath;
+      } catch {
+        // Fallback: straight-line distance
+        let dayDist = 0;
+        const dPath: Array<[number, number]> = [];
+        const coords = dPlaces.map((p) => {
+          const { lng, lat } = katechToWgs84(p.mapx, p.mapy);
+          dPath.push([lng, lat]);
+          return { lng, lat };
+        });
+
+        for (let i = 0; i < coords.length - 1; i++) {
+          const dist = getStraightLineDistance(coords[i].lat, coords[i].lng, coords[i + 1].lat, coords[i + 1].lng);
+          dayDist += dist;
+          allLegs.push({ index: globalLegIndex++, distance: dist, duration: (dist / 40000) * 3600000, name: '' });
+        }
+        totalDist += dayDist;
+        totalDur += (dayDist / 40000) * 3600000;
+        newRoutePath[day] = dPath;
+      }
     }
+
+    setDirections({ totalDistance: totalDist, totalDuration: totalDur, legs: allLegs, fullPath: [] });
+    setRoutePath(newRoutePath as any);
   }, []);
 
   const handleCreateRoute = useCallback(() => {
@@ -840,6 +858,8 @@ export default function HomePage() {
                 courseName={courseName}
                 courseDescription={courseDescription}
                 onUpdateCourseName={handleUpdateCourseName}
+                activeDayTab={activeDayTab}
+                setActiveDayTab={setActiveDayTab}
               />
             </div>
           </div>
@@ -857,8 +877,9 @@ export default function HomePage() {
         <NaverMap
           coursePlaces={coursePlaces}
           highlightPlace={highlightPlace}
-          routePath={isRouteCreated ? routePath : null}
+          routePath={isRouteCreated ? (routePath as any) : null}
           transitMode={transitMode}
+          activeDayTab={activeDayTab}
         />
 
         {reviewPlace && (
