@@ -52,6 +52,7 @@ export default function HomePage() {
   const [reviewPlace, setReviewPlace] = useState<string | null>(null);
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const [showStoragePins, setShowStoragePins] = useState(false);
 
   // Session state - unified: null = dashboard, 'builder' = editing
   const [sessionMode, setSessionMode] = useState<SessionMode | null>(null);
@@ -889,6 +890,8 @@ export default function HomePage() {
                 onUpdateCourseName={handleUpdateCourseName}
                 activeDayTab={activeDayTab}
                 setActiveDayTab={setActiveDayTab}
+                showStoragePins={showStoragePins}
+                setShowStoragePins={setShowStoragePins}
               />
             </div>
           </div>
@@ -909,6 +912,7 @@ export default function HomePage() {
           routePath={isRouteCreated ? (routePath as any) : null}
           transitMode={transitMode}
           activeDayTab={activeDayTab}
+          showStoragePins={showStoragePins}
         />
 
         {reviewPlace && (

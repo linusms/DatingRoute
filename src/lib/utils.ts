@@ -1,3 +1,5 @@
+import { CoursePlace } from '@/lib/types';
+
 /**
  * Format meters to a human-readable distance string.
  */
@@ -161,3 +163,174 @@ export function tourDateToISO(yyyymmdd: string): string {
   return `${yyyymmdd.slice(0, 4)}-${yyyymmdd.slice(4, 6)}-${yyyymmdd.slice(6, 8)}`;
 }
 
+/**
+ * Optimize route using Nearest Neighbor TSP heuristic.
+ * Keeps the starting point fixed (default index 0).
+ */
+export function optimizeRouteTSP(places: CoursePlace[], startIdx = 0): CoursePlace[] {
+  if (places.length <= 2) return places; // No need to sort
+
+  const unvisited = [...places];
+  const sorted: CoursePlace[] = [];
+
+  // Start with the specified starting place
+  let current = unvisited.splice(startIdx, 1)[0];
+  sorted.push(current);
+
+  while (unvisited.length > 0) {
+    let nearestIdx = -1;
+    let minDistance = Infinity;
+
+    const { lng: currLng, lat: currLat } = katechToWgs84(current.mapx, current.mapy);
+
+    for (let i = 0; i < unvisited.length; i++) {
+      const candidate = unvisited[i];
+      const { lng: candLng, lat: candLat } = katechToWgs84(candidate.mapx, candidate.mapy);
+      const dist = getStraightLineDistance(currLat, currLng, candLat, candLng);
+
+      if (dist < minDistance) {
+        minDistance = dist;
+        nearestIdx = i;
+      }
+    }
+
+    current = unvisited.splice(nearestIdx, 1)[0];
+    sorted.push(current);
+  }
+
+  // Update order property
+  return sorted.map((p, i) => ({ ...p, order: i }));
+}
+
+/**
+ * Auto-distribute storage places (day === 0) into days (1..dayCount) using K-Means clustering.
+ * Each place is uniquely assigned to exactly one day (no overlaps).
+ * After assignment, each day's route is optimized using TSP.
+ */
+export function autoDistributePlaces(places: CoursePlace[], dayCount: number): CoursePlace[] {
+  const assigned = places.filter(p => (p.day ?? 0) > 0);
+  const storage = places.filter(p => (p.day ?? 0) === 0);
+
+  if (storage.length === 0 || dayCount < 1) return places;
+
+  // Initialize centroids for each day
+  const centroids: Record<number, { lat: number, lng: number }> = {};
+  
+  for (let d = 1; d <= dayCount; d++) {
+    const dayPlaces = assigned.filter(p => p.day === d);
+    if (dayPlaces.length > 0) {
+      let sumLat = 0;
+      let sumLng = 0;
+      dayPlaces.forEach(p => {
+        const { lat, lng } = katechToWgs84(p.mapx, p.mapy);
+        sumLat += lat;
+        sumLng += lng;
+      });
+      centroids[d] = { lat: sumLat / dayPlaces.length, lng: sumLng / dayPlaces.length };
+    }
+  }
+
+  // For days without places, pick random points from storage as centroids
+  const storageCoords = storage.map(p => {
+    const coords = katechToWgs84(p.mapx, p.mapy);
+    return { ...p, coords };
+  });
+
+  // K-means++ style initialization for missing centroids
+  for (let d = 1; d <= dayCount; d++) {
+    if (!centroids[d]) {
+      if (storageCoords.length > 0) {
+        // Find the point furthest from all existing centroids
+        let maxDist = -1;
+        let bestIdx = Math.floor(Math.random() * storageCoords.length);
+        
+        const existingCentroids = Object.values(centroids);
+        if (existingCentroids.length > 0) {
+          for (let i = 0; i < storageCoords.length; i++) {
+            let minDistToCentroid = Infinity;
+            for (const c of existingCentroids) {
+              const dist = getStraightLineDistance(c.lat, c.lng, storageCoords[i].coords.lat, storageCoords[i].coords.lng);
+              if (dist < minDistToCentroid) minDistToCentroid = dist;
+            }
+            if (minDistToCentroid > maxDist) {
+              maxDist = minDistToCentroid;
+              bestIdx = i;
+            }
+          }
+        }
+        centroids[d] = { lat: storageCoords[bestIdx].coords.lat, lng: storageCoords[bestIdx].coords.lng };
+      } else {
+        // Fallback
+        centroids[d] = { lat: 37.5665, lng: 126.978 };
+      }
+    }
+  }
+
+  // K-Means assignment loop
+  let assignments: Record<string, number> = {};
+  for (let iter = 0; iter < 10; iter++) {
+    assignments = {};
+    const newSums: Record<number, { lat: number, lng: number, count: number }> = {};
+    for (let d = 1; d <= dayCount; d++) {
+      newSums[d] = { lat: 0, lng: 0, count: 0 };
+      // Include already assigned places in the new sums
+      const dayPlaces = assigned.filter(p => p.day === d);
+      dayPlaces.forEach(p => {
+        const { lat, lng } = katechToWgs84(p.mapx, p.mapy);
+        newSums[d].lat += lat;
+        newSums[d].lng += lng;
+        newSums[d].count += 1;
+      });
+    }
+
+    // Assign each storage place to the nearest centroid
+    for (const sp of storageCoords) {
+      let minDist = Infinity;
+      let bestDay = 1;
+      for (let d = 1; d <= dayCount; d++) {
+        const dist = getStraightLineDistance(centroids[d].lat, centroids[d].lng, sp.coords.lat, sp.coords.lng);
+        if (dist < minDist) {
+          minDist = dist;
+          bestDay = d;
+        }
+      }
+      assignments[sp.id] = bestDay;
+      newSums[bestDay].lat += sp.coords.lat;
+      newSums[bestDay].lng += sp.coords.lng;
+      newSums[bestDay].count += 1;
+    }
+
+    // Update centroids
+    let changed = false;
+    for (let d = 1; d <= dayCount; d++) {
+      if (newSums[d].count > 0) {
+        const newLat = newSums[d].lat / newSums[d].count;
+        const newLng = newSums[d].lng / newSums[d].count;
+        if (Math.abs(centroids[d].lat - newLat) > 0.0001 || Math.abs(centroids[d].lng - newLng) > 0.0001) {
+          changed = true;
+        }
+        centroids[d] = { lat: newLat, lng: newLng };
+      }
+    }
+    if (!changed) break;
+  }
+
+  // Apply assignments and optimize each day
+  const resultPlaces: CoursePlace[] = [];
+  for (let d = 1; d <= dayCount; d++) {
+    const currentDayAssigned = assigned.filter(p => p.day === d);
+    const currentDayDistributed = storage.filter(p => assignments[p.id] === d).map(p => ({ ...p, day: d }));
+    
+    let combined = [...currentDayAssigned, ...currentDayDistributed];
+    if (combined.length > 2) {
+      combined = optimizeRouteTSP(combined, 0); // Keep first element as start if possible
+    }
+    resultPlaces.push(...combined);
+  }
+
+  // Add back any unassigned places (should not happen, but just in case)
+  const allResultIds = new Set(resultPlaces.map(p => p.id));
+  const leftovers = storage.filter(p => !allResultIds.has(p.id));
+  
+  return [...resultPlaces, ...leftovers].map((p, i) => ({ ...p, order: i }));
+}

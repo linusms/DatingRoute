@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { CoursePlace, DateSchedule, DirectionResult, TransitMode, FACILITY_ICONS, FACILITY_LABELS } from '@/lib/types';
-import { formatDuration, formatDistance, getWalkingTimeMs, stripHtml, parseCategoryToFacility } from '@/lib/utils';
+import { formatDuration, formatDistance, getWalkingTimeMs, stripHtml, parseCategoryToFacility, optimizeRouteTSP, autoDistributePlaces } from '@/lib/utils';
 import { useDragAndDrop } from '@/lib/useDragAndDrop';
 import ShareCard from './ShareCard';
 import DateSchedulePicker from './DateSchedulePicker';
@@ -33,6 +33,8 @@ interface CourseBuilderProps {
   onUpdateCourseName?: (displayName: string, description: string) => Promise<void>;
   activeDayTab: 'all' | number;
   setActiveDayTab: (tab: 'all' | number) => void;
+  showStoragePins?: boolean;
+  setShowStoragePins?: (show: boolean) => void;
 }
 
 export default function CourseBuilder({
@@ -61,13 +63,14 @@ export default function CourseBuilder({
   onUpdateCourseName,
   activeDayTab,
   setActiveDayTab,
+  showStoragePins = false,
+  setShowStoragePins,
 }: CourseBuilderProps) {
   const [showShareCard, setShowShareCard] = useState(false);
   const [showInvitePanel, setShowInvitePanel] = useState<'create' | 'join' | null>(null);
   const [joinCode, setJoinCode] = useState('');
   const [joinLoading, setJoinLoading] = useState(false);
   const [codeCopied, setCodeCopied] = useState(false);
-  const [showStorageDropdown, setShowStorageDropdown] = useState(false);
 
   // Course naming state
   const [isEditingName, setIsEditingName] = useState(false);
@@ -175,6 +178,27 @@ export default function CourseBuilder({
     }
   };
 
+  const handleOptimizeRoute = () => {
+    if (activeDayTab === 'all' || activeDayTab === 0) return;
+    
+    const currentDayPlaces = places.filter(p => (p.day ?? 0) === activeDayTab);
+    const otherPlaces = places.filter(p => (p.day ?? 0) !== activeDayTab);
+    
+    if (currentDayPlaces.length <= 2) return;
+    
+    const optimized = optimizeRouteTSP(currentDayPlaces, 0); // Keep first place fixed
+    onReorderPlaces([...otherPlaces, ...optimized]);
+  };
+
+  const handleAutoDistribute = () => {
+    if (dayCount < 2) {
+      alert("일정이 2일 이상이어야 자동 분배가 가능합니다.");
+      return;
+    }
+    const distributed = autoDistributePlaces(places, dayCount);
+    onReorderPlaces(distributed);
+  };
+
   const isCollaborative = members && members.length > 1;
 
   // Calculate per-day stats (distance and duration)
@@ -226,14 +250,44 @@ export default function CourseBuilder({
             />
           </div>
 
-          <button
-            className="btn btn-primary animate-slide-up"
-            style={{ width: '100%', padding: '16px', fontSize: '16px', marginBottom: '16px' }}
-            onClick={onCreateRoute}
-            disabled={places.length < 2 && !isRouteCreated}
-          >
-            {isRouteCreated ? '🔄 경로 다시 생성하기' : '✨ 경로 생성하기'}
-          </button>
+          <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
+            <button
+              className="btn btn-primary animate-slide-up"
+              style={{ flex: 1, padding: '16px', fontSize: '16px' }}
+              onClick={onCreateRoute}
+              disabled={places.length < 2 && !isRouteCreated}
+            >
+              {isRouteCreated ? '🔄 경로 다시 생성' : '✨ 경로 생성'}
+            </button>
+            {activeDayTab !== 'all' && activeDayTab !== 0 && filteredPlaces.length > 2 && (
+              <button
+                className="btn animate-slide-up"
+                style={{
+                  flex: '0 0 auto', padding: '16px 20px', fontSize: '14px',
+                  background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(244,114,182,0.4)',
+                  color: '#f472b6', fontWeight: 600, cursor: 'pointer', borderRadius: '12px',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center'
+                }}
+                onClick={handleOptimizeRoute}
+              >
+                🪄 동선 최적화
+              </button>
+            )}
+            {(activeDayTab === 'all' || activeDayTab === 0) && isMultiDay && places.some(p => (p.day ?? 0) === 0) && (
+              <button
+                className="btn animate-slide-up"
+                style={{
+                  flex: '0 0 auto', padding: '16px 20px', fontSize: '14px',
+                  background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(192,132,252,0.4)',
+                  color: '#c084fc', fontWeight: 600, cursor: 'pointer', borderRadius: '12px',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center'
+                }}
+                onClick={handleAutoDistribute}
+              >
+                🤖 자동 분배
+              </button>
+            )}
+          </div>
 
           {/* Day Tabs */}
           <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', marginBottom: '16px', paddingBottom: '4px' }} className="custom-scrollbar">
@@ -549,7 +603,7 @@ export default function CourseBuilder({
           {activeDayTab !== 'all' && activeDayTab !== 0 && (
             <div style={{ marginTop: '16px' }}>
               <button
-                onClick={() => setShowStorageDropdown(!showStorageDropdown)}
+                onClick={() => setShowStoragePins?.(!showStoragePins)}
                 style={{
                   width: '100%', padding: '12px', borderRadius: '12px',
                   background: 'rgba(255,255,255,0.03)', border: '1px dashed rgba(244,114,182,0.4)',
@@ -560,7 +614,7 @@ export default function CourseBuilder({
                 <span>+</span> 담은 장소 목록에서 추가
               </button>
               
-              {showStorageDropdown && (() => {
+              {showStoragePins && (() => {
                 const storagePlaces = places.filter(p => (p.day ?? 0) === 0);
                 const assignedTitles = new Set(places.filter(p => (p.day ?? 0) > 0).map(p => p.title));
                 const sortedStoragePlaces = [...storagePlaces].sort((a, b) => {
@@ -592,7 +646,7 @@ export default function CourseBuilder({
                             onClick={() => {
                               const newPlace = { ...p, id: p.id + '-' + Date.now(), day: activeDayTab as number, order: places.length };
                               onReorderPlaces([...places, newPlace]);
-                              setShowStorageDropdown(false);
+                              setShowStoragePins?.(false);
                             }}
                             style={{
                               background: 'rgba(255,255,255,0.05)', padding: '12px', borderRadius: '8px',

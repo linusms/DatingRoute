@@ -18,6 +18,7 @@ interface NaverMapProps {
   routePath: Record<number, Array<[number, number]>> | null;
   transitMode: TransitMode;
   activeDayTab: 'all' | number;
+  showStoragePins?: boolean;
 }
 
 export default function NaverMap({
@@ -26,6 +27,7 @@ export default function NaverMap({
   routePath,
   transitMode,
   activeDayTab,
+  showStoragePins = false,
 }: NaverMapProps) {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapObjRef = useRef<any>(null);
@@ -93,7 +95,9 @@ export default function NaverMap({
     const bounds = new window.naver.maps.LatLngBounds();
 
     const placesToShow = coursePlaces.filter(p => {
-      if (activeDayTab === 'all') return (p.day ?? 0) !== 0;
+      const isStorage = (p.day ?? 0) === 0;
+      if (showStoragePins && isStorage) return true;
+      if (activeDayTab === 'all') return !isStorage;
       return (p.day ?? 0) === activeDayTab;
     });
 
@@ -229,7 +233,7 @@ export default function NaverMap({
     } else {
       map.fitBounds(bounds, { top: 60, right: 60, bottom: 60, left: 60 });
     }
-  }, [coursePlaces, routePath, transitMode, activeDayTab, clearMarkers, clearPolyline]);
+  }, [coursePlaces, routePath, transitMode, activeDayTab, showStoragePins, clearMarkers, clearPolyline]);
 
   // Highlight place on hover from search results
   useEffect(() => {
