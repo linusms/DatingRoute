@@ -59,11 +59,9 @@ export default function DashboardScreen({
 
   const handleEditStart = (e: React.MouseEvent, course: Course) => {
     e.stopPropagation();
-    // '저장되지 않은 경로'는 편집 불가
-    if (course.name === '저장되지 않은 경로') return;
     setEditState({
       courseId: course.id,
-      name: course.name,
+      name: course.isLive ? (course.displayName || '') : course.name,
       description: course.description || '',
     });
   };
@@ -75,20 +73,41 @@ export default function DashboardScreen({
 
     setEditSaving(true);
     try {
-      const res = await fetch(`/api/users/${currentUser.id}/courses/${editState.courseId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: editState.name, description: editState.description }),
-      });
-      if (res.ok) {
-        setCourses(prev =>
-          prev.map(c =>
-            c.id === editState.courseId
-              ? { ...c, name: editState.name, description: editState.description }
-              : c
-          )
-        );
-        setEditState(null);
+      const course = courses.find(c => c.id === editState.courseId);
+      if (!course) return;
+
+      if (course.isLive && course.roomId) {
+        const res = await fetch(`/api/sessions/${course.roomId}/name`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ displayName: editState.name, description: editState.description }),
+        });
+        if (res.ok) {
+          setCourses(prev =>
+            prev.map(c =>
+              c.id === editState.courseId
+                ? { ...c, displayName: editState.name, description: editState.description }
+                : c
+            )
+          );
+          setEditState(null);
+        }
+      } else {
+        const res = await fetch(`/api/users/${currentUser.id}/courses/${editState.courseId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: editState.name, description: editState.description }),
+        });
+        if (res.ok) {
+          setCourses(prev =>
+            prev.map(c =>
+              c.id === editState.courseId
+                ? { ...c, name: editState.name, description: editState.description }
+                : c
+            )
+          );
+          setEditState(null);
+        }
       }
     } catch { /* ignore */ }
     finally {
@@ -239,7 +258,10 @@ export default function DashboardScreen({
                             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                               <span className="dashboard-course-name">
                                 {isUnsaved ? (
-                                  <span className="dashboard-unsaved-label">{course.name}</span>
+                                  <>
+                                    <span style={{ color: '#f5f0ff' }}>{course.displayName || '이름 없는 경로'}</span>
+                                    <span className="dashboard-unsaved-label" style={{ marginLeft: '8px' }}>(자동저장)</span>
+                                  </>
                                 ) : course.name}
                               </span>
                               {course.memberCount && course.memberCount > 1 && (

@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { CoursePlace, DirectionResult, TransitMode, FACILITY_ICONS, FACILITY_LABELS } from '@/lib/types';
+import React, { useState, useMemo } from 'react';
+import { CoursePlace, DateSchedule, DirectionResult, TransitMode, FACILITY_ICONS, FACILITY_LABELS } from '@/lib/types';
 import { formatDuration, formatDistance, getWalkingTimeMs, stripHtml, parseCategoryToFacility } from '@/lib/utils';
 import { useDragAndDrop } from '@/lib/useDragAndDrop';
 import ShareCard from './ShareCard';
@@ -24,6 +24,11 @@ interface CourseBuilderProps {
   onCopyInviteCode?: () => void;
   onCopyInviteLink?: () => void;
   members?: { nickname?: string; isOwner?: boolean }[];
+  // Course naming (auto-save)
+  schedule?: DateSchedule | null;
+  courseName?: string;       // current display name (from DB)
+  courseDescription?: string; // current description (from DB)
+  onUpdateCourseName?: (displayName: string, description: string) => Promise<void>;
 }
 
 export default function CourseBuilder({
@@ -45,12 +50,70 @@ export default function CourseBuilder({
   onCopyInviteCode,
   onCopyInviteLink,
   members,
+  schedule,
+  courseName = '',
+  courseDescription = '',
+  onUpdateCourseName,
 }: CourseBuilderProps) {
   const [showShareCard, setShowShareCard] = useState(false);
   const [showInvitePanel, setShowInvitePanel] = useState<'create' | 'join' | null>(null);
   const [joinCode, setJoinCode] = useState('');
   const [joinLoading, setJoinLoading] = useState(false);
   const [codeCopied, setCodeCopied] = useState(false);
+
+  // Course naming state
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [editName, setEditName] = useState('');
+  const [editDescription, setEditDescription] = useState('');
+  const [nameSaving, setNameSaving] = useState(false);
+
+  // Multi-day: calculate number of days from schedule
+  const dayCount = useMemo(() => {
+    if (!schedule?.startDate || !schedule?.endDate) return 1;
+    const start = new Date(schedule.startDate);
+    const end = new Date(schedule.endDate);
+    const diff = Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+    return Math.max(1, diff);
+  }, [schedule]);
+
+  const isMultiDay = dayCount > 1;
+
+  // Day label helper
+  const getDayLabel = (dayNum: number) => {
+    if (!schedule?.startDate) return `Day ${dayNum}`;
+    const date = new Date(schedule.startDate);
+    date.setDate(date.getDate() + dayNum - 1);
+    const m = date.getMonth() + 1;
+    const d = date.getDate();
+    const weekdays = ['일', '월', '화', '수', '목', '금', '토'];
+    const w = weekdays[date.getDay()];
+    return `Day ${dayNum} (${m}/${d} ${w})`;
+  };
+
+  const handleStartEditName = () => {
+    setEditName(courseName);
+    setEditDescription(courseDescription);
+    setIsEditingName(true);
+  };
+
+  const handleSaveName = async () => {
+    if (!onUpdateCourseName) return;
+    setNameSaving(true);
+    try {
+      await onUpdateCourseName(editName.trim(), editDescription.trim());
+      setIsEditingName(false);
+    } finally {
+      setNameSaving(false);
+    }
+  };
+
+  // Change a place's day assignment
+  const handleChangePlaceDay = (placeId: string, newDay: number) => {
+    const updated = places.map(p =>
+      p.id === placeId ? { ...p, day: newDay } : p
+    );
+    onReorderPlaces(updated);
+  };
   
   const {
     list: draggablePlaces,
@@ -91,8 +154,101 @@ export default function CourseBuilder({
 
   return (
     <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
-      
-      {/* Invite Section */}
+
+      {/* ── 경로 이름/설명 편집 영역 ── */}
+      <div style={{
+        background: 'rgba(255,255,255,0.04)', borderRadius: '12px',
+        border: '1px solid rgba(244,114,182,0.15)', padding: '14px',
+      }}>
+        {isEditingName ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <input
+              type="text"
+              value={editName}
+              onChange={e => setEditName(e.target.value)}
+              placeholder="경로 이름 (예: 홍대 데이트 코스)"
+              autoFocus
+              style={{
+                width: '100%', padding: '8px 12px', borderRadius: '8px',
+                background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(244,114,182,0.4)',
+                color: '#f5f0ff', fontSize: '15px', fontWeight: 600, outline: 'none',
+              }}
+              onKeyDown={e => { if (e.key === 'Enter') handleSaveName(); if (e.key === 'Escape') setIsEditingName(false); }}
+            />
+            <input
+              type="text"
+              value={editDescription}
+              onChange={e => setEditDescription(e.target.value)}
+              placeholder="설명 (선택사항)"
+              style={{
+                width: '100%', padding: '6px 12px', borderRadius: '8px',
+                background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.15)',
+                color: '#b4a9c9', fontSize: '13px', outline: 'none',
+              }}
+            />
+            <div style={{ display: 'flex', gap: '6px' }}>
+              <button
+                onClick={handleSaveName}
+                disabled={nameSaving}
+                style={{
+                  padding: '6px 16px', borderRadius: '8px', fontSize: '13px',
+                  background: 'linear-gradient(135deg, #f472b6, #c084fc)',
+                  color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 600,
+                }}
+              >
+                {nameSaving ? '저장 중...' : '✓ 저장'}
+              </button>
+              <button
+                onClick={() => setIsEditingName(false)}
+                style={{
+                  padding: '6px 12px', borderRadius: '8px', fontSize: '13px',
+                  background: 'rgba(255,255,255,0.08)', color: '#8b7fa8',
+                  border: '1px solid rgba(255,255,255,0.1)', cursor: 'pointer',
+                }}
+              >
+                취소
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '2px' }}>
+                <span style={{ fontSize: '15px', fontWeight: 700, color: '#f5f0ff' }}>
+                  {courseName || '이름 없는 경로'}
+                </span>
+                <span style={{
+                  fontSize: '10px', padding: '1px 6px', borderRadius: '4px',
+                  background: 'rgba(244,114,182,0.15)', color: '#f472b6',
+                  border: '1px solid rgba(244,114,182,0.3)', fontWeight: 600,
+                }}>자동저장</span>
+              </div>
+              {courseDescription && (
+                <div style={{ fontSize: '12px', color: '#8b7fa8' }}>{courseDescription}</div>
+              )}
+              {!courseDescription && !courseName && (
+                <div style={{ fontSize: '12px', color: '#6b5f85', fontStyle: 'italic' }}>이름과 설명을 설정해보세요</div>
+              )}
+            </div>
+            {onUpdateCourseName && (
+              <button
+                onClick={handleStartEditName}
+                title="이름 편집"
+                style={{
+                  background: 'rgba(244,114,182,0.1)', color: '#f472b6',
+                  border: 'none', width: '32px', height: '32px', borderRadius: '8px',
+                  cursor: 'pointer', display: 'flex', alignItems: 'center',
+                  justifyContent: 'center', fontSize: '15px', flexShrink: 0,
+                }}
+              >
+                ✏️
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+
+
       <div>
         <div className="invite-section">
           <button
@@ -227,20 +383,44 @@ export default function CourseBuilder({
             );
           })()}
 
-          {/* Places DND timeline */}
+          {/* Places DND timeline with optional day dividers */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0' }}>
-            {draggablePlaces.map((place, idx) => {
+            {(() => {
+              // When multi-day: group by day and show day headers
+              const seenDays = new Set<number>();
+              return draggablePlaces.map((place, idx) => {
               const facility = parseCategoryToFacility(place.category);
               const facilityIcon = FACILITY_ICONS[facility];
               const facilityLabel = FACILITY_LABELS[facility];
+              const placeDay = place.day ?? 1;
 
-              // Get leg info for the segment AFTER this place (between this place and next)
+              // Get leg info for the segment AFTER this place
               const legs = directions?.legs || [];
               const legAfter = (isRouteCreated && legs.length > 0 && idx < draggablePlaces.length - 1)
                 ? legs[idx] : null;
 
+              // Day divider: show header when day changes
+              const showDayHeader = isMultiDay && !seenDays.has(placeDay);
+              if (showDayHeader) seenDays.add(placeDay);
+
               return (
                 <React.Fragment key={place.id}>
+                  {/* Day divider header */}
+                  {showDayHeader && (
+                    <div style={{
+                      display: 'flex', alignItems: 'center', gap: '10px',
+                      margin: idx === 0 ? '0 0 10px 0' : '16px 0 10px 0',
+                    }}>
+                      <div style={{
+                        background: 'linear-gradient(135deg, #f472b6, #c084fc)',
+                        borderRadius: '8px', padding: '4px 14px',
+                        fontSize: '13px', fontWeight: 700, color: '#fff', flexShrink: 0,
+                      }}>
+                        📅 {getDayLabel(placeDay)}
+                      </div>
+                      <div style={{ flex: 1, height: '1px', background: 'linear-gradient(to right, rgba(244,114,182,0.3), transparent)' }} />
+                    </div>
+                  )}
                   <div
                     draggable={!isRouteCreated}
                     onDragStart={(e) => handleDragStart(e, idx)}
@@ -288,8 +468,8 @@ export default function CourseBuilder({
                       <div style={{ fontSize: '12px', color: '#8b7fa8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {place.roadAddress || place.address}
                       </div>
-                      {/* External links: homepage & instagram */}
-                      <div style={{ display: 'flex', gap: '6px', marginTop: '6px', flexWrap: 'wrap' }}>
+                      {/* External links */}
+                      <div style={{ display: 'flex', gap: '6px', marginTop: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
                         {place.link && (
                           <a
                             href={place.link}
@@ -337,7 +517,27 @@ export default function CourseBuilder({
                         >
                           🗺️ 네이버맵
                         </a>
-                      </div>
+                        {/* Day selector: only show when multi-day & not in route mode */}
+                        {isMultiDay && !isRouteCreated && (
+                          <select
+                            value={placeDay}
+                            onChange={e => handleChangePlaceDay(place.id, Number(e.target.value))}
+                            onClick={e => e.stopPropagation()}
+                            style={{
+                              fontSize: '11px', padding: '2px 6px', borderRadius: '4px',
+                              background: 'rgba(255,255,255,0.08)', color: '#c084fc',
+                              border: '1px solid rgba(192,132,252,0.3)', cursor: 'pointer',
+                              outline: 'none',
+                            }}
+                          >
+                            {Array.from({ length: dayCount }, (_, i) => i + 1).map(d => (
+                              <option key={d} value={d} style={{ background: '#1a1520' }}>
+                                Day {d}
+                              </option>
+                            ))}
+                          </select>
+                        )}
+                    </div>
                     </div>
                     {!isRouteCreated && (
                       <button
@@ -381,8 +581,10 @@ export default function CourseBuilder({
                   )}
                 </React.Fragment>
               );
-            })}
+            });
+            })()}
           </div>
+
 
           {!isRouteCreated && places.length >= 2 && (
             <button

@@ -4,14 +4,13 @@ import React from 'react';
 import type { User } from '@/lib/types';
 
 interface HeaderProps {
-  onOpenSaveModal: () => void;
   onGoToDashboard: () => void;
   courseCount: number;
   currentUser?: User | null;
   onLogout?: () => void;
 }
 
-export default function Header({ onOpenSaveModal, onGoToDashboard, courseCount, currentUser, onLogout }: HeaderProps) {
+export default function Header({ onGoToDashboard, courseCount, currentUser, onLogout }: HeaderProps) {
   return (
     <header className="header" style={{
       display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px',
@@ -37,16 +36,6 @@ export default function Header({ onOpenSaveModal, onGoToDashboard, courseCount, 
             </span>
           </div>
         )}
-        {courseCount > 0 && (
-          <button className="btn btn-secondary" onClick={onOpenSaveModal} style={{
-            background: 'linear-gradient(135deg, rgba(52, 211, 153, 0.15), rgba(96, 165, 250, 0.15))',
-            color: '#34d399', border: '1px solid rgba(52, 211, 153, 0.3)',
-            padding: '8px 16px', borderRadius: '8px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer'
-          }}>
-            💾 경로 저장
-          </button>
-        )}
-
 
         {currentUser && (
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', background: 'rgba(255,255,255,0.05)', padding: '6px 12px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)' }}>

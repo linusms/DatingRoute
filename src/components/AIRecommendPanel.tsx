@@ -1,12 +1,14 @@
 'use client';
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { CoursePlace, DateSchedule, RecommendedPlace, RegionEvent, Place } from '@/lib/types';
 import { stripHtml, tourDateToISO } from '@/lib/utils';
 import DateSchedulePicker from './DateSchedulePicker';
 
 interface AIRecommendPanelProps {
   coursePlaces: CoursePlace[];
+  schedule: DateSchedule | null;
+  onScheduleChange: (s: DateSchedule | null) => void;
   onAddPlace: (place: Place) => void;
   onHighlightPlace?: (place: Place | null) => void;
 }
@@ -21,10 +23,11 @@ const AI_CATEGORIES = [
 
 export default function AIRecommendPanel({
   coursePlaces,
+  schedule,
+  onScheduleChange,
   onAddPlace,
   onHighlightPlace,
 }: AIRecommendPanelProps) {
-  const [schedule, setSchedule] = useState<DateSchedule | null>(null);
   const [recommendations, setRecommendations] = useState<RecommendedPlace[]>([]);
   const [events, setEvents] = useState<RegionEvent[]>([]);
   const [summary, setSummary] = useState<string>('');
@@ -47,6 +50,55 @@ export default function AIRecommendPanel({
   const [activeSection, setActiveSection] = useState<'recommend' | 'events'>('recommend');
   const [expandedEventId, setExpandedEventId] = useState<string | null>(null);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [showPopup, setShowPopup] = useState(false);
+
+  // Resize state
+  const panelRef = useRef<HTMLDivElement>(null);
+  const [panelSize, setPanelSize] = useState({ width: 600, height: 700 });
+  
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setPanelSize({ width: 600, height: Math.round(window.innerHeight * 0.85) });
+    }
+  }, []);
+
+  const isResizingRef = useRef(false);
+  const resizeStartRef = useRef({ x: 0, y: 0, w: 0, h: 0 });
+
+  const handleResizeMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    isResizingRef.current = true;
+    resizeStartRef.current = {
+      x: e.clientX,
+      y: e.clientY,
+      w: panelSize.width,
+      h: panelSize.height,
+    };
+
+    const handleMouseMove = (ev: MouseEvent) => {
+      if (!isResizingRef.current) return;
+      const dx = ev.clientX - resizeStartRef.current.x;
+      const dy = ev.clientY - resizeStartRef.current.y;
+      setPanelSize({
+        width: Math.max(360, Math.min(window.innerWidth * 0.95, resizeStartRef.current.w + dx)),
+        height: Math.max(400, Math.min(window.innerHeight * 0.98, resizeStartRef.current.h + dy)),
+      });
+    };
+
+    const handleMouseUp = () => {
+      isResizingRef.current = false;
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+
+    document.body.style.cursor = 'nwse-resize';
+    document.body.style.userSelect = 'none';
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  }, [panelSize]);
 
   const toggleCategory = (catId: string) => {
     setSelectedCategories(prev =>
@@ -64,6 +116,7 @@ export default function AIRecommendPanel({
       setIsLoading(true);
       setError(null);
       setHasSearched(true);
+      setShowPopup(true);
       setProgressStep(1);
       setStatusMessage('🚀 AI 데이터 분석 준비 중...');
     }
@@ -203,13 +256,23 @@ export default function AIRecommendPanel({
 
   return (
     <div className="ai-recommend-panel">
-      {/* Calendar Date Picker with Single Search Button */}
-      <DateSchedulePicker
-        schedule={schedule}
-        onScheduleChange={setSchedule}
-        onSearch={handleAIRecommend}
-        isLoading={isLoading}
-      />
+      {/* Calendar Date Picker */}
+      <div style={{ marginBottom: '16px' }}>
+        <DateSchedulePicker
+          schedule={schedule}
+          onScheduleChange={onScheduleChange}
+        />
+      </div>
+      
+      <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '16px' }}>
+        <button 
+          onClick={() => handleAIRecommend()}
+          disabled={isLoading}
+          className="ai-search-button"
+        >
+          {isLoading ? '분석 중...' : '🔍 추천 검색'}
+        </button>
+      </div>
 
       {/* ── 기준 장소 선택 ── */}
       <div style={{
@@ -304,257 +367,289 @@ export default function AIRecommendPanel({
         )}
       </div>
 
-      {/* Real-time Loading Status Modal / Card */}
-      {isLoading && (
-        <div className="ai-realtime-loading-card animate-scale-in">
-          <div className="ai-loading-spinner-wrapper">
-            <div className="ai-loading-pulse-ring" />
-            <div className="ai-loading-icon">✨</div>
-          </div>
-          <div className="ai-loading-status-text">
-            {statusMessage || '실시간 정보 수집 중...'}
-          </div>
-          <div className="ai-loading-progress-bar-bg">
-            <div
-              className="ai-loading-progress-bar-fill"
-              style={{ width: `${(progressStep / totalSteps) * 100}%` }}
-            />
-          </div>
-          <div className="ai-loading-step-count">
-            [{progressStep} / {totalSteps}] 단계 진행 중...
-          </div>
-        </div>
-      )}
-
-      {/* Empty State before search */}
-      {!hasSearched && !isLoading && (
-        <div className="ai-empty-state">
-          <div className="ai-empty-icon">📅</div>
-          <h4>데이트 일정에 맞는 AI 추천</h4>
-          <p>
-            기준 장소와 반경을 설정하고
-            <br />
-            카테고리를 선택한 후
-            <br />
-            <strong>[🔍 검색]</strong> 버튼을 누르면
-            <br />
-            핫플, 팝업스토어, 축제가 자동으로 정리됩니다!
-          </p>
-        </div>
-      )}
-
-      {/* Results */}
-      {hasSearched && !isLoading && (
-        <div className="ai-results animate-fade-in">
-          {error && (
-            <div className="ai-error">
-              <span>⚠️</span> {error}
+      {/* Search Results Popup Overlay */}
+      {showPopup && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, width: '100%', height: '100%',
+          background: 'rgba(0,0,0,0.6)', zIndex: 9999,
+          display: 'flex', alignItems: 'center', justifyContent: 'center'
+        }} onClick={() => setShowPopup(false)}>
+          <div
+            ref={panelRef}
+            onClick={e => e.stopPropagation()}
+            style={{
+              position: 'relative',
+              width: `${panelSize.width}px`,
+              height: `${panelSize.height}px`,
+              background: 'rgba(26,21,32,0.95)',
+              backdropFilter: 'blur(20px)',
+              borderRadius: '24px',
+              border: '1px solid rgba(244,114,182,0.3)',
+              boxShadow: '0 20px 40px rgba(0,0,0,0.5)',
+              display: 'flex', flexDirection: 'column', overflow: 'hidden'
+            }}
+          >
+            {/* Header */}
+            <div style={{ padding: '16px 24px', borderBottom: '1px solid rgba(255,255,255,0.1)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(0,0,0,0.2)' }}>
+              <h3 style={{ margin: 0, color: '#f5f0ff', fontSize: '18px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                ✨ AI 추천 결과
+              </h3>
+              <button onClick={() => setShowPopup(false)} style={{ background: 'transparent', border: 'none', color: '#8b7fa8', cursor: 'pointer', fontSize: '20px', padding: '4px' }}>✕</button>
             </div>
-          )}
 
-          {!error && (
-            <>
-              <div className="ai-section-tabs">
-                <button
-                  className={`ai-section-tab ${activeSection === 'recommend' ? 'active' : ''}`}
-                  onClick={() => setActiveSection('recommend')}
-                >
-                  ✨ AI 추천 핫플/팝업
-                  {recommendations.length > 0 && (
-                    <span className="ai-count-badge">{recommendations.length}</span>
-                  )}
-                </button>
-                <button
-                  className={`ai-section-tab ${activeSection === 'events' ? 'active' : ''}`}
-                  onClick={() => setActiveSection('events')}
-                >
-                  🎪 지역 행사/축제
-                  {events.length > 0 && (
-                    <span className="ai-count-badge">{events.length}</span>
-                  )}
-                </button>
-              </div>
-
-              {/* Recommended Places */}
-              {activeSection === 'recommend' && (
-                <div className="ai-list stagger-children">
-                  {recommendations.length === 0 ? (
-                    <div className="ai-empty-section">
-                      <div className="ai-empty-section-icon">✨</div>
-                      <p>추천 장소를 불러오지 못했습니다</p>
-                    </div>
-                  ) : (
-                    recommendations.map((rec, idx) => (
-                      <div
-                        key={`rec-${idx}-${rec.mapx}`}
-                        className="ai-rec-card"
-                        onMouseEnter={() => onHighlightPlace?.(recToPlace(rec))}
-                        onMouseLeave={() => onHighlightPlace?.(null)}
-                      >
-                        <div className="ai-rec-header">
-                          <h3 className="ai-rec-title">
-                            <span className="ai-rec-star">★</span>
-                            {rec.name}
-                          </h3>
-                          <span className="ai-rec-category">{rec.category}</span>
-                        </div>
-                        <div style={{ marginBottom: '6px', display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
-                          <span style={{
-                            fontSize: '11px', padding: '2px 6px', borderRadius: '4px',
-                            background: 'rgba(255,255,255,0.06)', color: '#f472b6', fontWeight: 600,
-                            cursor: rec.link ? 'pointer' : 'default',
-                            display: 'inline-block'
-                          }}
-                          onClick={(e) => {
-                            if (rec.link) {
-                              e.stopPropagation();
-                              window.open(rec.link, '_blank');
-                            }
-                          }}>
-                            {getSourceIcon((rec as any).sourceType)}
-                          </span>
-                          {/* Instagram & NaverMap quick links */}
-                          <a
-                            href={`https://www.instagram.com/explore/tags/${encodeURIComponent(rec.name.replace(/\s/g, ''))}`}
-                            target="_blank" rel="noreferrer"
-                            onClick={e => e.stopPropagation()}
-                            style={{
-                              fontSize: '11px', padding: '2px 6px', borderRadius: '4px',
-                              background: 'rgba(255,255,255,0.06)', color: '#c084fc',
-                              textDecoration: 'none', border: '1px solid rgba(192,132,252,0.2)',
-                            }}
-                          >📷 인스타</a>
-                          <a
-                            href={`https://map.naver.com/v5/search/${encodeURIComponent(rec.name)}`}
-                            target="_blank" rel="noreferrer"
-                            onClick={e => e.stopPropagation()}
-                            style={{
-                              fontSize: '11px', padding: '2px 6px', borderRadius: '4px',
-                              background: 'rgba(255,255,255,0.06)', color: '#4ade80',
-                              textDecoration: 'none', border: '1px solid rgba(74,222,128,0.2)',
-                            }}
-                          >🗺️ 네이버맵</a>
-                        </div>
-                        <p className="ai-rec-reason">{rec.reason}</p>
-                        {rec.keywords && rec.keywords.length > 0 && (
-                          <div className="ai-rec-keywords">
-                            {rec.keywords.map((kw, ki) => (
-                              <span key={ki} className="ai-keyword-tag">#{kw}</span>
-                            ))}
-                          </div>
-                        )}
-                        <div className="ai-rec-address">
-                          📍 {rec.roadAddress || rec.address || '주소 정보 없음'}
-                        </div>
-                        <div className="ai-rec-actions">
-                          <button
-                            className="btn btn-primary btn-sm"
-                            onClick={() => onAddPlace(recToPlace(rec))}
-                          >
-                            + 경로 추가
-                          </button>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                  {recommendations.length > 0 && (
-                    <button
-                      className="btn btn-secondary"
-                      style={{ width: '100%', marginTop: '16px', padding: '12px', borderRadius: '8px', background: 'rgba(255,255,255,0.1)', color: 'white', border: 'none', cursor: 'pointer' }}
-                      onClick={() => handleAIRecommend(true)}
-                      disabled={isLoadingMore}
-                    >
-                      {isLoadingMore ? '더 불러오는 중...' : '+ 더 불러오기'}
-                    </button>
-                  )}
+            {/* Content Area */}
+            <div style={{ flex: 1, overflowY: 'auto', padding: '20px' }} className="custom-scrollbar">
+              {isLoading && (
+                <div className="ai-realtime-loading-card animate-scale-in" style={{ margin: '40px auto' }}>
+                  <div className="ai-loading-spinner-wrapper">
+                    <div className="ai-loading-pulse-ring" />
+                    <div className="ai-loading-icon">✨</div>
+                  </div>
+                  <div className="ai-loading-status-text">
+                    {statusMessage || '실시간 정보 수집 중...'}
+                  </div>
+                  <div className="ai-loading-progress-bar-bg">
+                    <div
+                      className="ai-loading-progress-bar-fill"
+                      style={{ width: `${(progressStep / totalSteps) * 100}%` }}
+                    />
+                  </div>
+                  <div className="ai-loading-step-count">
+                    [{progressStep} / {totalSteps}] 단계 진행 중...
+                  </div>
                 </div>
               )}
 
-              {/* Regional Events */}
-              {activeSection === 'events' && (
-                <div className="ai-list stagger-children">
-                  {events.length === 0 ? (
-                    <div className="ai-empty-section">
-                      <div className="ai-empty-section-icon">🎪</div>
-                      <p>해당 기간/지역에 등록된 행사가 없습니다</p>
+              {hasSearched && !isLoading && (
+                <div className="ai-results animate-fade-in">
+                  {error && (
+                    <div className="ai-error">
+                      <span>⚠️</span> {error}
                     </div>
-                  ) : (
-                    events.map((event) => (
-                      <div
-                        key={event.contentId}
-                        className={`ai-event-card ${expandedEventId === event.contentId ? 'expanded' : ''}`}
-                        onMouseEnter={() => {
-                          if (event.mapx && event.mapy) {
-                            onHighlightPlace?.(eventToPlace(event));
-                          }
-                        }}
-                        onMouseLeave={() => onHighlightPlace?.(null)}
-                        style={{ cursor: 'pointer' }}
-                        onClick={() => setExpandedEventId(prev => prev === event.contentId ? null : event.contentId)}
-                      >
-                        <div className="ai-event-header-compact" style={{ padding: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <div>
-                            <h3 className="ai-event-title" style={{ margin: 0, fontSize: '15px' }}>{stripHtml(event.title)}</h3>
-                            <div className="ai-event-address" style={{ fontSize: '13px', color: 'rgba(255,255,255,0.6)', marginTop: '4px' }}>
-                              📍 {event.address || '주소 정보 없음'}
-                            </div>
-                          </div>
-                          <span style={{ transform: expandedEventId === event.contentId ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s', display: 'inline-block' }}>▼</span>
-                        </div>
+                  )}
 
-                        {expandedEventId === event.contentId && (
-                          <div className="ai-event-details" style={{ padding: '0 16px 16px 16px', borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '16px' }} onClick={(e) => e.stopPropagation()}>
-                            {event.imageUrl && (
-                              /* eslint-disable-next-line @next/next/no-img-element */
-                              <img
-                                src={event.imageUrl}
-                                alt={event.title}
-                                className="ai-event-image"
-                                style={{ borderRadius: '8px', marginBottom: '12px' }}
-                              />
-                            )}
-                            <div className="ai-event-content" style={{ padding: 0 }}>
-                              <div className="ai-event-date">
-                                📅 {formatEventDate(event.startDate, event.endDate)}
-                              </div>
-                              <div className="ai-event-actions" style={{ marginTop: '12px', display: 'flex', gap: '8px', alignItems: 'center' }}>
-                                <button
-                                  className="btn btn-primary btn-sm"
-                                  onClick={() => onAddPlace(eventToPlace(event))}
-                                >
-                                  + 경로 추가
-                                </button>
-                                {event.contentId && (
-                                  <button
-                                    className="btn btn-sm"
+                  {!error && (
+                    <>
+                      <div className="ai-section-tabs">
+                        <button
+                          className={`ai-section-tab ${activeSection === 'recommend' ? 'active' : ''}`}
+                          onClick={() => setActiveSection('recommend')}
+                        >
+                          ✨ AI 추천 핫플/팝업
+                          {recommendations.length > 0 && (
+                            <span className="ai-count-badge">{recommendations.length}</span>
+                          )}
+                        </button>
+                        <button
+                          className={`ai-section-tab ${activeSection === 'events' ? 'active' : ''}`}
+                          onClick={() => setActiveSection('events')}
+                        >
+                          🎪 지역 행사/축제
+                          {events.length > 0 && (
+                            <span className="ai-count-badge">{events.length}</span>
+                          )}
+                        </button>
+                      </div>
+
+                      {/* Recommended Places */}
+                      {activeSection === 'recommend' && (
+                        <div className="ai-list stagger-children">
+                          {recommendations.length === 0 ? (
+                            <div className="ai-empty-section">
+                              <div className="ai-empty-section-icon">✨</div>
+                              <p>추천 장소를 불러오지 못했습니다</p>
+                            </div>
+                          ) : (
+                            recommendations.map((rec, idx) => (
+                              <div
+                                key={`rec-${idx}-${rec.mapx}`}
+                                className="ai-rec-card"
+                                onMouseEnter={() => onHighlightPlace?.(recToPlace(rec))}
+                                onMouseLeave={() => onHighlightPlace?.(null)}
+                              >
+                                <div className="ai-rec-header">
+                                  <h3 className="ai-rec-title">
+                                    <span className="ai-rec-star">★</span>
+                                    {rec.name}
+                                  </h3>
+                                  <span className="ai-rec-category">{rec.category}</span>
+                                </div>
+                                <div style={{ marginBottom: '6px', display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
+                                  <span style={{
+                                    fontSize: '11px', padding: '2px 6px', borderRadius: '4px',
+                                    background: 'rgba(255,255,255,0.06)', color: '#f472b6', fontWeight: 600,
+                                    cursor: rec.link ? 'pointer' : 'default',
+                                    display: 'inline-block'
+                                  }}
+                                  onClick={(e) => {
+                                    if (rec.link) {
+                                      e.stopPropagation();
+                                      window.open(rec.link, '_blank');
+                                    }
+                                  }}>
+                                    {getSourceIcon((rec as any).sourceType)}
+                                  </span>
+                                  {/* Instagram & NaverMap quick links */}
+                                  <a
+                                    href={`https://www.instagram.com/explore/tags/${encodeURIComponent(rec.name.replace(/\s/g, ''))}`}
+                                    target="_blank" rel="noreferrer"
+                                    onClick={e => e.stopPropagation()}
                                     style={{
-                                      background: 'rgba(255,255,255,0.08)',
-                                      color: '#f472b6',
-                                      border: '1px solid rgba(244,114,182,0.3)',
-                                      cursor: 'pointer',
-                                      borderRadius: '6px',
-                                      padding: '4px 10px',
-                                      fontSize: '13px',
+                                      fontSize: '11px', padding: '2px 6px', borderRadius: '4px',
+                                      background: 'rgba(255,255,255,0.06)', color: '#c084fc',
+                                      textDecoration: 'none', border: '1px solid rgba(192,132,252,0.2)',
                                     }}
-                                    onClick={() => window.open(
-                                      `https://korean.visitkorea.or.kr/detail/ms_detail.do?cotid=${event.contentId}`,
-                                      '_blank'
-                                    )}
+                                  >📷 인스타</a>
+                                  <a
+                                    href={`https://map.naver.com/v5/search/${encodeURIComponent(rec.name)}`}
+                                    target="_blank" rel="noreferrer"
+                                    onClick={e => e.stopPropagation()}
+                                    style={{
+                                      fontSize: '11px', padding: '2px 6px', borderRadius: '4px',
+                                      background: 'rgba(255,255,255,0.06)', color: '#4ade80',
+                                      textDecoration: 'none', border: '1px solid rgba(74,222,128,0.2)',
+                                    }}
+                                  >🗺️ 네이버맵</a>
+                                </div>
+                                <p className="ai-rec-reason">{rec.reason}</p>
+                                {rec.keywords && rec.keywords.length > 0 && (
+                                  <div className="ai-rec-keywords">
+                                    {rec.keywords.map((kw, ki) => (
+                                      <span key={ki} className="ai-keyword-tag">#{kw}</span>
+                                    ))}
+                                  </div>
+                                )}
+                                <div className="ai-rec-address">
+                                  📍 {rec.roadAddress || rec.address || '주소 정보 없음'}
+                                </div>
+                                <div className="ai-rec-actions">
+                                  <button
+                                    className="btn btn-primary btn-sm"
+                                    onClick={() => onAddPlace(recToPlace(rec))}
                                   >
-                                    🔗 상세보기
+                                    + 경로 추가
                                   </button>
+                                </div>
+                              </div>
+                            ))
+                          )}
+                          {recommendations.length > 0 && (
+                            <button
+                              className="btn btn-secondary"
+                              style={{ width: '100%', marginTop: '16px', padding: '12px', borderRadius: '8px', background: 'rgba(255,255,255,0.1)', color: 'white', border: 'none', cursor: 'pointer' }}
+                              onClick={() => handleAIRecommend(true)}
+                              disabled={isLoadingMore}
+                            >
+                              {isLoadingMore ? '더 불러오는 중...' : '+ 더 불러오기'}
+                            </button>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Regional Events */}
+                      {activeSection === 'events' && (
+                        <div className="ai-list stagger-children">
+                          {events.length === 0 ? (
+                            <div className="ai-empty-section">
+                              <div className="ai-empty-section-icon">🎪</div>
+                              <p>해당 기간/지역에 등록된 행사가 없습니다</p>
+                            </div>
+                          ) : (
+                            events.map((event) => (
+                              <div
+                                key={event.contentId}
+                                className={`ai-event-card ${expandedEventId === event.contentId ? 'expanded' : ''}`}
+                                onMouseEnter={() => {
+                                  if (event.mapx && event.mapy) {
+                                    onHighlightPlace?.(eventToPlace(event));
+                                  }
+                                }}
+                                onMouseLeave={() => onHighlightPlace?.(null)}
+                                style={{ cursor: 'pointer' }}
+                                onClick={() => setExpandedEventId(prev => prev === event.contentId ? null : event.contentId)}
+                              >
+                                <div className="ai-event-header-compact" style={{ padding: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                  <div>
+                                    <h3 className="ai-event-title" style={{ margin: 0, fontSize: '15px' }}>{stripHtml(event.title)}</h3>
+                                    <div className="ai-event-address" style={{ fontSize: '13px', color: 'rgba(255,255,255,0.6)', marginTop: '4px' }}>
+                                      📍 {event.address || '주소 정보 없음'}
+                                    </div>
+                                  </div>
+                                  <span style={{ transform: expandedEventId === event.contentId ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s', display: 'inline-block' }}>▼</span>
+                                </div>
+
+                                {expandedEventId === event.contentId && (
+                                  <div className="ai-event-details" style={{ padding: '0 16px 16px 16px', borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '16px' }} onClick={(e) => e.stopPropagation()}>
+                                    {event.imageUrl && (
+                                      /* eslint-disable-next-line @next/next/no-img-element */
+                                      <img
+                                        src={event.imageUrl}
+                                        alt={event.title}
+                                        className="ai-event-image"
+                                        style={{ borderRadius: '8px', marginBottom: '12px' }}
+                                      />
+                                    )}
+                                    <div className="ai-event-content" style={{ padding: 0 }}>
+                                      <div className="ai-event-date">
+                                        📅 {formatEventDate(event.startDate, event.endDate)}
+                                      </div>
+                                      <div className="ai-event-actions" style={{ marginTop: '12px', display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                        <button
+                                          className="btn btn-primary btn-sm"
+                                          onClick={() => onAddPlace(eventToPlace(event))}
+                                        >
+                                          + 경로 추가
+                                        </button>
+                                        {event.contentId && (
+                                          <button
+                                            className="btn btn-sm"
+                                            style={{
+                                              background: 'rgba(255,255,255,0.08)',
+                                              color: '#f472b6',
+                                              border: '1px solid rgba(244,114,182,0.3)',
+                                              cursor: 'pointer',
+                                              borderRadius: '6px',
+                                              padding: '4px 10px',
+                                              fontSize: '13px',
+                                            }}
+                                            onClick={() => window.open(
+                                              `https://korean.visitkorea.or.kr/detail/ms_detail.do?cotid=${event.contentId}`,
+                                              '_blank'
+                                            )}
+                                          >
+                                            🔗 상세보기
+                                          </button>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
                                 )}
                               </div>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    ))
+                            ))
+                          )}
+                        </div>
+                      )}
+                    </>
                   )}
                 </div>
               )}
-            </>
-          )}
+            </div>
+
+            {/* Bottom-right resize handle */}
+            <div
+              onMouseDown={handleResizeMouseDown}
+              style={{
+                position: 'absolute', right: 0, bottom: 0,
+                width: '24px', height: '24px', cursor: 'nwse-resize',
+                display: 'flex', alignItems: 'flex-end', justifyContent: 'flex-end',
+                padding: '4px',
+              }}
+            >
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                <path d="M11 1L1 11M11 6L6 11M11 11L11 11" stroke="rgba(244,114,182,0.5)" strokeWidth="1.5" strokeLinecap="round"/>
+              </svg>
+            </div>
+          </div>
         </div>
       )}
     </div>

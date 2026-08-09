@@ -20,6 +20,7 @@ import {
   TransitMode,
   SessionMode,
   RoomMember,
+  DateSchedule,
 } from '@/lib/types';
 import {
   encodeCourseToUrl,
@@ -32,6 +33,11 @@ export default function HomePage() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [activeTab, setActiveTab] = useState<'search' | 'ai' | 'route'>('search');
   const [coursePlaces, setCoursePlaces] = useState<CoursePlace[]>([]);
+  
+  // Shared course state
+  const [schedule, setSchedule] = useState<DateSchedule | null>(null);
+  const [courseName, setCourseName] = useState<string>('');
+  const [courseDescription, setCourseDescription] = useState<string>('');
 
   // Directions state
   const [directions, setDirections] = useState<DirectionResult | null>(null);
@@ -265,11 +271,34 @@ export default function HomePage() {
       setDirections(null);
       setRoutePath(null);
       setIsRouteCreated(false);
+      setCourseName('');
+      setCourseDescription('');
+      setSchedule(null);
     } catch (err) {
       console.error(err);
       showToastMsg('경로 생성에 실패했습니다.');
     }
   }, [currentUser, showToastMsg]);
+
+  /** Update live course name */
+  const handleUpdateCourseName = useCallback(async (displayName: string, description: string) => {
+    if (!sessionId) return;
+    try {
+      const res = await fetch(`/api/sessions/${sessionId}/name`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ displayName, description }),
+      });
+      if (res.ok) {
+        setCourseName(displayName);
+        setCourseDescription(description);
+        showToastMsg('경로 이름이 저장되었습니다.');
+      }
+    } catch (err) {
+      console.error(err);
+      showToastMsg('경로 이름 저장 중 오류가 발생했습니다.');
+    }
+  }, [sessionId, showToastMsg]);
 
   /** Load an existing course from the dashboard */
   const handleLoadCourseFromDashboard = useCallback(async (course: Course) => {
@@ -288,6 +317,11 @@ export default function HomePage() {
           setNickname(currentUser.nickname);
           setMembers(data.room?.members || []);
           setIsOwner(data.room?.ownerId === currentUser.id);
+
+          if (data.courseDetails) {
+            setCourseName(data.courseDetails.displayName || '');
+            setCourseDescription(data.courseDetails.description || '');
+          }
 
           // Use live places from the room (latest state)
           if (data.coursePlaces && data.coursePlaces.length > 0) {
@@ -378,6 +412,12 @@ export default function HomePage() {
       const placesRes = await fetch(`/api/sessions/${data.room.id}?userId=${currentUser.id}`);
       if (placesRes.ok) {
         const placesData = await placesRes.json();
+        
+        if (placesData.courseDetails) {
+          setCourseName(placesData.courseDetails.displayName || '');
+          setCourseDescription(placesData.courseDetails.description || '');
+        }
+
         if (placesData.coursePlaces?.length > 0) {
           setCoursePlaces(placesData.coursePlaces);
           setActiveTab('route');
@@ -707,7 +747,6 @@ export default function HomePage() {
   return (
     <div className="app-layout">
       <Header
-        onOpenSaveModal={() => setShowSaveModal(true)}
         onGoToDashboard={handleGoToDashboard}
         courseCount={coursePlaces.length}
         currentUser={currentUser}
@@ -769,6 +808,8 @@ export default function HomePage() {
             <div style={{ display: activeTab === 'ai' ? 'block' : 'none', height: '100%' }}>
               <AIRecommendPanel
                 coursePlaces={coursePlaces}
+                schedule={schedule}
+                onScheduleChange={setSchedule}
                 onAddPlace={handleAddPlace}
                 onHighlightPlace={setHighlightPlace}
               />
@@ -793,6 +834,10 @@ export default function HomePage() {
                 onCopyInviteCode={handleCopyInviteCode}
                 onCopyInviteLink={handleCopyInviteLink}
                 members={members}
+                schedule={schedule}
+                courseName={courseName}
+                courseDescription={courseDescription}
+                onUpdateCourseName={handleUpdateCourseName}
               />
             </div>
           </div>

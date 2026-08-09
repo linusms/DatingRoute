@@ -13,6 +13,7 @@ export interface Place {
 export interface CoursePlace extends Place {
   order: number;
   memo: string;
+  day?: number;
 }
 
 export interface DirectionLeg {
@@ -44,11 +45,13 @@ declare global {
 
 export interface Course {
   id: string;
-  name: string;
+  name: string;           // internal name (저장된 경로) or '저장되지 않은 경로'
+  displayName?: string;   // user-set label for live courses
   description: string;
   places: CoursePlace[];
   roomId?: string;
   isCollaborative?: boolean;
+  isLive?: boolean;       // true = live (auto-saved) course, false = named snapshot
   memberCount?: number;
   createdAt: string;
   updatedAt: string;

@@ -68,6 +68,7 @@ function mapDbPlaceToCoursePlace(row: any): CoursePlace {
     ...row,
     roadAddress: row.road_address,
     order: row.order_index,
+    day: row.day_index ?? 1,
   } as CoursePlace;
 }
 
@@ -255,6 +256,23 @@ export async function getLivePlaces(roomId: string, ownerId: string): Promise<Co
   return (rows || []).map(mapDbPlaceToCoursePlace);
 }
 
+export async function getLiveCourseDetails(roomId: string): Promise<{ displayName: string; description: string; id: string } | null> {
+  const { data } = await supabase
+    .from('courses')
+    .select('id, display_name, description')
+    .eq('name', '__live__')
+    .eq('room_id', roomId)
+    .maybeSingle();
+  if (data) {
+    return {
+      id: data.id,
+      displayName: data.display_name || '',
+      description: data.description || ''
+    };
+  }
+  return null;
+}
+
 export async function addLivePlace(roomId: string, ownerId: string, placeData: Partial<CoursePlace>): Promise<CoursePlace> {
   const courseId = await getLiveCourseId(roomId, ownerId);
   const newPlaceDb = {
@@ -270,6 +288,7 @@ export async function addLivePlace(roomId: string, ownerId: string, placeData: P
     description: placeData.description || '',
     memo: placeData.memo || '',
     order_index: placeData.order || 0,
+    day_index: placeData.day ?? 1,
   };
   const { error } = await supabase.from('course_places').insert(newPlaceDb);
   if (error) console.error('Add live place error:', error);
@@ -279,13 +298,15 @@ export async function addLivePlace(roomId: string, ownerId: string, placeData: P
 
 export async function updateLivePlaces(roomId: string, ownerId: string, places: CoursePlace[]): Promise<void> {
   const courseId = await getLiveCourseId(roomId, ownerId);
+  void courseId; // ensure live course exists
   
-  // Update order or properties
+  // Update order, day, and memo for each place
   for (let i = 0; i < places.length; i++) {
     const p = places[i];
     const { error } = await supabase.from('course_places').update({
       order_index: i,
       memo: p.memo || '',
+      day_index: p.day ?? 1,
     }).eq('id', p.id);
     if (error) console.error('Update live place error:', error);
   }
@@ -373,21 +394,18 @@ export async function getUserCoursesWithCollaborative(userId: string): Promise<C
     updatedAt: c.updated_at,
   }));
 
-  // Map live collaborative courses (show as "unsaved" in dashboard)
+  // Map live collaborative courses (show as auto-saved routes in dashboard)
   for (const c of liveCourses) {
-    // Skip if user already saved this room's course (avoid duplicates)
-    const alreadySaved = (ownedCourses || []).some(oc => oc.room_id === c.room_id);
-    // Always show the live course - it represents the collaborative workspace
     const memberCount = memberCountByRoom[c.room_id] || 1;
-    // Only show as collaborative unsaved if more than 1 member or user is not the owner
-    const isUserOwner = (memberships || []).some(m => m.room_id === c.room_id && m.is_owner);
     
     result.push({
       id: c.id,
       name: '저장되지 않은 경로',
-      description: '',
+      displayName: c.display_name || '',   // user-set label
+      description: c.description || '',
       places: placesByCourse[c.id] || [],
       roomId: c.room_id,
+      isLive: true,
       isCollaborative: memberCount > 1,
       memberCount,
       createdAt: c.created_at,
@@ -459,6 +477,24 @@ export async function updateCourse(courseId: string, userId: string, name: strin
     .update({ name, description, updated_at: new Date().toISOString() })
     .eq('id', courseId)
     .eq('owner_id', userId);
+  return !error;
+}
+
+/** Update the display name and description of a live course (shared by all collaborators) */
+export async function updateLiveCourseName(
+  roomId: string,
+  displayName: string,
+  description: string
+): Promise<boolean> {
+  const { error } = await supabase
+    .from('courses')
+    .update({
+      display_name: displayName,
+      description,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('room_id', roomId)
+    .eq('name', '__live__');
   return !error;
 }
 

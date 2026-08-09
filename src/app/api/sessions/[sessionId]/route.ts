@@ -1,6 +1,6 @@
 export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
-import { getRoomById, getLivePlaces } from '@/lib/db';
+import { getRoomById, getLivePlaces, getLiveCourseDetails } from '@/lib/db';
 
 export async function GET(
   request: NextRequest,
@@ -22,8 +22,13 @@ export async function GET(
     }
 
     const livePlaces = await getLivePlaces(sessionId, userId);
+    const courseDetails = await getLiveCourseDetails(sessionId);
 
-    return NextResponse.json({ room, coursePlaces: livePlaces });
+    return NextResponse.json({ 
+      room, 
+      coursePlaces: livePlaces,
+      courseDetails
+    });
   } catch (error: any) {
     console.error('Room fetch error:', error);
     return NextResponse.json({ error: '서버 에러' }, { status: 500 });

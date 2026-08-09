@@ -6,15 +6,11 @@ import { DateSchedule } from '@/lib/types';
 interface DateSchedulePickerProps {
   schedule: DateSchedule | null;
   onScheduleChange: (schedule: DateSchedule) => void;
-  onSearch: () => void;
-  isLoading: boolean;
 }
 
 export default function DateSchedulePicker({
   schedule,
   onScheduleChange,
-  onSearch,
-  isLoading,
 }: DateSchedulePickerProps) {
   const today = new Date();
   const [viewYear, setViewYear] = useState(today.getFullYear());
@@ -90,19 +86,6 @@ export default function DateSchedulePicker({
     return dateStr === endDate;
   }, [viewYear, viewMonth, endDate]);
 
-  const handleSearchClick = () => {
-    if (!startDate) return;
-    const finalEnd = endDate || startDate;
-    const sched: DateSchedule = {
-      startDate,
-      endDate: finalEnd,
-      startTime,
-      endTime,
-    };
-    onScheduleChange(sched);
-    setIsCollapsed(true);
-    onSearch();
-  };
 
   const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
   const MONTH_NAMES = ['1월', '2월', '3월', '4월', '5월', '6월', '7월', '8월', '9월', '10월', '11월', '12월'];
@@ -211,22 +194,6 @@ export default function DateSchedulePicker({
           </div>
         </div>
       )}
-
-      {/* Search Button */}
-      <button
-        className="btn btn-primary dsp-search-btn"
-        onClick={handleSearchClick}
-        disabled={!startDate || isLoading}
-      >
-        {isLoading ? (
-          <>
-            <span className="dsp-spinner" />
-            검색 중...
-          </>
-        ) : (
-          <>🔍 검색</>
-        )}
-      </button>
     </div>
   );
 }
