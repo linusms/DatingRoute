@@ -4,10 +4,10 @@ import { katechToWgs84, getStraightLineDistance } from '@/lib/utils';
 
 // 카테고리 ID → 한국어 라벨 매핑
 const CATEGORY_LABELS: Record<string, string> = {
-  restaurant: '식당/맛집',
-  cafe: '카페/디저트',
-  activity: '액티비티/문화공간/전시',
-  accommodation: '숙박시설/호텔/펜션',
+  restaurant: '맛집',
+  cafe: '카페',
+  activity: '핫플',
+  accommodation: '펜션',
 };
 
 export async function POST(request: NextRequest) {
@@ -48,17 +48,12 @@ export async function POST(request: NextRequest) {
         const tourApiKey = process.env.TOUR_API_KEY;
         const geminiKey = process.env.GEMINI_API_KEY;
 
-        // ── Step 1: Parallel Reverse-Geocoding & TourAPI ──
-        sendProgress(1, 4, '🔍 한국관광공사 주변 축제 및 행사 정보 조회 중...');
+        // ── Step 1: 지역(Region) 추출 및 한국관광공사 행사 ──
+        sendProgress(1, 5, '🔍 기준 지역 탐색 및 축제 정보 조회 중...');
 
         const regions = new Set<string>();
+        const geocodeTargets = centerPlace ? [centerPlace] : places.slice(0, 5);
 
-        // 기준 장소가 있으면 기준 장소만, 없으면 전체 코스 장소 기준
-        const geocodeTargets = centerPlace
-          ? [centerPlace]
-          : places.slice(0, 5);
-
-        // Run all reverse-geocodes in parallel
         if (geocodeTargets.length > 0 && ncpClientId && ncpClientSecret) {
           const rgPromises = geocodeTargets.map(async (place: any) => {
             try {
@@ -83,9 +78,7 @@ export async function POST(request: NextRequest) {
                   return { area1, area2: `${area1} ${area2}` };
                 }
               }
-            } catch {
-              // ignore
-            }
+            } catch {}
             return null;
           });
 
@@ -96,12 +89,10 @@ export async function POST(request: NextRequest) {
           });
         }
 
-        // TourAPI fetch
         const tourEvents: any[] = [];
         if (tourApiKey && tourApiKey !== 'your_tour_api_key' && schedule?.startDate) {
           const startDate = schedule.startDate.replace(/-/g, '');
           const endDate = (schedule.endDate || schedule.startDate).replace(/-/g, '');
-
           try {
             const url = new URL('http://apis.data.go.kr/B551011/KorService2/searchFestival2');
             url.searchParams.set('serviceKey', tourApiKey);
@@ -116,7 +107,6 @@ export async function POST(request: NextRequest) {
 
             const abortCtrl = new AbortController();
             const timer = setTimeout(() => abortCtrl.abort(), 3500);
-
             const res = await fetch(url.toString(), { signal: abortCtrl.signal });
             clearTimeout(timer);
 
@@ -146,113 +136,138 @@ export async function POST(request: NextRequest) {
                 }
               }
             }
-          } catch (err) {
-            console.error('TourAPI error / timeout:', err);
-          }
+          } catch {}
         }
-
-        // ── Step 2 & Step 3: Parallel Naver Blog & YouTube Searches ──
-        sendProgress(2, 4, '📝 네이버 블로그 데이트 핫플 & 팝업 추천 수집 중...');
-
-        const blogData: Record<string, any[]> = {};
-        const ytData: Record<string, any[]> = {};
 
         const regionNames = Array.from(regions).filter(r => r.includes(' ')).map(r => r.split(' ')[1]) || [];
         if (regionNames.length === 0 && regions.size > 0) {
           regionNames.push(...Array.from(regions));
         }
-
-        // Remove duplicates
         const uniqueRegions = Array.from(new Set(regionNames));
+        if (uniqueRegions.length === 0) uniqueRegions.push('서울');
 
-        // 카테고리 기반 검색어 생성
-        const categorySearchTerms: string[] = [];
-        if (categories.includes('restaurant')) categorySearchTerms.push('맛집');
-        if (categories.includes('cafe')) categorySearchTerms.push('카페');
-        if (categories.includes('activity')) categorySearchTerms.push('핫플 데이트');
-        if (categories.includes('accommodation')) categorySearchTerms.push('숙박 펜션');
+        // ── Step 2: Naver Local API를 통한 장소 대량 확보 (DB First) ──
+        sendProgress(2, 5, '🗺️ 해당 지역의 관련 장소 대량 검색 중...');
 
-        const defaultTerms = categorySearchTerms.length > 0
-          ? categorySearchTerms
-          : ['팝업스토어', '핫플 데이트'];
+        const categorySearchTerms = categories.map((c: string) => CATEGORY_LABELS[c] || c);
+        const searchTargets = uniqueRegions.slice(0, 2).flatMap((r) =>
+          categorySearchTerms.map((term: string) => `${r} ${term}`)
+        );
 
-        const searchTargets = uniqueRegions.length > 0
-          ? uniqueRegions.slice(0, 2).flatMap((r) =>
-              defaultTerms.map(term => `${r} ${term}`)
-            )
-          : defaultTerms.map(term => `서울 ${term}`);
+        let basePlaces: any[] = [];
+        if (naverClientId && naverClientSecret) {
+          const localPromises = searchTargets.map(async (target: string) => {
+            try {
+              // 각 검색어 당 15개 요청
+              const searchUrl = `https://openapi.naver.com/v1/search/local.json?query=${encodeURIComponent(target)}&display=15&sort=random`;
+              const searchRes = await fetch(searchUrl, {
+                headers: {
+                  'X-Naver-Client-Id': naverClientId,
+                  'X-Naver-Client-Secret': naverClientSecret,
+                },
+              });
+              if (searchRes.ok) {
+                const sData = await searchRes.json();
+                return sData.items || [];
+              }
+            } catch {}
+            return [];
+          });
+          const results = await Promise.all(localPromises);
+          
+          results.flat().forEach((item: any) => {
+            const cleanTitle = (item.title || '').replace(/<[^>]+>/g, '');
+            // 중복 제거 및 기존 코스에 있는 장소(excludePlaces 포함) 제거
+            const existingCoursePlaces = places.map((p: any) => p.title.replace(/<[^>]+>/g, ''));
+            const isExcluded = [...existingCoursePlaces, ...excludePlaces].includes(cleanTitle);
+            
+            if (!isExcluded && !basePlaces.some(p => p.name === cleanTitle)) {
+              basePlaces.push({
+                name: cleanTitle,
+                category: item.category || '',
+                address: item.address || '',
+                roadAddress: item.roadAddress || '',
+                mapx: parseInt(item.mapx, 10) || 0,
+                mapy: parseInt(item.mapy, 10) || 0,
+                link: item.link || '',
+                mentionCount: 0,
+              });
+            }
+          });
+        }
 
-        const ytTargets = uniqueRegions.length > 0
-          ? uniqueRegions.slice(0, 2).map((r) => `${r} 데이트 핫플`)
-          : ['서울 데이트 코스 추천', '핫플레이스 팝업스토어'];
+        // 반경 필터링 적용 (basePlaces 추리기)
+        const filterCenter = centerPlace ? [centerPlace] : places;
+        if (filterCenter.length > 0) {
+          basePlaces = basePlaces.filter((recPlace: any) => {
+            const { lng: recLng, lat: recLat } = katechToWgs84(recPlace.mapx, recPlace.mapy);
+            return filterCenter.some((coursePlace: any) => {
+              const { lng: courseLng, lat: courseLat } = katechToWgs84(coursePlace.mapx, coursePlace.mapy);
+              const distance = getStraightLineDistance(recLat, recLng, courseLat, courseLng);
+              return distance <= radiusMeters;
+            });
+          });
+        }
 
-        // Blog Promises
+        // 최대 30개까지만 추림 (AI API 부하 및 토큰 초과 방지)
+        basePlaces = basePlaces.slice(0, 30);
+
+        // ── Step 3: Blog & YouTube 검색으로 SNS 언급량 산출 ──
+        sendProgress(3, 5, '📱 장소별 SNS 및 YouTube 언급량 분석 중...');
+
+        let blogTextBlob = '';
+        let ytTextBlob = '';
+
         const blogPromises = (naverClientId && naverClientSecret) ? searchTargets.map(async (target: string) => {
           try {
-            const blogUrl = `https://openapi.naver.com/v1/search/blog.json?query=${encodeURIComponent(target)}&display=5&sort=sim`;
-            const blogRes = await fetch(blogUrl, {
-              headers: {
-                'X-Naver-Client-Id': naverClientId,
-                'X-Naver-Client-Secret': naverClientSecret,
-              },
-            });
-            if (blogRes.ok) {
-              const bd = await blogRes.json();
-              return {
-                target,
-                items: (bd.items || []).map((b: any) => ({
-                  title: (b.title || '').replace(/<[^>]+>/g, ''),
-                  description: (b.description || '').replace(/<[^>]+>/g, ''),
-                  link: b.link || '',
-                })),
-              };
+            const blogUrl = `https://openapi.naver.com/v1/search/blog.json?query=${encodeURIComponent(target)}&display=10&sort=sim`;
+            const res = await fetch(blogUrl, { headers: { 'X-Naver-Client-Id': naverClientId, 'X-Naver-Client-Secret': naverClientSecret } });
+            if (res.ok) {
+              const bd = await res.json();
+              return bd.items.map((b: any) => b.title + ' ' + b.description).join(' ');
             }
           } catch {}
-          return { target, items: [] };
+          return '';
         }) : [];
 
-        // YouTube Promises
+        const ytTargets = uniqueRegions.slice(0, 2).map((r) => `${r} 데이트 핫플`);
         const ytPromises = (youtubeKey && youtubeKey !== 'your_youtube_api_key') ? ytTargets.map(async (target: string) => {
           try {
             const ytUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&maxResults=5&q=${encodeURIComponent(target)}&type=video&key=${youtubeKey}&relevanceLanguage=ko`;
-            const ytRes = await fetch(ytUrl);
-            if (ytRes.ok) {
-              const yd = await ytRes.json();
-              return {
-                target,
-                items: (yd.items || []).map((v: any) => ({
-                  title: v.snippet?.title || '',
-                  channelTitle: v.snippet?.channelTitle || '',
-                  url: `https://www.youtube.com/watch?v=${v.id?.videoId}`,
-                })),
-              };
+            const res = await fetch(ytUrl);
+            if (res.ok) {
+              const yd = await res.json();
+              return yd.items.map((v: any) => v.snippet?.title + ' ' + v.snippet?.description).join(' ');
             }
           } catch {}
-          return { target, items: [] };
+          return '';
         }) : [];
 
-        // Execute all Blog & YouTube searches in parallel
-        const [blogResults, ytResults] = await Promise.all([
-          Promise.all(blogPromises),
-          Promise.all(ytPromises),
-        ]);
+        const [blogContents, ytContents] = await Promise.all([Promise.all(blogPromises), Promise.all(ytPromises)]);
+        blogTextBlob = blogContents.join(' ').replace(/<[^>]+>/g, '');
+        ytTextBlob = ytContents.join(' ').replace(/<[^>]+>/g, '');
 
-        sendProgress(3, 4, '▶️ YouTube 데이트 영상 & 팝업 추천 수집 완료!');
-
-        blogResults.forEach(b => {
-          if (b?.target && b.items.length > 0) blogData[b.target] = b.items;
+        // 언급 횟수 계산 (단순 문자열 포함 횟수)
+        basePlaces.forEach(place => {
+          const nameMatch = new RegExp(place.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+          const blogHits = (blogTextBlob.match(nameMatch) || []).length;
+          const ytHits = (ytTextBlob.match(nameMatch) || []).length;
+          place.mentionCount = blogHits + ytHits;
+          // 약간의 랜덤 가중치를 주어 동일 카운트일 때 순서 믹스
+          place.mentionCount += Math.floor(Math.random() * 2);
         });
-        ytResults.forEach(y => {
-          if (y?.target && y.items.length > 0) ytData[y.target] = y.items;
-        });
 
-        // ── Step 4: Gemini AI Synthesis & Parallel Place Mapping ──
-        sendProgress(4, 4, '✨ Gemini AI로 종합 분석 및 핵심 요약 생성 중...');
+        // 언급량 기준으로 상위 25개로 제한
+        basePlaces.sort((a, b) => b.mentionCount - a.mentionCount);
+        basePlaces = basePlaces.slice(0, 25);
 
-        let recommendations: any[] = [];
-        let summary = '';
+        // ── Step 4: Gemini AI에게 리스트 검토 및 코멘트 달기 요청 ──
+        sendProgress(4, 5, '✨ AI가 선정된 장소들의 매력 포인트를 작성 중...');
 
-        if (geminiKey && geminiKey !== 'your_gemini_api_key') {
+        let recommendations = basePlaces;
+        let summary = '추천 장소 검색이 완료되었습니다!';
+
+        if (geminiKey && geminiKey !== 'your_gemini_api_key' && basePlaces.length > 0) {
           try {
             const genAI = new GoogleGenerativeAI(geminiKey);
             const model = genAI.getGenerativeModel({
@@ -260,96 +275,38 @@ export async function POST(request: NextRequest) {
               generationConfig: { responseMimeType: 'application/json' },
             });
 
-            const placeNames = places.map((p: any) => (p.title || '').replace(/<[^>]+>/g, ''));
-            const regionList = Array.from(regions).join(', ') || '서울/수도권';
-            const centerName = centerPlace
-              ? (centerPlace.title || '').replace(/<[^>]+>/g, '')
-              : null;
+            const placeListText = basePlaces.map(p => `- ${p.name} (카테고리: ${p.category})`).join('\n');
 
-            let blogContext = '';
-            for (const [name, blogs] of Object.entries(blogData)) {
-              if (blogs.length > 0) {
-                blogContext += `\n[${name} 관련 블로그 검색 결과]\n`;
-                blogs.forEach((b: any) => {
-                  blogContext += `- ${b.title}: ${b.description.slice(0, 100)}\n`;
-                });
-              }
-            }
+            const prompt = `당신은 한국 데이트 코스 전문가입니다.
+내가 시스템(네이버 지도 API)을 통해 현재 데이트 조건에 맞는 핫플레이스 ${basePlaces.length}곳을 찾았습니다.
 
-            let ytContext = '';
-            for (const [name, vids] of Object.entries(ytData)) {
-              if (vids.length > 0) {
-                ytContext += `\n[${name} 관련 YouTube 검색 결과]\n`;
-                vids.forEach((v: any) => {
-                  ytContext += `- ${v.title} (${v.channelTitle})\n`;
-                });
-              }
-            }
+찾은 장소 목록:
+${placeListText}
 
-            let eventContext = '';
-            if (tourEvents.length > 0) {
-              eventContext = '\n[한국관광공사 등록 행사/축제]\n';
-              tourEvents.slice(0, 8).forEach(e => {
-                eventContext += `- ${e.title} (${e.address})\n`;
-              });
-            }
-
-            const dateRange = schedule?.startDate
-              ? `${schedule.startDate} ~ ${schedule.endDate || schedule.startDate}`
-              : '미정';
-
-            // 선택된 카테고리 한국어 라벨
-            const categoryLabels = categories.map((c: string) => CATEGORY_LABELS[c] || c).join(', ');
-            const categoryInstruction = categories.length > 0
-              ? `반드시 다음 카테고리에서만 추천하세요: ${categoryLabels}`
-              : '맛집, 카페, 문화장소, 숙박 등 다양하게 추천하세요.';
-
-            // 기준 장소 기반 프롬프트
-            const locationContext = centerName
-              ? `기준 장소: ${centerName} (반경 ${radiusKm}km 이내)`
-              : `데이트 지역/장소: ${placeNames.length > 0 ? placeNames.join(', ') : regionList}`;
-
-            const prompt = `당신은 한국 데이트 장소 및 핫플레이스 전문가입니다.
-
-${locationContext}
-데이트 예정 기간: ${dateRange}
-추천 카테고리 제한: ${categoryInstruction}
-
-수집된 데이터:
-${blogContext}
-${ytContext}
-${eventContext}
-
-위 정보를 종합하여:
-1. 유튜브, 블로그, 주변 축제 정보를 바탕으로 이 시기에 데이트하기 좋은 핫플레이스, 팝업스토어, 추천 장소를 최대 10곳 제안해주세요.
-2. ${categoryInstruction}
-3. 사용자가 이미 코스에 추가한 다음 장소들은 추천 목록에서 반드시 제외해주세요: [${[...placeNames, ...excludePlaces].join(', ')}]
-4. 각 장소마다 출처(유튜브 인기/블로그 핫플/팝업 행사/축제 등) 및 핵심 추천 이유를 작성해주세요.
-5. 각 장소의 'category'는 반드시 "맛집", "카페", "액티비티/문화공간", "숙박시설" 중 하나로 분류해주세요.
-6. 각 추천 이유를 표현하는 2~3개의 간략한 키워드 태그를 생성해주세요.
-7. 전체 데이트 코스에 대한 매력적인 한 줄 요약 멘트를 작성해주세요.
+작업 지시:
+1. 위 목록에 있는 장소들에 대해서만 응답을 생성하세요. 새로운 장소를 임의로 지어내지 마세요.
+2. 각 장소마다 이 시기에 데이트하기 좋은 '매력적인 이유(1문장)'를 작성해주세요.
+3. 각 장소를 표현하는 트렌디한 '해시태그 키워드(2~3개)'를 생성해주세요.
+4. 모든 장소들에 대한 전반적인 데이트 코스 요약 멘트(summary)를 1문장 작성해주세요.
 
 반드시 아래 JSON 스키마로만 응답하세요:
 {
-  "summary": "전체 코스 한 줄 요약",
+  "summary": "전체 요약 멘트",
   "places": [
     {
-      "name": "정확한 실제 장소명 또는 상호명",
-      "category": "맛집 / 카페 / 액티비티/문화공간 / 숙박시설 중 택1",
-      "reason": "추천 이유 1문장 (유튜브/블로그/팝업 출처 언급)",
-      "keywords": ["키워드1", "키워드2", "키워드3"],
-      "sourceType": "youtube / blog / event / popup 중 택1"
+      "name": "목록에 있는 정확한 상호명",
+      "reason": "추천 이유 1문장",
+      "keywords": ["키워드1", "키워드2"],
+      "sourceType": "blog"
     }
   ]
 }`;
-
             let text = '';
             try {
               const result = await model.generateContent(prompt);
               text = result.response.text();
             } catch (error: any) {
               if (error?.message?.includes('503') || error?.status === 503) {
-                console.warn('Gemini 2.5-flash is overloaded (503). Falling back to gemini-1.5-flash.');
                 const fallbackModel = genAI.getGenerativeModel({
                   model: 'gemini-1.5-flash',
                   generationConfig: { responseMimeType: 'application/json' },
@@ -368,75 +325,30 @@ ${eventContext}
               parsed = { summary: '', places: [] };
             }
 
-            summary = parsed.summary || 'Gemini AI 추천이 완성되었습니다!';
+            summary = parsed.summary || summary;
 
-            // Parallel Naver Local Searches for all recommended places
-            if (parsed.places && naverClientId && naverClientSecret) {
-              const placeSearchPromises = parsed.places.map(async (p: any) => {
-                try {
-                  const searchUrl = `https://openapi.naver.com/v1/search/local.json?query=${encodeURIComponent(p.name)}&display=1`;
-                  const searchRes = await fetch(searchUrl, {
-                    headers: {
-                      'X-Naver-Client-Id': naverClientId,
-                      'X-Naver-Client-Secret': naverClientSecret,
-                    },
-                  });
-                  if (searchRes.ok) {
-                    const sData = await searchRes.json();
-                    if (sData.items && sData.items.length > 0) {
-                      const item = sData.items[0];
-                      return {
-                        name: (item.title || '').replace(/<[^>]+>/g, ''),
-                        reason: p.reason || '',
-                        keywords: p.keywords || [],
-                        sourceType: p.sourceType || 'blog',
-                        category: p.category || item.category || '',
-                        address: item.address || '',
-                        roadAddress: item.roadAddress || '',
-                        mapx: parseInt(item.mapx, 10) || 0,
-                        mapy: parseInt(item.mapy, 10) || 0,
-                        link: item.link || '',
-                      };
-                    }
-                  }
-                } catch {
-                  // skip
+            // AI가 응답한 이유와 키워드를 기존 basePlaces에 병합
+            if (parsed.places && Array.isArray(parsed.places)) {
+              recommendations = basePlaces.map(bp => {
+                const aiData = parsed.places.find((ap: any) => ap.name === bp.name);
+                if (aiData) {
+                  return {
+                    ...bp,
+                    reason: aiData.reason || '',
+                    keywords: aiData.keywords || [],
+                    sourceType: aiData.sourceType || 'blog',
+                  };
                 }
-                return null;
+                return bp;
               });
-
-              const resolvedPlaces = await Promise.all(placeSearchPromises);
-
-              // 반경 필터링 적용
-              // centerPlace가 있으면 centerPlace 기준, 없으면 전체 코스 장소 기준
-              const filterCenter = centerPlace
-                ? [centerPlace]
-                : places;
-
-              if (filterCenter.length > 0) {
-                const filteredPlaces = resolvedPlaces.filter(Boolean).filter((recPlace: any) => {
-                  const { lng: recLng, lat: recLat } = katechToWgs84(recPlace.mapx, recPlace.mapy);
-
-                  // 기준 장소 중 하나라도 반경 이내에 있으면 통과
-                  return filterCenter.some((coursePlace: any) => {
-                    const { lng: courseLng, lat: courseLat } = katechToWgs84(coursePlace.mapx, coursePlace.mapy);
-                    const distance = getStraightLineDistance(recLat, recLng, courseLat, courseLng);
-                    return distance <= radiusMeters;
-                  });
-                });
-
-                recommendations = filteredPlaces;
-              } else {
-                recommendations = resolvedPlaces.filter(Boolean);
-              }
             }
           } catch (err) {
             console.error('Gemini error:', err);
-            summary = 'AI 추천을 분석하는 중 일부 오류가 있었지만 수집된 정보를 정리했습니다.';
           }
         }
 
-        // Send final result
+        sendProgress(5, 5, '🎉 추천 결과 정리 중...');
+
         controller.enqueue(
           encoder.encode(`data: ${JSON.stringify({
             type: 'result',

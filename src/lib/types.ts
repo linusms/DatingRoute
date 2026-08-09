@@ -203,14 +203,16 @@ export interface YoutubeVideo {
 /* ---- AI Recommend Tab types ---- */
 export interface RecommendedPlace {
   name: string;
+  category: string;
   reason: string;
   keywords: string[];
-  category: string;
-  address: string;
-  roadAddress: string;
-  mapx: number;
-  mapy: number;
-  link: string;
+  sourceType: string;
+  address?: string;
+  roadAddress?: string;
+  mapx?: number;
+  mapy?: number;
+  link?: string;
+  mentionCount?: number;
 }
 
 export interface RegionEvent {

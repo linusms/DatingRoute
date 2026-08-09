@@ -56,6 +56,9 @@ export default function AIRecommendPanel({
   const [showPopup, setShowPopup] = useState(false);
   const [showCategory, setShowCategory] = useState(true);
 
+  // Sorting
+  const [sortOrder, setSortOrder] = useState<'default' | 'mention-desc' | 'mention-asc'>('default');
+
   // Resize state
   const panelRef = useRef<HTMLDivElement>(null);
   const [panelSize, setPanelSize] = useState({ width: 600, height: 700 });
@@ -239,11 +242,11 @@ export default function AIRecommendPanel({
     id: Math.random().toString(36).slice(2, 9),
     title: rec.name,
     category: rec.category || '추천',
-    address: rec.address,
-    roadAddress: rec.roadAddress,
-    mapx: rec.mapx,
-    mapy: rec.mapy,
-    link: rec.link,
+    address: rec.address || '',
+    roadAddress: rec.roadAddress || '',
+    mapx: rec.mapx || 0,
+    mapy: rec.mapy || 0,
+    link: rec.link || '',
     description: rec.reason,
   });
 
@@ -259,6 +262,16 @@ export default function AIRecommendPanel({
       ? `https://korean.visitkorea.or.kr/detail/ms_detail.do?cotid=${event.contentId}`
       : '',
     description: `${formatEventDate(event.startDate, event.endDate)}`,
+  });
+
+  const sortedRecommendations = [...recommendations].sort((a, b) => {
+    if (sortOrder === 'mention-desc') {
+      return (b.mentionCount || 0) - (a.mentionCount || 0);
+    }
+    if (sortOrder === 'mention-asc') {
+      return (a.mentionCount || 0) - (b.mentionCount || 0);
+    }
+    return 0; // default (기본 추천순)
   });
 
   const formatEventDate = (start: string, end: string) => {
@@ -516,37 +529,60 @@ export default function AIRecommendPanel({
 
                   {!error && (
                     <>
-                      <div className="ai-section-tabs">
-                        <button
-                          className={`ai-section-tab ${activeSection === 'recommend' ? 'active' : ''}`}
-                          onClick={() => setActiveSection('recommend')}
-                        >
-                          ✨ AI 추천 핫플/팝업
-                          {recommendations.length > 0 && (
-                            <span className="ai-count-badge">{recommendations.length}</span>
-                          )}
-                        </button>
-                        <button
-                          className={`ai-section-tab ${activeSection === 'events' ? 'active' : ''}`}
-                          onClick={() => setActiveSection('events')}
-                        >
-                          🎪 지역 행사/축제
-                          {events.length > 0 && (
-                            <span className="ai-count-badge">{events.length}</span>
-                          )}
-                        </button>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                        <div className="ai-section-tabs" style={{ marginBottom: 0 }}>
+                          <button
+                            className={`ai-section-tab ${activeSection === 'recommend' ? 'active' : ''}`}
+                            onClick={() => setActiveSection('recommend')}
+                          >
+                            ✨ AI 추천 핫플/팝업
+                            {recommendations.length > 0 && (
+                              <span className="ai-count-badge">{recommendations.length}</span>
+                            )}
+                          </button>
+                          <button
+                            className={`ai-section-tab ${activeSection === 'events' ? 'active' : ''}`}
+                            onClick={() => setActiveSection('events')}
+                          >
+                            🎪 지역 행사/축제
+                            {events.length > 0 && (
+                              <span className="ai-count-badge">{events.length}</span>
+                            )}
+                          </button>
+                        </div>
+                        
+                        {activeSection === 'recommend' && (
+                          <select 
+                            value={sortOrder}
+                            onChange={e => setSortOrder(e.target.value as any)}
+                            style={{
+                              background: 'rgba(255,255,255,0.05)',
+                              border: '1px solid rgba(255,255,255,0.1)',
+                              color: '#fff',
+                              padding: '6px 12px',
+                              borderRadius: '8px',
+                              fontSize: '13px',
+                              outline: 'none',
+                              cursor: 'pointer'
+                            }}
+                          >
+                            <option value="default" style={{ color: '#000' }}>✨ 추천순</option>
+                            <option value="mention-desc" style={{ color: '#000' }}>🔥 SNS 언급 많은순</option>
+                            <option value="mention-asc" style={{ color: '#000' }}>🌱 SNS 언급 적은순</option>
+                          </select>
+                        )}
                       </div>
 
                       {/* Recommended Places */}
                       {activeSection === 'recommend' && (
                         <div className="ai-list stagger-children">
-                          {recommendations.length === 0 ? (
+                          {sortedRecommendations.length === 0 ? (
                             <div className="ai-empty-section">
                               <div className="ai-empty-section-icon">✨</div>
                               <p>추천 장소를 불러오지 못했습니다</p>
                             </div>
                           ) : (
-                            recommendations.map((rec, idx) => (
+                            sortedRecommendations.map((rec, idx) => (
                               <div
                                 key={`rec-${idx}-${rec.mapx}`}
                                 className="ai-rec-card"
@@ -558,7 +594,14 @@ export default function AIRecommendPanel({
                                     <span className="ai-rec-star">★</span>
                                     {rec.name}
                                   </h3>
-                                  <span className="ai-rec-category">{rec.category}</span>
+                                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                    {(rec.mentionCount ?? 0) > 0 && (
+                                      <span style={{ fontSize: '12px', color: '#fb923c', fontWeight: 600 }}>
+                                        🔥 블로그/유튜브 {rec.mentionCount}회 언급
+                                      </span>
+                                    )}
+                                    <span className="ai-rec-category">{rec.category}</span>
+                                  </div>
                                 </div>
                                 <div style={{ marginBottom: '6px', display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
                                   <span style={{
