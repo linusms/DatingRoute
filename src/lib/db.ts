@@ -298,18 +298,35 @@ export async function addLivePlace(roomId: string, ownerId: string, placeData: P
 
 export async function updateLivePlaces(roomId: string, ownerId: string, places: CoursePlace[]): Promise<void> {
   const courseId = await getLiveCourseId(roomId, ownerId);
-  void courseId; // ensure live course exists
-  
-  // Update order, day, and memo for each place
-  for (let i = 0; i < places.length; i++) {
-    const p = places[i];
-    const { error } = await supabase.from('course_places').update({
-      order_index: i,
-      memo: p.memo || '',
-      day_index: p.day ?? 1,
-    }).eq('id', p.id);
-    if (error) console.error('Update live place error:', error);
+
+  if (places.length === 0) {
+    // Delete all places for this course
+    await supabase.from('course_places').delete().eq('course_id', courseId);
+    return;
   }
+
+  // Upsert all places: insert if new, update if existing.
+  // This handles temporary IDs that were never saved to the DB.
+  const rows = places.map((p, i) => ({
+    id: p.id,
+    course_id: courseId,
+    title: p.title || '',
+    category: p.category || '',
+    address: p.address || '',
+    road_address: p.roadAddress || '',
+    mapx: p.mapx || 0,
+    mapy: p.mapy || 0,
+    link: p.link || '',
+    description: p.description || '',
+    memo: p.memo || '',
+    order_index: i,
+    day_index: p.day ?? 1,
+  }));
+
+  const { error } = await supabase
+    .from('course_places')
+    .upsert(rows, { onConflict: 'id' });
+  if (error) console.error('Upsert live places error:', error);
 }
 
 export async function deleteLivePlace(roomId: string, ownerId: string, placeId: string): Promise<void> {

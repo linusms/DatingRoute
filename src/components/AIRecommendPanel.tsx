@@ -851,7 +851,7 @@ export default function AIRecommendPanel({
                                   </span>
                                   {/* Instagram & NaverMap quick links */}
                                   <a
-                                    href={`https://www.instagram.com/explore/tags/${encodeURIComponent(rec.name.replace(/[^가-힣a-zA-Z0-9]/g, ''))}`}
+                                    href={`https://www.google.com/search?q=${encodeURIComponent(rec.name + ' 인스타그램')}&tbm=isch`}
                                     target="_blank" rel="noreferrer"
                                     onClick={e => e.stopPropagation()}
                                     style={{
