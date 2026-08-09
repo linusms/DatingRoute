@@ -472,6 +472,7 @@ export default function AIRecommendPanel({
               border: '1px solid rgba(244,114,182,0.3)',
               boxShadow: '0 20px 40px rgba(0,0,0,0.5)',
               display: 'flex', flexDirection: 'column', overflow: 'hidden',
+              maxHeight: `${Math.min(panelSize.height, typeof window !== 'undefined' ? window.innerHeight * 0.95 : 1000)}px`,
             }}
           >
             {/* Header */}
