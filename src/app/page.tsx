@@ -592,7 +592,7 @@ export default function HomePage() {
 
         newPlace = {
           ...place,
-          id: place.id || Math.random().toString(36).substring(2, 9),
+          id: Math.random().toString(36).substring(2, 9),
           order: prev.length,
           memo: '',
           day: targetDay,
@@ -857,9 +857,12 @@ export default function HomePage() {
               onClick={() => setActiveTab('route')}
             >
               🗺️ 경로 생성
-              {coursePlaces.length > 0 && (
-                <span className="sidebar-tab-badge">{coursePlaces.length}</span>
-              )}
+              {(() => {
+                const storageCount = coursePlaces.filter((p) => (p.day ?? 0) === 0).length;
+                return storageCount > 0 ? (
+                  <span className="sidebar-tab-badge">{storageCount}</span>
+                ) : null;
+              })()}
             </button>
           </div>
 
