@@ -412,7 +412,6 @@ export default function AIRecommendPanel({
             style={{
               position: 'relative',
               width: `${panelSize.width}px`,
-              height: `${panelSize.height}px`,
               background: 'rgba(26,21,32,0.95)',
               backdropFilter: 'blur(20px)',
               borderRadius: '24px',
