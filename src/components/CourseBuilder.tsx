@@ -283,19 +283,15 @@ export default function CourseBuilder({
     const stats: Record<number, { distance: number, durationMs: number }> = {};
     if (!isRouteCreated || !directions || !directions.legs) return stats;
 
-    for (let i = 0; i < places.length - 1; i++) {
-      const p1 = places[i];
-      const p2 = places[i + 1];
-      if ((p1.day ?? 0) === (p2.day ?? 0) && (p1.day ?? 0) !== 0) {
-        const day = p1.day ?? 0;
+    directions.legs.forEach((leg: any) => {
+      const p = places.find(p => p.id === leg.fromId);
+      if (p && (p.day ?? 0) !== 0) {
+        const day = p.day ?? 0;
         if (!stats[day]) stats[day] = { distance: 0, durationMs: 0 };
-        const leg = directions.legs[i];
-        if (leg) {
-          stats[day].distance += leg.distance;
-          stats[day].durationMs += leg.duration;
-        }
+        stats[day].distance += leg.distance || 0;
+        stats[day].durationMs += leg.duration || 0;
       }
-    }
+    });
     return stats;
   }, [places, directions, isRouteCreated]);
 
@@ -537,10 +533,9 @@ export default function CourseBuilder({
               const placeDay = place.day ?? 1;
 
               // Get leg info for the segment AFTER this place (using global index)
-              const globalIdx = places.findIndex(p => p.id === place.id);
               const legs = directions?.legs || [];
-              const legAfter = (isRouteCreated && legs.length > 0 && globalIdx < places.length - 1)
-                ? legs[globalIdx] : null;
+              const legAfter = (isRouteCreated && legs.length > 0)
+                ? legs.find((l: any) => l.fromId === place.id) : null;
 
               // Day divider: show header when day changes (only in 'all' tab if multi-day)
               const showDayHeader = isMultiDay && activeDayTab === 'all' && !seenDays.has(placeDay);

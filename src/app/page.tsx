@@ -538,8 +538,8 @@ export default function HomePage() {
 
         totalDist += data._totalDistance || 0;
         totalDur += data._totalDuration || 0;
-        data._parsedLegs?.forEach((leg: any) => {
-          allLegs.push({ ...leg, index: globalLegIndex++ });
+        data._parsedLegs?.forEach((leg: any, i: number) => {
+          allLegs.push({ ...leg, index: globalLegIndex++, fromId: dPlaces[i].id, toId: dPlaces[i+1].id });
         });
         newRoutePath[day] = data._fullPath;
       } catch {
@@ -555,7 +555,7 @@ export default function HomePage() {
         for (let i = 0; i < coords.length - 1; i++) {
           const dist = getStraightLineDistance(coords[i].lat, coords[i].lng, coords[i + 1].lat, coords[i + 1].lng);
           dayDist += dist;
-          allLegs.push({ index: globalLegIndex++, distance: dist, duration: (dist / 40000) * 3600000, name: '' });
+          allLegs.push({ index: globalLegIndex++, distance: dist, duration: (dist / 40000) * 3600000, name: '', fromId: dPlaces[i].id, toId: dPlaces[i+1].id });
         }
         totalDist += dayDist;
         totalDur += (dayDist / 40000) * 3600000;
