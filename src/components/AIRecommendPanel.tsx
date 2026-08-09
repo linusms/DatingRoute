@@ -22,6 +22,22 @@ const AI_CATEGORIES = [
   { id: 'accommodation', label: '🏨 숙박시설', desc: '호텔/펜션/게스트하우스' },
 ];
 
+export type SearchHistoryItem = {
+  id: string;
+  timestamp: number;
+  conditions: {
+    selectedPlaceId: string;
+    radiusKm: number;
+    categories: string[];
+    sortOrder: string;
+  };
+  results: {
+    recommendations: RecommendedPlace[];
+    events: RegionEvent[];
+    summary: string;
+  };
+};
+
 export default function AIRecommendPanel({
   coursePlaces,
   schedule,
@@ -30,6 +46,9 @@ export default function AIRecommendPanel({
   onHighlightPlace,
   roomId,
 }: AIRecommendPanelProps) {
+  const [searchHistory, setSearchHistory] = useState<SearchHistoryItem[]>([]);
+  const [activeHistoryId, setActiveHistoryId] = useState<string | null>(null);
+
   const [recommendations, setRecommendations] = useState<RecommendedPlace[]>([]);
   const [events, setEvents] = useState<RegionEvent[]>([]);
   const [summary, setSummary] = useState<string>('');
@@ -72,7 +91,7 @@ export default function AIRecommendPanel({
   }, []);
 
   // 로컬 스토리지에 캐싱 (경로(룸) 별로 AI 추천 유지)
-  const storageKey = roomId ? `ai-recommend-${roomId}` : null;
+  const storageKey = roomId ? `ai-recommend-history-${roomId}` : null;
 
   useEffect(() => {
     if (!storageKey || typeof window === 'undefined') return;
@@ -80,12 +99,16 @@ export default function AIRecommendPanel({
       const cached = localStorage.getItem(storageKey);
       if (cached) {
         const data = JSON.parse(cached);
-        if (data.recommendations) setRecommendations(data.recommendations);
-        if (data.events) setEvents(data.events);
-        if (data.summary) setSummary(data.summary);
-        if (data.hasSearched) setHasSearched(data.hasSearched);
-        if (data.selectedCategories) setSelectedCategories(data.selectedCategories);
-        if (data.sortOrder) setSortOrder(data.sortOrder);
+        if (data.history && Array.isArray(data.history)) {
+          setSearchHistory(data.history);
+          if (data.activeId) {
+            setActiveHistoryId(data.activeId);
+            const activeItem = data.history.find((h: SearchHistoryItem) => h.id === data.activeId);
+            if (activeItem) {
+              loadHistoryItem(activeItem);
+            }
+          }
+        }
       }
     } catch (e) {
       console.error('Failed to load AI recommend cache', e);
@@ -94,21 +117,53 @@ export default function AIRecommendPanel({
 
   useEffect(() => {
     if (!storageKey || typeof window === 'undefined') return;
-    if (!hasSearched) return; // 검색 전 초기 상태 덮어쓰기 방지
+    if (searchHistory.length === 0) return;
     try {
       const data = {
-        recommendations,
-        events,
-        summary,
-        hasSearched,
-        selectedCategories,
-        sortOrder
+        history: searchHistory,
+        activeId: activeHistoryId
       };
       localStorage.setItem(storageKey, JSON.stringify(data));
     } catch (e) {
       console.error('Failed to save AI recommend cache', e);
     }
-  }, [storageKey, recommendations, events, summary, hasSearched, selectedCategories, sortOrder]);
+  }, [storageKey, searchHistory, activeHistoryId]);
+
+  // 진행 중이거나 더 불러오기 한 결과를 현재 활성화된 History Item에 동기화
+  useEffect(() => {
+    if (!activeHistoryId || !hasSearched) return;
+    setSearchHistory(prev => prev.map(item => {
+      if (item.id === activeHistoryId) {
+        return {
+          ...item,
+          results: { recommendations, events, summary }
+        };
+      }
+      return item;
+    }));
+  }, [activeHistoryId, recommendations, events, summary, hasSearched]);
+
+  const loadHistoryItem = (item: SearchHistoryItem) => {
+    setSelectedPlaceId(item.conditions.selectedPlaceId);
+    setRadiusKm(item.conditions.radiusKm);
+    setSelectedCategories(item.conditions.categories);
+    setSortOrder(item.conditions.sortOrder as any);
+    
+    setRecommendations(item.results.recommendations);
+    setEvents(item.results.events);
+    setSummary(item.results.summary);
+    setHasSearched(true);
+    setShowPopup(true);
+  };
+
+  const handleNewSearch = () => {
+    setActiveHistoryId(null);
+    setHasSearched(false);
+    setShowPopup(false);
+    setRecommendations([]);
+    setEvents([]);
+    setSummary('');
+  };
 
   const isResizingRef = useRef(false);
   const resizeStartRef = useRef({ x: 0, y: 0, w: 0, h: 0 });
@@ -244,6 +299,29 @@ export default function AIRecommendPanel({
                   setSummary(data.summary || '');
                   setHasSearched(true);
                   setShowPopup(true);
+
+                  const newId = Date.now().toString();
+                  const newItem: SearchHistoryItem = {
+                    id: newId,
+                    timestamp: Date.now(),
+                    conditions: {
+                      selectedPlaceId,
+                      radiusKm,
+                      categories: selectedCategories,
+                      sortOrder
+                    },
+                    results: {
+                      recommendations: data.recommendations || [],
+                      events: data.events || [],
+                      summary: data.summary || ''
+                    }
+                  };
+                  
+                  setSearchHistory(prev => {
+                    const updated = [newItem, ...prev];
+                    return updated.slice(0, 10);
+                  });
+                  setActiveHistoryId(newId);
                 }
               } else if (data.type === 'error') {
                 setError(data.message);
@@ -333,6 +411,61 @@ export default function AIRecommendPanel({
 
   return (
     <div className="ai-recommend-panel">
+      {/* ── 검색 기록 리스트 ── */}
+      {searchHistory.length > 0 && (
+        <div style={{
+          background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(244,114,182,0.15)',
+          borderRadius: '12px', padding: '14px', marginBottom: '16px',
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+            <div style={{ fontSize: '12px', color: '#8b7fa8', fontWeight: 600, letterSpacing: '0.5px' }}>
+              🕒 최근 검색 기록
+            </div>
+            {activeHistoryId && (
+              <button
+                onClick={handleNewSearch}
+                style={{
+                  background: 'rgba(244,114,182,0.15)', border: '1px solid rgba(244,114,182,0.3)',
+                  color: '#f472b6', padding: '4px 8px', borderRadius: '4px', fontSize: '11px', cursor: 'pointer'
+                }}
+              >
+                + 새 검색
+              </button>
+            )}
+          </div>
+          <select
+            value={activeHistoryId || ''}
+            onChange={e => {
+              const id = e.target.value;
+              if (id) {
+                setActiveHistoryId(id);
+                const item = searchHistory.find(h => h.id === id);
+                if (item) loadHistoryItem(item);
+              } else {
+                handleNewSearch();
+              }
+            }}
+            style={{
+              width: '100%', padding: '8px 10px', borderRadius: '8px',
+              background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(244,114,182,0.2)',
+              color: '#f5f0ff', fontSize: '13px', cursor: 'pointer', outline: 'none'
+            }}
+          >
+            <option value="" style={{ background: '#1a1520' }}>새로운 조건으로 검색하기...</option>
+            {searchHistory.map(h => {
+              const date = new Date(h.timestamp);
+              const timeStr = `${date.getMonth()+1}/${date.getDate()} ${date.getHours()}:${String(date.getMinutes()).padStart(2, '0')}`;
+              const cats = h.conditions.categories.map(c => AI_CATEGORIES.find(ac => ac.id === c)?.label.split(' ')[1] || c).join(', ');
+              return (
+                <option key={h.id} value={h.id} style={{ background: '#1a1520' }}>
+                  [{timeStr}] 반경 {h.conditions.radiusKm}km / {cats || '전체'}
+                </option>
+              );
+            })}
+          </select>
+        </div>
+      )}
+
       {/* Calendar Date Picker */}
       <div style={{ marginBottom: '16px' }}>
         <DateSchedulePicker
