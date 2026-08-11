@@ -16,7 +16,7 @@ export async function GET(request: NextRequest) {
   const youtubeKey = process.env.YOUTUBE_API_KEY;
   if (youtubeKey) {
     try {
-      const ytUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&maxResults=6&q=${encodeURIComponent(query + ' 후기')}&type=video&key=${youtubeKey}&relevanceLanguage=ko`;
+      const ytUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&maxResults=6&q=${encodeURIComponent('"' + query + '"')}&type=video&key=${youtubeKey}&relevanceLanguage=ko`;
       const ytRes = await fetch(ytUrl);
       if (ytRes.ok) {
         const ytData = await ytRes.json();
@@ -49,7 +49,7 @@ export async function GET(request: NextRequest) {
   const naverClientSecret = process.env.NAVER_CLIENT_SECRET;
   if (naverClientId && naverClientSecret) {
     try {
-      const blogUrl = `https://openapi.naver.com/v1/search/blog.json?query=${encodeURIComponent(query + ' 데이트')}&display=6&sort=sim`;
+      const blogUrl = `https://openapi.naver.com/v1/search/blog.json?query=${encodeURIComponent('"' + query + '"')}&display=6&sort=sim`;
       const blogRes = await fetch(blogUrl, {
         headers: {
           'X-Naver-Client-Id': naverClientId,

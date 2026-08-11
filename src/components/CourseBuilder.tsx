@@ -673,21 +673,7 @@ export default function CourseBuilder({
                             🌐 홈페이지
                           </a>
                         )}
-                        <a
-                          href={`https://www.google.com/search?q=${encodeURIComponent(stripHtml(place.title) + ' 인스타그램')}&tbm=isch`}
-                          target="_blank"
-                          rel="noreferrer"
-                          onClick={(e) => e.stopPropagation()}
-                          style={{
-                            display: 'inline-flex', alignItems: 'center', gap: '4px',
-                            fontSize: '11px', padding: '2px 8px', borderRadius: '4px',
-                            background: 'rgba(255,255,255,0.06)', color: '#f472b6',
-                            textDecoration: 'none', border: '1px solid rgba(244,114,182,0.2)',
-                            fontWeight: 500, cursor: 'pointer', whiteSpace: 'nowrap',
-                          }}
-                        >
-                          📷 인스타그램
-                        </a>
+
                         <a
                           href={`https://map.naver.com/v5/search/${encodeURIComponent(stripHtml(place.title))}`}
                           target="_blank"
@@ -907,12 +893,7 @@ export default function CourseBuilder({
                                   border: '1px solid rgba(147,197,253,0.2)', fontWeight: 500, whiteSpace: 'nowrap',
                                 }}>🌐 홈페이지</span>
                               )}
-                              <span style={{
-                                display: 'inline-flex', alignItems: 'center', gap: '4px',
-                                fontSize: '11px', padding: '2px 8px', borderRadius: '4px',
-                                background: 'rgba(255,255,255,0.06)', color: '#f472b6',
-                                border: '1px solid rgba(244,114,182,0.2)', fontWeight: 500, whiteSpace: 'nowrap',
-                              }}>📷 인스타그램</span>
+
                               <span style={{
                                 display: 'inline-flex', alignItems: 'center', gap: '4px',
                                 fontSize: '11px', padding: '2px 8px', borderRadius: '4px',

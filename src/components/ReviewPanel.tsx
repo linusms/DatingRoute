@@ -12,6 +12,7 @@ export default function ReviewPanel({ placeName, onClose }: ReviewPanelProps) {
   const [videos, setVideos] = useState<YoutubeVideo[]>([]);
   const [blogs, setBlogs] = useState<ReviewItem[]>([]);
   const [blogSummary, setBlogSummary] = useState<string | null>(null);
+  const [ytSummary, setYtSummary] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -98,6 +99,7 @@ export default function ReviewPanel({ placeName, onClose }: ReviewPanelProps) {
       setIsLoading(true);
       setError(null);
       setBlogSummary(null);
+      setYtSummary(null);
 
       try {
         const res = await fetch(
@@ -108,12 +110,16 @@ export default function ReviewPanel({ placeName, onClose }: ReviewPanelProps) {
         const data = await res.json();
 
         if (isMounted) {
-          setVideos(data.videos || []);
+          const vidItems = data.videos || [];
+          setVideos(vidItems);
           const blogItems = data.blogs || [];
           setBlogs(blogItems);
 
           if (blogItems.length > 0) {
-            fetchSummary(blogItems);
+            fetchSummary(blogItems, 'blog');
+          }
+          if (vidItems.length > 0) {
+            fetchSummary(vidItems, 'youtube');
           }
         }
       } catch (err: any) {
@@ -127,17 +133,18 @@ export default function ReviewPanel({ placeName, onClose }: ReviewPanelProps) {
       }
     };
 
-    const fetchSummary = async (blogList: ReviewItem[]) => {
+    const fetchSummary = async (itemList: any[], type: 'blog' | 'youtube') => {
       try {
         const summaryRes = await fetch('/api/reviews/summary', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ blogs: blogList, placeName }),
+          body: JSON.stringify({ items: itemList, type, placeName }),
         });
         if (summaryRes.ok) {
           const summaryData = await summaryRes.json();
           if (isMounted && summaryData.summary) {
-            setBlogSummary(summaryData.summary);
+            if (type === 'blog') setBlogSummary(summaryData.summary);
+            else setYtSummary(summaryData.summary);
           }
         }
       } catch (err) {
@@ -250,7 +257,27 @@ export default function ReviewPanel({ placeName, onClose }: ReviewPanelProps) {
               {videos.length === 0 ? (
                 <div style={{ color: '#8b7fa8', textAlign: 'center', padding: '40px' }}>관련 영상이 없습니다.</div>
               ) : (
-                videos.map((vid) => (
+                <>
+                  <div className="ai-recommendation animate-fade-in" style={{
+                    background: 'rgba(244,114,182,0.1)',
+                    border: '1px solid rgba(244,114,182,0.3)',
+                    borderRadius: '12px',
+                    padding: '16px',
+                    fontSize: '14px',
+                    color: '#f5f0ff',
+                    lineHeight: 1.6,
+                  }}>
+                    <strong style={{ color: '#f472b6', display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px', fontSize: '15px' }}>
+                      <span>✨</span> Gemini 유튜브 핵심 요약
+                    </strong>
+                    {ytSummary ? (
+                      <div style={{ whiteSpace: 'pre-wrap' }}>{ytSummary}</div>
+                    ) : (
+                      <div style={{ color: '#8b7fa8' }}>요약을 생성하는 중입니다...</div>
+                    )}
+                  </div>
+                  <h4 style={{ color: '#8b7fa8', marginTop: '8px', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '1px' }}>참고한 영상 목록</h4>
+                  {videos.map((vid) => (
                   <a key={vid.id} href={vid.url} target="_blank" rel="noreferrer" style={{
                     display: 'flex', gap: '12px', textDecoration: 'none', background: 'rgba(255,255,255,0.03)',
                     padding: '12px', borderRadius: '12px', border: '1px solid rgba(244,114,182,0.1)'
@@ -262,7 +289,8 @@ export default function ReviewPanel({ placeName, onClose }: ReviewPanelProps) {
                       <div style={{ fontSize: '12px', color: '#8b7fa8' }}>{vid.channelTitle}</div>
                     </div>
                   </a>
-                ))
+                ))}
+              </>
               )}
             </div>
           )}
@@ -286,7 +314,7 @@ export default function ReviewPanel({ placeName, onClose }: ReviewPanelProps) {
                       <span>✨</span> Gemini 블로그 핵심 요약
                     </strong>
                     {blogSummary ? (
-                      <div>{blogSummary}</div>
+                      <div style={{ whiteSpace: 'pre-wrap' }}>{blogSummary}</div>
                     ) : (
                       <div style={{ color: '#8b7fa8' }}>요약을 생성하는 중입니다...</div>
                     )}

@@ -436,9 +436,8 @@ export default function AIRecommendPanel({
 
   const getSourceIcon = (sourceType?: string) => {
     if (sourceType === 'youtube') return '▶️ YouTube';
-    if (sourceType === 'event') return '🎪 행사/축제';
     if (sourceType === 'popup') return '🛍️ 팝업스토어';
-    return '📝 네이버 블로그';
+    return '🌐 공식 웹/SNS';
   };
 
   const selectedCenterPlace = coursePlaces.find(p => p.id === selectedPlaceId);
@@ -777,25 +776,11 @@ export default function AIRecommendPanel({
                   {!error && (
                     <>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                        <div className="ai-section-tabs" style={{ marginBottom: 0 }}>
-                          <button
-                            className={`ai-section-tab ${activeSection === 'recommend' ? 'active' : ''}`}
-                            onClick={() => setActiveSection('recommend')}
-                          >
-                            ✨ AI 추천 핫플/팝업
-                            {recommendations.length > 0 && (
-                              <span className="ai-count-badge">{recommendations.length}</span>
-                            )}
-                          </button>
-                          <button
-                            className={`ai-section-tab ${activeSection === 'events' ? 'active' : ''}`}
-                            onClick={() => setActiveSection('events')}
-                          >
-                            🎪 지역 행사/축제
-                            {events.length > 0 && (
-                              <span className="ai-count-badge">{events.length}</span>
-                            )}
-                          </button>
+                        <div style={{ marginBottom: 0 }}>
+                          <span style={{ fontSize: '15px', fontWeight: 600, color: '#f5f0ff' }}>✨ AI 추천 핫플/팝업</span>
+                          {recommendations.length > 0 && (
+                            <span className="ai-count-badge" style={{ marginLeft: '8px' }}>{recommendations.length}</span>
+                          )}
                         </div>
                         
                         {activeSection === 'recommend' && (
@@ -865,17 +850,7 @@ export default function AIRecommendPanel({
                                   }}>
                                     {getSourceIcon((rec as any).sourceType)}
                                   </span>
-                                  {/* Instagram & NaverMap quick links */}
-                                  <a
-                                    href={`https://www.google.com/search?q=${encodeURIComponent(rec.name + ' 인스타그램')}&tbm=isch`}
-                                    target="_blank" rel="noreferrer"
-                                    onClick={e => e.stopPropagation()}
-                                    style={{
-                                      fontSize: '11px', padding: '2px 6px', borderRadius: '4px',
-                                      background: 'rgba(255,255,255,0.06)', color: '#c084fc',
-                                      textDecoration: 'none', border: '1px solid rgba(192,132,252,0.2)',
-                                    }}
-                                  >📷 인스타</a>
+
                                   <a
                                     href={`https://map.naver.com/v5/search/${encodeURIComponent(rec.name)}`}
                                     target="_blank" rel="noreferrer"

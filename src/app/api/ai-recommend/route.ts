@@ -91,54 +91,7 @@ export async function POST(request: NextRequest) {
         }
 
         const tourEvents: any[] = [];
-        if (tourApiKey && tourApiKey !== 'your_tour_api_key' && schedule?.startDate) {
-          const startDate = schedule.startDate.replace(/-/g, '');
-          const endDate = (schedule.endDate || schedule.startDate).replace(/-/g, '');
-          try {
-            const url = new URL('http://apis.data.go.kr/B551011/KorService2/searchFestival2');
-            url.searchParams.set('serviceKey', tourApiKey);
-            url.searchParams.set('MobileOS', 'AND');
-            url.searchParams.set('MobileApp', 'DatingRoute');
-            url.searchParams.set('_type', 'json');
-            url.searchParams.set('eventStartDate', startDate);
-            url.searchParams.set('eventEndDate', endDate);
-            url.searchParams.set('numOfRows', '15');
-            url.searchParams.set('pageNo', '1');
-            url.searchParams.set('arrange', 'C');
 
-            const abortCtrl = new AbortController();
-            const timer = setTimeout(() => abortCtrl.abort(), 3500);
-            const res = await fetch(url.toString(), { signal: abortCtrl.signal });
-            clearTimeout(timer);
-
-            if (res.ok) {
-              const data = await res.json();
-              let items = data?.response?.body?.items?.item;
-              if (items && !Array.isArray(items)) items = [items];
-              if (items && Array.isArray(items)) {
-                const regionArr = Array.from(regions);
-                for (const item of items) {
-                  const addr = item.addr1 || '';
-                  const matchesRegion = regionArr.length === 0 || regionArr.some(r => addr.includes(r.split(' ')[0]));
-                  if (matchesRegion) {
-                    tourEvents.push({
-                      contentId: String(item.contentid || ''),
-                      title: item.title || '',
-                      address: item.addr1 || '',
-                      imageUrl: item.firstimage || item.firstimage2 || '',
-                      startDate: item.eventstartdate || startDate,
-                      endDate: item.eventenddate || endDate,
-                      tel: item.tel || '',
-                      mapx: parseFloat(item.mapx) || 0,
-                      mapy: parseFloat(item.mapy) || 0,
-                      category: item.cat2 || item.cat1 || '행사',
-                    });
-                  }
-                }
-              }
-            }
-          } catch {}
-        }
 
         const regionNames = Array.from(regions).filter(r => r.includes(' ')).map(r => r.split(' ')[1]) || [];
         if (regionNames.length === 0 && regions.size > 0) {
@@ -314,7 +267,7 @@ ${placeListText}
 0. 사용자가 특별히 요청한 키워드: ${searchKeyword ? searchKeyword : '없음'}
 (키워드가 있다면 해당 키워드와 연관된 장소를 우선적으로 추천하고, 추천 이유에 반영해주세요.)
 1. 위 목록에 있는 장소들에 대해서만 응답을 생성하세요. 새로운 장소를 임의로 지어내지 마세요.
-2. 각 장소마다 이 시기에 데이트하기 좋은 '매력적인 이유(1문장)'를 작성해주세요.
+2. 각 장소의 '매력적인 이유'는 정형적이고 뻔한 설명을 피하고, **특이한 시그니처 메뉴나 중요 볼거리, 독특한 체험 등 핵심 특징만 짧게 개조식으로 1~2문장**으로 작성하세요. (예: "- 흑임자 라떼가 유명한 시그니처 카페. - 바다가 한눈에 보이는 루프탑 포토존.")
 3. 각 장소를 표현하는 트렌디한 '해시태그 키워드(2~3개)'를 생성해주세요.
 4. 모든 장소들에 대한 전반적인 데이트 코스 요약 멘트(summary)를 1문장 작성해주세요.
 
@@ -382,7 +335,7 @@ ${placeListText}
           encoder.encode(`data: ${JSON.stringify({
             type: 'result',
             recommendations,
-            events: tourEvents,
+            events: [],
             summary,
           })}\n\n`)
         );
