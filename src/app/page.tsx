@@ -28,6 +28,8 @@ import {
 } from '@/lib/courseStorage';
 import { katechToWgs84, getStraightLineDistance, calculateFallbackDirections, stripHtml } from '@/lib/utils';
 import { useSessionSync } from '@/lib/useSessionSync';
+import { useResizable } from '@/hooks/useResizable';
+import { useDirections } from '@/hooks/useDirections';
 
 export default function HomePage() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -40,8 +42,7 @@ export default function HomePage() {
   const [courseDescription, setCourseDescription] = useState<string>('');
 
   // Directions state
-  const [directions, setDirections] = useState<DirectionResult | null>(null);
-  const [routePath, setRoutePath] = useState<Array<[number, number]> | null>(null);
+  const { directions, setDirections, routePath, setRoutePath, fetchDirections, clearDirections } = useDirections();
 
   // Route features state
   const [isRouteCreated, setIsRouteCreated] = useState(false);
@@ -68,52 +69,35 @@ export default function HomePage() {
   const skipNextSSERef = useRef(false);
 
   // ──── Resize Panel State ────
-  const [sidebarSize, setSidebarSize] = useState<number | null>(null);
-  const isDraggingRef = useRef(false);
   const appMainRef = useRef<HTMLDivElement>(null);
+  const isMobile = typeof window !== 'undefined' && window.innerWidth <= 768;
 
-  const isMobile = useMemo(() => {
-    if (typeof window === 'undefined') return false;
-    return window.innerWidth <= 768;
-  }, []);
+  const {
+    size: hookSidebarSize,
+    handleResizeStart,
+    isResizing
+  } = useResizable({
+    mode: 'percentage',
+    direction: isMobile ? 'vertical' : 'horizontal',
+    initialWidth: 50, // These will be ignored if sidebarSize is overridden, but required by hook initial state
+    initialHeight: 50,
+    minWidth: 15,
+    maxWidth: 70,
+    minHeight: 20,
+    maxHeight: 80,
+    containerRef: appMainRef
+  });
 
-  const handleResizeStart = useCallback((e: React.MouseEvent | React.TouchEvent) => {
-    e.preventDefault();
-    isDraggingRef.current = true;
-    document.body.style.cursor = isMobile ? 'row-resize' : 'col-resize';
-    document.body.style.userSelect = 'none';
+  const [sidebarSize, setSidebarSize] = useState<number | null>(null);
 
-    const handleMove = (ev: MouseEvent | TouchEvent) => {
-      if (!isDraggingRef.current || !appMainRef.current) return;
-      const rect = appMainRef.current.getBoundingClientRect();
-      const clientPos = 'touches' in ev ? ev.touches[0] : ev;
-
-      if (isMobile) {
-        const offsetY = clientPos.clientY - rect.top;
-        const percent = (offsetY / rect.height) * 100;
-        setSidebarSize(Math.max(20, Math.min(80, percent)));
-      } else {
-        const offsetX = clientPos.clientX - rect.left;
-        const percent = (offsetX / rect.width) * 100;
-        setSidebarSize(Math.max(15, Math.min(70, percent)));
-      }
-    };
-
-    const handleEnd = () => {
-      isDraggingRef.current = false;
-      document.body.style.cursor = '';
-      document.body.style.userSelect = '';
-      document.removeEventListener('mousemove', handleMove);
-      document.removeEventListener('mouseup', handleEnd);
-      document.removeEventListener('touchmove', handleMove);
-      document.removeEventListener('touchend', handleEnd);
-    };
-
-    document.addEventListener('mousemove', handleMove);
-    document.addEventListener('mouseup', handleEnd);
-    document.addEventListener('touchmove', handleMove, { passive: false });
-    document.addEventListener('touchend', handleEnd);
-  }, [isMobile]);
+  useEffect(() => {
+    // Synchronize hook state with local state (sidebarSize uses width for desktop, height for mobile)
+    if (isMobile) {
+      if (hookSidebarSize.height !== 50) setSidebarSize(hookSidebarSize.height);
+    } else {
+      if (hookSidebarSize.width !== 50) setSidebarSize(hookSidebarSize.width);
+    }
+  }, [hookSidebarSize.width, hookSidebarSize.height, isMobile]);
 
   // ──── Session Token Validation ────
   const validateSession = useCallback(async () => {
@@ -480,11 +464,15 @@ export default function HomePage() {
     setMembers([]);
     setIsOwner(false);
     setCoursePlaces([]);
-    setDirections(null);
-    setRoutePath(null);
+    clearDirections();
     setIsRouteCreated(false);
     setSchedule(null);
-  }, []);
+  }, [clearDirections]);
+
+  const handleClearRoute = useCallback(() => {
+    clearDirections();
+    setSchedule(null);
+  }, [clearDirections]);
 
   const handleSessionInvalidatedLogout = useCallback(() => {
     setSessionInvalidated(false);
@@ -494,70 +482,6 @@ export default function HomePage() {
   }, [handleGoToDashboard]);
 
   // ──── Directions ────
-  const fetchDirections = useCallback(async (places: CoursePlace[]) => {
-    const validPlaces = places.filter((p) => (p.day ?? 0) !== 0);
-    if (validPlaces.length < 2) {
-      setDirections(null);
-      setRoutePath(null);
-      return;
-    }
-
-    const byDay: Record<number, CoursePlace[]> = {};
-    validPlaces.forEach(p => {
-      const d = p.day ?? 1;
-      if (!byDay[d]) byDay[d] = [];
-      byDay[d].push(p);
-    });
-
-    let totalDist = 0;
-    let totalDur = 0;
-    const allLegs: any[] = [];
-    const newRoutePath: Record<number, Array<[number, number]>> = {};
-    let globalLegIndex = 0;
-
-    for (const d of Object.keys(byDay)) {
-      const day = Number(d);
-      const dPlaces = byDay[day];
-      if (dPlaces.length < 2) continue;
-
-      try {
-        const coords = dPlaces.map((p) => {
-          const { lng, lat } = katechToWgs84(p.mapx, p.mapy);
-          return `${lng},${lat}`;
-        });
-
-        const start = coords[0];
-        const goal = coords[coords.length - 1];
-        const waypoints = coords.length > 2 ? coords.slice(1, -1).join('|') : undefined;
-
-        let url = `/api/directions?start=${start}&goal=${goal}`;
-        if (waypoints) url += `&waypoints=${encodeURIComponent(waypoints)}`;
-
-        const res = await fetch(url);
-        const data = await res.json();
-
-        if (!res.ok || data.error || !data._fullPath) throw new Error(data.error || 'API Error');
-
-        totalDist += data._totalDistance || 0;
-        totalDur += data._totalDuration || 0;
-        data._parsedLegs?.forEach((leg: any, i: number) => {
-          allLegs.push({ ...leg, index: globalLegIndex++, fromId: dPlaces[i].id, toId: dPlaces[i+1].id });
-        });
-        newRoutePath[day] = data._fullPath;
-      } catch {
-        // Fallback: straight-line distance
-        const fallback = calculateFallbackDirections(dPlaces, globalLegIndex);
-        totalDist += fallback.dayDist;
-        totalDur += fallback.dayDur;
-        allLegs.push(...fallback.newLegs);
-        newRoutePath[day] = fallback.dPath;
-        globalLegIndex = fallback.nextLegIndex;
-      }
-    }
-
-    setDirections({ totalDistance: totalDist, totalDuration: totalDur, legs: allLegs, fullPath: [] });
-    setRoutePath(newRoutePath as any);
-  }, []);
 
   const handleCreateRoute = useCallback(() => {
     if (coursePlaces.length < 2) {
@@ -915,7 +839,7 @@ export default function HomePage() {
 
         {/* Resize Handle */}
         <div
-          className={`resize-handle ${isDraggingRef.current ? 'dragging' : ''}`}
+          className={`resize-handle ${isResizing ? 'dragging' : ''}`}
           onMouseDown={handleResizeStart}
           onTouchStart={handleResizeStart}
         >

@@ -2,6 +2,7 @@
 
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { CoursePlace, DateSchedule, RecommendedPlace, RegionEvent, Place } from '@/lib/types';
+import { useResizable } from '@/hooks/useResizable';
 import { stripHtml, tourDateToISO } from '@/lib/utils';
 import DateSchedulePicker from './DateSchedulePicker';
 
@@ -196,43 +197,22 @@ export default function AIRecommendPanel({
     });
   };
 
-  const isResizingRef = useRef(false);
-  const resizeStartRef = useRef({ x: 0, y: 0, w: 0, h: 0 });
+  const {
+    size: hookPanelSize,
+    handleResizeStart: handleResizeMouseDown
+  } = useResizable({
+    mode: 'pixel',
+    direction: 'both',
+    initialWidth: panelSize.width,
+    initialHeight: panelSize.height,
+    minWidth: 360,
+    minHeight: 400,
+  });
 
-  const handleResizeMouseDown = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    isResizingRef.current = true;
-    resizeStartRef.current = {
-      x: e.clientX,
-      y: e.clientY,
-      w: panelSize.width,
-      h: panelSize.height,
-    };
-
-    const handleMouseMove = (ev: MouseEvent) => {
-      if (!isResizingRef.current) return;
-      const dx = ev.clientX - resizeStartRef.current.x;
-      const dy = ev.clientY - resizeStartRef.current.y;
-      setPanelSize({
-        width: Math.max(360, Math.min(window.innerWidth * 0.95, resizeStartRef.current.w + dx)),
-        height: Math.max(400, Math.min(window.innerHeight * 0.98, resizeStartRef.current.h + dy)),
-      });
-    };
-
-    const handleMouseUp = () => {
-      isResizingRef.current = false;
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
-      document.body.style.cursor = '';
-      document.body.style.userSelect = '';
-    };
-
-    document.body.style.cursor = 'nwse-resize';
-    document.body.style.userSelect = 'none';
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseup', handleMouseUp);
-  }, [panelSize]);
+  // Sync local hook size with the component's state (if needed) or just use the hook's size directly
+  useEffect(() => {
+    setPanelSize(hookPanelSize);
+  }, [hookPanelSize, setPanelSize]);
 
   const toggleCategory = (catId: string) => {
     setSelectedCategories(prev =>
