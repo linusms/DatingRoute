@@ -27,19 +27,12 @@ import {
   decodeCourseFromUrl,
 } from '@/lib/courseStorage';
 import { katechToWgs84, getStraightLineDistance, calculateFallbackDirections, stripHtml } from '@/lib/utils';
-import { useSessionSync } from '@/lib/useSessionSync';
+import { useCourseSession } from '@/hooks/useCourseSession';
 import { useResizable } from '@/hooks/useResizable';
 import { useDirections } from '@/hooks/useDirections';
 
 export default function HomePage() {
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [activeTab, setActiveTab] = useState<'search' | 'ai' | 'route'>('search');
-  const [coursePlaces, setCoursePlaces] = useState<CoursePlace[]>([]);
-  
-  // Shared course state
-  const [schedule, setSchedule] = useState<DateSchedule | null>(null);
-  const [courseName, setCourseName] = useState<string>('');
-  const [courseDescription, setCourseDescription] = useState<string>('');
 
   // Directions state
   const { directions, setDirections, routePath, setRoutePath, fetchDirections, clearDirections } = useDirections();
@@ -55,18 +48,46 @@ export default function HomePage() {
   const [toast, setToast] = useState<string | null>(null);
   const [showStoragePins, setShowStoragePins] = useState(false);
 
-  // Session state - unified: null = dashboard, 'builder' = editing
-  const [sessionMode, setSessionMode] = useState<SessionMode | null>(null);
-  const [sessionId, setSessionId] = useState<string | null>(null); // room ID
-  const [inviteCode, setInviteCode] = useState<string | null>(null);
-  const [nickname, setNickname] = useState<string>('');
-  const [members, setMembers] = useState<RoomMember[]>([]);
-  const [isOwner, setIsOwner] = useState(false);
-  const [pendingInviteCode, setPendingInviteCode] = useState<string | null>(null);
-  const [sessionInvalidated, setSessionInvalidated] = useState(false);
-
-  // Skip SSE updates that were triggered by this client
-  const skipNextSSERef = useRef(false);
+  const {
+    currentUser,
+    setCurrentUser,
+    isInitializing,
+    coursePlaces,
+    setCoursePlaces,
+    schedule,
+    setSchedule,
+    courseName,
+    setCourseName,
+    courseDescription,
+    setCourseDescription,
+    sessionMode,
+    sessionId,
+    inviteCode,
+    nickname,
+    members,
+    isOwner,
+    pendingInviteCode,
+    setPendingInviteCode,
+    sessionInvalidated,
+    isConnected,
+    skipNextSSERef,
+    handleCreateNewRoute,
+    handleUpdateCourseName,
+    handleLoadCourseFromDashboard,
+    handleJoinByInviteCode,
+    handleCreateInviteCode,
+    handleGoToDashboard,
+    handleLogout,
+    handleSessionInvalidatedLogout,
+  } = useCourseSession({
+    setActiveTab,
+    showToastMsg: (msg) => {
+      setToast(msg);
+      setTimeout(() => setToast(null), 2500);
+    },
+    clearDirections,
+    setIsRouteCreated,
+  });
 
   // ──── Resize Panel State ────
   const appMainRef = useRef<HTMLDivElement>(null);
@@ -99,70 +120,9 @@ export default function HomePage() {
     }
   }, [hookSidebarSize.width, hookSidebarSize.height, isMobile]);
 
-  // ──── Session Token Validation ────
-  const validateSession = useCallback(async () => {
-    if (!currentUser?.sessionToken || !currentUser?.id) return;
-    try {
-      const res = await fetch('/api/auth/validate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: currentUser.id, sessionToken: currentUser.sessionToken }),
-      });
-      if (!res.ok) {
-        setSessionInvalidated(true);
-      }
-    } catch { /* ignore network errors */ }
-  }, [currentUser?.id, currentUser?.sessionToken]);
-
-  // Validate session on window focus and periodically (every 5 minutes)
-  useEffect(() => {
-    if (!currentUser?.sessionToken) return;
-    
-    const handleFocus = () => validateSession();
-    window.addEventListener('focus', handleFocus);
-    window.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible') validateSession();
-    });
-
-    const interval = setInterval(validateSession, 5 * 60 * 1000); // 5 minutes
-    return () => {
-      window.removeEventListener('focus', handleFocus);
-      window.removeEventListener('visibilitychange', handleFocus);
-      clearInterval(interval);
-    };
-  }, [validateSession, currentUser?.sessionToken]);
-
-  // Detect invite parameter and restore session on mount
-  useEffect(() => {
-    // Check for invite code in URL
-    const params = new URLSearchParams(window.location.search);
-    const invite = params.get('invite');
-    if (invite) {
-      setPendingInviteCode(invite.toUpperCase());
-      window.history.replaceState({}, '', window.location.pathname);
-    }
-
-    // Check for old-style shared URL
-    const shared = params.get('shared');
-    if (shared) {
-      const decoded = decodeCourseFromUrl(shared);
-      if (decoded) {
-        setCoursePlaces(decoded.places);
-        setActiveTab('route');
-        showToastMsg(`"${decoded.name}" 공유 코스를 불러왔습니다!`);
-        window.history.replaceState({}, '', window.location.pathname);
-        return;
-      }
-    }
-
-    // Try to restore persisted user
-    try {
-      const userRaw = localStorage.getItem('datingroute_user');
-      if (userRaw) {
-        setCurrentUser(JSON.parse(userRaw));
-      }
-    } catch { /* ignore */ }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const showToastMsg = useCallback((msg: string) => {
+    setToast(msg);
+    setTimeout(() => setToast(null), 2500);
   }, []);
 
   // Initialize Kakao SDK
@@ -177,309 +137,12 @@ export default function HomePage() {
     }
   }, []);
 
-  // ──── SSE Real-time Sync ────
-  const { isConnected } = useSessionSync({
-    sessionId,
-    enabled: sessionMode === 'builder' && !!sessionId,
-    onPlaceAdded: (_place, allPlaces) => {
-      if (skipNextSSERef.current) {
-        skipNextSSERef.current = false;
-        return;
-      }
-      if (allPlaces) {
-        setCoursePlaces(allPlaces);
-        setIsRouteCreated(false);
-      } else if (_place) {
-        setCoursePlaces(prev => {
-          const exists = prev.find(p => p.id === _place.id);
-          if (exists) return prev;
-          return [...prev, _place].sort((a, b) => a.order - b.order);
-        });
-        setIsRouteCreated(false);
-      }
-    },
-    onPlaceRemoved: (_placeId, allPlaces) => {
-      if (skipNextSSERef.current) {
-        skipNextSSERef.current = false;
-        return;
-      }
-      if (allPlaces) {
-        setCoursePlaces(allPlaces);
-        setIsRouteCreated(false);
-      } else if (_placeId) {
-        setCoursePlaces(prev => prev.filter(p => p.id !== _placeId));
-        setIsRouteCreated(false);
-      }
-    },
-    onPlacesReordered: (allPlaces) => {
-      if (skipNextSSERef.current) {
-        skipNextSSERef.current = false;
-        return;
-      }
-      if (allPlaces) {
-        setCoursePlaces(allPlaces);
-        setIsRouteCreated(false);
-      }
-    },
-    onMemberJoined: (member) => {
-      setMembers((prev) => {
-        if (prev.find((m) => m.id === member.id)) return prev;
-        return [...prev, member];
-      });
-      showToastMsg(`🎉 ${member.nickname}님이 참여했습니다!`);
-    },
-  });
 
-  // ──── Helper ────
-  const showToastMsg = useCallback((msg: string) => {
-    setToast(msg);
-    setTimeout(() => setToast(null), 2500);
-  }, []);
-
-  // ──── Session Actions ────
-
-  /** Create a new route: always creates a room */
-  const handleCreateNewRoute = useCallback(async () => {
-    if (!currentUser) return;
-
-    try {
-      const res = await fetch('/api/sessions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ownerId: currentUser.id, expiresInDays: 30 }),
-      });
-      if (!res.ok) throw new Error('방 생성 실패');
-      const data = await res.json();
-
-      setSessionMode('builder');
-      setSessionId(data.room.id);
-      setInviteCode(data.inviteCode);
-      setNickname(currentUser.nickname);
-      setMembers([{
-        id: currentUser.id,
-        roomId: data.room.id,
-        userId: currentUser.id,
-        joinedAt: new Date().toISOString(),
-        isOwner: true,
-        nickname: currentUser.nickname,
-      }]);
-      setIsOwner(true);
-      setCoursePlaces([]);
-      setDirections(null);
-      setRoutePath(null);
-      setIsRouteCreated(false);
-      setCourseName('');
-      setCourseDescription('');
-      setSchedule(null);
-    } catch (err) {
-      console.error(err);
-      showToastMsg('경로 생성에 실패했습니다.');
-    }
-  }, [currentUser, showToastMsg]);
-
-  /** Update live course name */
-  const handleUpdateCourseName = useCallback(async (displayName: string, description: string) => {
-    if (!sessionId) return;
-    try {
-      const res = await fetch(`/api/sessions/${sessionId}/name`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ displayName, description }),
-      });
-      if (res.ok) {
-        setCourseName(displayName);
-        setCourseDescription(description);
-        showToastMsg('경로 이름이 저장되었습니다.');
-      }
-    } catch (err) {
-      console.error(err);
-      showToastMsg('경로 이름 저장 중 오류가 발생했습니다.');
-    }
-  }, [sessionId, showToastMsg]);
-
-  /** Load an existing course from the dashboard */
-  const handleLoadCourseFromDashboard = useCallback(async (course: Course) => {
-    if (!currentUser) return;
-
-    // If the course has a roomId, reconnect to that room
-    if (course.roomId) {
-      try {
-        const res = await fetch(`/api/sessions/${course.roomId}?userId=${currentUser.id}`);
-        if (res.ok) {
-          const data = await res.json();
-
-          setSessionMode('builder');
-          setSessionId(course.roomId);
-          setInviteCode(data.room?.inviteCode || data.room?.invite_code || null);
-          setNickname(currentUser.nickname);
-          setMembers(data.room?.members || []);
-          setIsOwner(data.room?.ownerId === currentUser.id);
-
-          if (data.courseDetails) {
-            setCourseName(data.courseDetails.displayName || '');
-            setCourseDescription(data.courseDetails.description || '');
-            // Load schedule from DB (cross-device sync)
-            setSchedule(data.courseDetails.schedule ?? null);
-          }
-
-          // Use live places from the room (latest state)
-          if (data.coursePlaces && data.coursePlaces.length > 0) {
-            setCoursePlaces(data.coursePlaces);
-          } else {
-            setCoursePlaces(course.places);
-          }
-
-          setDirections(null);
-          setRoutePath(null);
-          setIsRouteCreated(false);
-          return;
-        }
-      } catch { /* room may have expired, fall through */ }
-    }
-
-    // Fallback: just load the places without a room (legacy/expired room)
-    // Create a new room for this course
-    try {
-      const res = await fetch('/api/sessions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ownerId: currentUser.id, expiresInDays: 30 }),
-      });
-      if (!res.ok) throw new Error('방 생성 실패');
-      const data = await res.json();
-
-      setSessionMode('builder');
-      setSessionId(data.room.id);
-      setInviteCode(data.inviteCode);
-      setNickname(currentUser.nickname);
-      setMembers([{
-        id: currentUser.id,
-        roomId: data.room.id,
-        userId: currentUser.id,
-        joinedAt: new Date().toISOString(),
-        isOwner: true,
-        nickname: currentUser.nickname,
-      }]);
-      setIsOwner(true);
-      setCoursePlaces(course.places);
-
-      // Sync places to the new room's live course
-      if (course.places.length > 0) {
-        skipNextSSERef.current = true;
-        await fetch(`/api/sessions/${data.room.id}/places`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'set', places: course.places, userId: currentUser.id }),
-        });
-      }
-
-      setDirections(null);
-      setRoutePath(null);
-      setIsRouteCreated(false);
-    } catch (err) {
-      console.error(err);
-      showToastMsg('경로 불러오기에 실패했습니다.');
-    }
-  }, [currentUser, showToastMsg]);
-
-  /** Join a room by invite code */
-  const handleJoinByInviteCode = useCallback(async (code: string) => {
-    if (!currentUser) return;
-
-    const res = await fetch('/api/sessions/join', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ inviteCode: code, userId: currentUser.id }),
-    });
-    if (!res.ok) {
-      const err = await res.json();
-      showToastMsg(err.error || '유효하지 않은 초대코드입니다.');
-      throw new Error(err.error || '세션 참여 실패');
-    }
-    const data = await res.json();
-
-    setSessionMode('builder');
-    setSessionId(data.room.id);
-    setInviteCode(data.room.inviteCode);
-    setNickname(currentUser.nickname);
-    setMembers(data.room.members || []);
-    setIsOwner(false);
-    setPendingInviteCode(null);
-
-    // Load live places from room
-    try {
-      const placesRes = await fetch(`/api/sessions/${data.room.id}?userId=${currentUser.id}`);
-      if (placesRes.ok) {
-        const placesData = await placesRes.json();
-        
-        if (placesData.courseDetails) {
-          setCourseName(placesData.courseDetails.displayName || '');
-          setCourseDescription(placesData.courseDetails.description || '');
-          // Load schedule from DB (cross-device sync)
-          setSchedule(placesData.courseDetails.schedule ?? null);
-        }
-
-        if (placesData.coursePlaces?.length > 0) {
-          setCoursePlaces(placesData.coursePlaces);
-          setActiveTab('route');
-        }
-      }
-    } catch { /* ignore */ }
-
-    showToastMsg('🎉 경로에 참여했습니다!');
-  }, [currentUser, showToastMsg]);
-
-  /** Create invite code for current room (already created with room, just display it) */
-  const handleCreateInviteCode = useCallback(() => {
-    // The invite code was already created when the room was created
-    // Just show it
-    if (inviteCode) {
-      showToastMsg(`초대코드: ${inviteCode}`);
-    }
-  }, [inviteCode, showToastMsg]);
-
-  const handleLogout = useCallback(() => {
-    setCurrentUser(null);
-    localStorage.removeItem('datingroute_user');
-    handleGoToDashboard();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // Save schedule to DB (cross-device sync) instead of localStorage
-  useEffect(() => {
-    if (schedule !== undefined && sessionId) {
-      fetch(`/api/sessions/${sessionId}/schedule`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ schedule }),
-      }).catch(() => {/* ignore */});
-    }
-  }, [schedule, sessionId]);
-
-  const handleGoToDashboard = useCallback(() => {
-    setSessionMode(null);
-    setSessionId(null);
-    setInviteCode(null);
-    setNickname('');
-    setMembers([]);
-    setIsOwner(false);
-    setCoursePlaces([]);
-    clearDirections();
-    setIsRouteCreated(false);
-    setSchedule(null);
-  }, [clearDirections]);
 
   const handleClearRoute = useCallback(() => {
     clearDirections();
     setSchedule(null);
-  }, [clearDirections]);
-
-  const handleSessionInvalidatedLogout = useCallback(() => {
-    setSessionInvalidated(false);
-    setCurrentUser(null);
-    localStorage.removeItem('datingroute_user');
-    handleGoToDashboard();
-  }, [handleGoToDashboard]);
+  }, [clearDirections, setSchedule]);
 
   // ──── Directions ────
 
