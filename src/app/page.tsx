@@ -26,7 +26,7 @@ import {
   encodeCourseToUrl,
   decodeCourseFromUrl,
 } from '@/lib/courseStorage';
-import { katechToWgs84, getStraightLineDistance, stripHtml } from '@/lib/utils';
+import { katechToWgs84, getStraightLineDistance, calculateFallbackDirections, stripHtml } from '@/lib/utils';
 import { useSessionSync } from '@/lib/useSessionSync';
 
 export default function HomePage() {
@@ -130,11 +130,22 @@ export default function HomePage() {
     } catch { /* ignore network errors */ }
   }, [currentUser?.id, currentUser?.sessionToken]);
 
-  // Periodically validate session token (every 30 seconds)
+  // Validate session on window focus and periodically (every 5 minutes)
   useEffect(() => {
     if (!currentUser?.sessionToken) return;
-    const interval = setInterval(validateSession, 30000);
-    return () => clearInterval(interval);
+    
+    const handleFocus = () => validateSession();
+    window.addEventListener('focus', handleFocus);
+    window.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') validateSession();
+    });
+
+    const interval = setInterval(validateSession, 5 * 60 * 1000); // 5 minutes
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+      window.removeEventListener('visibilitychange', handleFocus);
+      clearInterval(interval);
+    };
   }, [validateSession, currentUser?.sessionToken]);
 
   // Detect invite parameter and restore session on mount
@@ -535,22 +546,12 @@ export default function HomePage() {
         newRoutePath[day] = data._fullPath;
       } catch {
         // Fallback: straight-line distance
-        let dayDist = 0;
-        const dPath: Array<[number, number]> = [];
-        const coords = dPlaces.map((p) => {
-          const { lng, lat } = katechToWgs84(p.mapx, p.mapy);
-          dPath.push([lng, lat]);
-          return { lng, lat };
-        });
-
-        for (let i = 0; i < coords.length - 1; i++) {
-          const dist = getStraightLineDistance(coords[i].lat, coords[i].lng, coords[i + 1].lat, coords[i + 1].lng);
-          dayDist += dist;
-          allLegs.push({ index: globalLegIndex++, distance: dist, duration: (dist / 40000) * 3600000, name: '', fromId: dPlaces[i].id, toId: dPlaces[i+1].id });
-        }
-        totalDist += dayDist;
-        totalDur += (dayDist / 40000) * 3600000;
-        newRoutePath[day] = dPath;
+        const fallback = calculateFallbackDirections(dPlaces, globalLegIndex);
+        totalDist += fallback.dayDist;
+        totalDur += fallback.dayDur;
+        allLegs.push(...fallback.newLegs);
+        newRoutePath[day] = fallback.dPath;
+        globalLegIndex = fallback.nextLegIndex;
       }
     }
 

@@ -102,47 +102,14 @@ export function parseCategoryToFacility(category: string): import('@/lib/types')
   if (!category) return 'other';
   const c = category.toLowerCase();
 
-  // Cafe
-  if (c.includes('카페') || c.includes('커피') || c.includes('디저트') || c.includes('베이커리') || c.includes('제과')) {
-    return 'cafe';
-  }
-  // Bar
-  if (c.includes('바') || c.includes('펍') || c.includes('주점') || c.includes('술집') || c.includes('와인') || c.includes('이자카야') || c.includes('호프')) {
-    return 'bar';
-  }
-  // Restaurant
-  if (c.includes('음식') || c.includes('식당') || c.includes('한식') || c.includes('중식') || c.includes('일식') || c.includes('양식') ||
-      c.includes('분식') || c.includes('치킨') || c.includes('피자') || c.includes('패스트') || c.includes('뷔페') || c.includes('맛집') ||
-      c.includes('고기') || c.includes('해물') || c.includes('국밥') || c.includes('라멘') || c.includes('파스타') || c.includes('레스토랑') ||
-      c.includes('갈비') || c.includes('삼겹') || c.includes('초밥') || c.includes('스시') || c.includes('브런치')) {
-    return 'restaurant';
-  }
-  // Culture
-  if (c.includes('미술') || c.includes('박물관') || c.includes('갤러리') || c.includes('전시') || c.includes('공연') || c.includes('극장') ||
-      c.includes('영화') || c.includes('문화') || c.includes('도서관') || c.includes('역사') || c.includes('기념관') || c.includes('시네마') ||
-      c.includes('cgv') || c.includes('롯데시네마') || c.includes('메가박스')) {
-    return 'culture';
-  }
-  // Park
-  if (c.includes('공원') || c.includes('산책') || c.includes('정원') || c.includes('수목원') || c.includes('산') || c.includes('해변') ||
-      c.includes('호수') || c.includes('강') || c.includes('자연') || c.includes('유원지') || c.includes('테마파크') || c.includes('놀이공원')) {
-    return 'park';
-  }
-  // Shopping
-  if (c.includes('쇼핑') || c.includes('마트') || c.includes('백화점') || c.includes('시장') || c.includes('아울렛') || c.includes('편의점') ||
-      c.includes('의류') || c.includes('잡화') || c.includes('뷰티') || c.includes('화장품')) {
-    return 'shopping';
-  }
-  // Entertainment
-  if (c.includes('오락') || c.includes('볼링') || c.includes('노래') || c.includes('방탈출') || c.includes('스포츠') || c.includes('게임') ||
-      c.includes('pc방') || c.includes('찜질') || c.includes('사우나') || c.includes('스파') || c.includes('요가') || c.includes('헬스') ||
-      c.includes('클라이밍') || c.includes('레저')) {
-    return 'entertainment';
-  }
-  // Accommodation
-  if (c.includes('호텔') || c.includes('모텔') || c.includes('숙박') || c.includes('펜션') || c.includes('리조트') || c.includes('게스트')) {
-    return 'accommodation';
-  }
+  if (/(카페|커피|디저트|베이커리|제과)/.test(c)) return 'cafe';
+  if (/(바|펍|주점|술집|와인|이자카야|호프)/.test(c)) return 'bar';
+  if (/(음식|식당|한식|중식|일식|양식|분식|치킨|피자|패스트|뷔페|맛집|고기|해물|국밥|라멘|파스타|레스토랑|갈비|삼겹|초밥|스시|브런치)/.test(c)) return 'restaurant';
+  if (/(미술|박물관|갤러리|전시|공연|극장|영화|문화|도서관|역사|기념관|시네마|cgv|롯데시네마|메가박스)/.test(c)) return 'culture';
+  if (/(공원|산책|정원|수목원|산|해변|호수|강|자연|유원지|테마파크|놀이공원)/.test(c)) return 'park';
+  if (/(쇼핑|마트|백화점|시장|아울렛|편의점|의류|잡화|뷰티|화장품)/.test(c)) return 'shopping';
+  if (/(오락|볼링|노래|방탈출|스포츠|게임|pc방|찜질|사우나|스파|요가|헬스|클라이밍|레저)/.test(c)) return 'entertainment';
+  if (/(호텔|모텔|숙박|펜션|리조트|게스트)/.test(c)) return 'accommodation';
 
   return 'other';
 }
@@ -323,7 +290,11 @@ export function autoDistributePlaces(places: CoursePlace[], dayCount: number): C
   const resultPlaces: CoursePlace[] = [];
   for (let d = 1; d <= dayCount; d++) {
     const currentDayAssigned = assigned.filter(p => p.day === d);
-    const currentDayDistributed = storage.filter(p => assignments[p.id] === d).map(p => ({ ...p, day: d }));
+    const currentDayDistributed = storage.filter(p => assignments[p.id] === d).map(p => ({ 
+      ...p, 
+      day: d, 
+      id: Math.random().toString(36).substring(2, 9) 
+    }));
     
     let combined = [...currentDayAssigned, ...currentDayDistributed];
     if (combined.length > 2) {
@@ -333,8 +304,40 @@ export function autoDistributePlaces(places: CoursePlace[], dayCount: number): C
   }
 
   // Add back any unassigned places (should not happen, but just in case) and ignored places
-  const allResultIds = new Set(resultPlaces.map(p => p.id));
-  const leftovers = storage.filter(p => !allResultIds.has(p.id));
-  
-  return [...resultPlaces, ...leftovers, ...ignoredStorage].map((p, i) => ({ ...p, order: i }));
+  // Keep all original storage items (they retain day 0)
+  return [...resultPlaces, ...storage, ...ignoredStorage].map((p, i) => ({ ...p, order: i }));
+}
+
+export function calculateFallbackDirections(dPlaces: CoursePlace[], startGlobalLegIndex: number) {
+  let dayDist = 0;
+  const dPath: Array<[number, number]> = [];
+  const newLegs: any[] = [];
+  let legIndex = startGlobalLegIndex;
+
+  const coords = dPlaces.map((p) => {
+    const { lng, lat } = katechToWgs84(p.mapx, p.mapy);
+    dPath.push([lng, lat]);
+    return { lng, lat };
+  });
+
+  for (let i = 0; i < coords.length - 1; i++) {
+    const dist = getStraightLineDistance(coords[i].lat, coords[i].lng, coords[i + 1].lat, coords[i + 1].lng);
+    dayDist += dist;
+    newLegs.push({
+      index: legIndex++,
+      distance: dist,
+      duration: (dist / 40000) * 3600000,
+      name: '',
+      fromId: dPlaces[i].id,
+      toId: dPlaces[i + 1].id,
+    });
+  }
+
+  return {
+    dayDist,
+    dayDur: (dayDist / 40000) * 3600000,
+    dPath,
+    newLegs,
+    nextLegIndex: legIndex,
+  };
 }

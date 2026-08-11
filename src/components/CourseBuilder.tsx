@@ -160,7 +160,14 @@ export default function CourseBuilder({
     }
     if (activeDayTab === 0) {
       // Storage tab only shows day 0 master copies.
-      return places.filter(p => (p.day ?? 0) === 0);
+      const storagePlaces = places.filter(p => (p.day ?? 0) === 0);
+      return storagePlaces.sort((a, b) => {
+        const aAssigned = places.some(p => (p.day ?? 0) > 0 && stripHtml(p.title) === stripHtml(a.title));
+        const bAssigned = places.some(p => (p.day ?? 0) > 0 && stripHtml(p.title) === stripHtml(b.title));
+        if (aAssigned && !bAssigned) return 1;
+        if (!aAssigned && bAssigned) return -1;
+        return 0;
+      });
     }
     return places.filter(p => (p.day ?? 0) === activeDayTab);
   }, [places, activeDayTab]);
@@ -531,6 +538,11 @@ export default function CourseBuilder({
               const facilityIcon = FACILITY_ICONS[facility];
               const facilityLabel = FACILITY_LABELS[facility];
               const placeDay = place.day ?? 1;
+              
+              const assignedDays = activeDayTab === 0 
+                ? Array.from(new Set(places.filter(p => (p.day ?? 0) > 0 && stripHtml(p.title) === stripHtml(place.title)).map(p => p.day)))
+                : [];
+              const isAssigned = assignedDays.length > 0;
 
               // Get leg info for the segment AFTER this place (using global index)
               const legs = directions?.legs || [];
@@ -601,7 +613,7 @@ export default function CourseBuilder({
                       border: '1px solid rgba(244,114,182,0.1)',
                       borderRadius: '12px', padding: '16px', display: 'flex', gap: '12px', alignItems: 'center',
                       cursor: (isRouteCreated || isSelectMode || (activeDayTab === 0 && placeDay !== 0)) ? 'pointer' : 'grab',
-                      opacity: (place.isHold || (activeDayTab === 0 && placeDay !== 0)) ? 0.6 : 1,
+                      opacity: (place.isHold || (activeDayTab === 0 && placeDay !== 0) || (activeDayTab === 0 && isAssigned)) ? 0.5 : 1,
                     }}
                   >
                     {isSelectMode && place.day === 0 && (
@@ -636,6 +648,11 @@ export default function CourseBuilder({
                             {activeDayTab === 0 && placeDay !== 0 && (
                               <span style={{ marginLeft: '6px', fontSize: '11px', background: 'rgba(192, 132, 252, 0.2)', color: '#c084fc', padding: '2px 6px', borderRadius: '4px' }}>
                                 Day {placeDay}에 추가됨
+                              </span>
+                            )}
+                            {activeDayTab === 0 && isAssigned && (
+                              <span style={{ marginLeft: '6px', fontSize: '11px', background: 'rgba(74, 222, 128, 0.2)', color: '#4ade80', border: '1px solid rgba(74, 222, 128, 0.4)', padding: '2px 6px', borderRadius: '4px' }}>
+                                Day {assignedDays.join(', ')} 포함됨
                               </span>
                             )}
                           </div>
