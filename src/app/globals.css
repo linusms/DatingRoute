@@ -372,7 +372,7 @@ body {
   display: flex;
   flex-direction: column;
   height: 100vh;
-  width: 100vw;
+  width: 100%;
   overflow: hidden;
 }
 
@@ -1283,7 +1283,7 @@ body {
 /* ===== Responsive ===== */
 @media (max-width: 768px) {
   :root {
-    --sidebar-width: 100vw;
+    --sidebar-width: 100%;
     --header-height: 44px;
   }
 
@@ -2946,7 +2946,7 @@ body {
   display: flex;
   flex-direction: column;
   height: 100vh;
-  width: 100vw;
+  width: 100%;
   background: var(--color-bg-primary);
   overflow: hidden;
 }

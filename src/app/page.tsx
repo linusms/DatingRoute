@@ -343,8 +343,8 @@ export default function HomePage() {
     return (
       <div style={{
         display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-        height: '100dvh', width: '100vw', background: 'var(--color-bg-primary)',
-        position: 'fixed', top: 0, left: 0, zIndex: 9999, padding: '24px'
+        height: '100dvh', width: '100%', background: 'var(--color-bg-primary)',
+        position: 'fixed', top: 0, left: 0, zIndex: 9999, padding: '24px', boxSizing: 'border-box'
       }}>
         <div style={{
           background: 'var(--color-bg-card)', padding: '32px', borderRadius: '12px',

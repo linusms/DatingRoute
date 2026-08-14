@@ -838,14 +838,19 @@ export default function CourseBuilder({
                           }
                         }}
                         style={{
-                          background: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', border: 'none',
-                          width: '32px', height: '32px', borderRadius: '8px', cursor: 'pointer',
-                          display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '16px',
-                          flexShrink: 0,
+                          background: 'rgba(255, 255, 255, 0.05)', color: 'var(--color-text-tertiary)', border: 'none',
+                          width: '30px', height: '30px', borderRadius: '8px', cursor: 'pointer',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          flexShrink: 0, transition: 'background 0.2s, color 0.2s'
                         }}
+                        onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)'; e.currentTarget.style.color = '#ef4444'; }}
+                        onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)'; e.currentTarget.style.color = 'var(--color-text-tertiary)'; }}
                         title={placeDay !== 0 ? "보관함으로 되돌리기" : "완전 삭제"}
                       >
-                        {placeDay !== 0 ? '⬇️' : '✕'}
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                          <line x1="18" y1="6" x2="6" y2="18"></line>
+                          <line x1="6" y1="6" x2="18" y2="18"></line>
+                        </svg>
                       </button>
                     )}
                   </div>

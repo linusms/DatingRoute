@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import Script from 'next/script';
 
@@ -7,6 +7,14 @@ export const metadata: Metadata = {
   description:
     '나만의 데이트 코스를 계획하고 경로를 확인하세요. 장소 검색, 코스 생성, 경로 안내, YouTube/블로그 후기까지 한 곳에서.',
   keywords: ['데이트', '코스', '플래너', '맛집', '카페', '서울', '데이트코스'],
+};
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+  viewportFit: 'cover',
 };
 
 export default function RootLayout({
