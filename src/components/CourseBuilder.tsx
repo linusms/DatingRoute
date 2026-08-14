@@ -85,6 +85,14 @@ export default function CourseBuilder({
   // Select mode state for storage
   const [isSelectMode, setIsSelectMode] = useState(false);
   const [selectedPlaceIds, setSelectedPlaceIds] = useState<Set<string>>(new Set());
+  const [showOverflowMenu, setShowOverflowMenu] = useState(false);
+
+  const overflowMenuItemStyle: React.CSSProperties = {
+    padding: '8px 12px', borderRadius: '8px', border: 'none',
+    background: 'transparent', color: '#e2e8f0', cursor: 'pointer',
+    fontSize: '13px', fontWeight: 500, textAlign: 'left',
+    transition: 'background 0.15s', width: '100%',
+  };
 
   // Multi-day: calculate number of days from schedule
   const dayCount = useMemo(() => {
@@ -303,7 +311,7 @@ export default function CourseBuilder({
   }, [places, directions, isRouteCreated]);
 
   return (
-    <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+    <div style={{ padding: '12px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
 
 
 
@@ -330,58 +338,64 @@ export default function CourseBuilder({
             />
           </div>
 
-          <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
+          <div style={{ display: 'flex', gap: '6px', marginBottom: '12px', alignItems: 'center' }}>
             <button
               className="btn btn-primary animate-slide-up"
-              style={{ flex: 1, padding: '16px', fontSize: '16px' }}
+              style={{ flex: 1, padding: '10px', fontSize: '14px' }}
               onClick={onCreateRoute}
               disabled={places.length < 2 && !isRouteCreated}
             >
-              {isRouteCreated ? '🔄 경로 다시 생성' : '✨ 경로 생성'}
+              {isRouteCreated ? '🔄 다시 생성' : '✨ 경로 생성'}
             </button>
-            {activeDayTab !== 'all' && activeDayTab !== 0 && filteredPlaces.length > 2 && (
-              <button
-                className="btn animate-slide-up"
-                style={{
-                  flex: '0 0 auto', padding: '16px 20px', fontSize: '14px',
-                  background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(244,114,182,0.4)',
-                  color: '#f472b6', fontWeight: 600, cursor: 'pointer', borderRadius: '12px',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center'
-                }}
-                onClick={handleOptimizeRoute}
-              >
-                🪄 동선 최적화
-              </button>
-            )}
-            {(activeDayTab === 'all' || activeDayTab === 0) && isMultiDay && places.some(p => (p.day ?? 0) === 0) && (
-              <button
-                className="btn animate-slide-up"
-                style={{
-                  flex: '0 0 auto', padding: '16px 20px', fontSize: '14px',
-                  background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(192,132,252,0.4)',
-                  color: '#c084fc', fontWeight: 600, cursor: 'pointer', borderRadius: '12px',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center'
-                }}
-                onClick={handleAutoDistribute}
-              >
-                🤖 자동 분배
-              </button>
-            )}
-            {activeDayTab !== 0 && filteredPlaces.length > 0 && (
-              <button
-                className="btn animate-slide-up"
-                style={{
-                  flex: '0 0 auto', padding: '16px 20px', fontSize: '14px',
-                  background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.4)',
-                  color: '#ef4444', fontWeight: 600, cursor: 'pointer', borderRadius: '12px',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center'
-                }}
-                onClick={handleResetRoute}
-                title="이 탭의 장소를 보관함으로 되돌립니다"
-              >
-                🗑️ 경로 초기화
-              </button>
-            )}
+            {/* Overflow menu for secondary actions */}
+            {(() => {
+              const hasOptimize = activeDayTab !== 'all' && activeDayTab !== 0 && filteredPlaces.length > 2;
+              const hasDistribute = (activeDayTab === 'all' || activeDayTab === 0) && isMultiDay && places.some(p => (p.day ?? 0) === 0);
+              const hasReset = activeDayTab !== 0 && filteredPlaces.length > 0;
+              if (!hasOptimize && !hasDistribute && !hasReset) return null;
+              return (
+                <div style={{ position: 'relative' }}>
+                  <button
+                    onClick={() => setShowOverflowMenu(prev => !prev)}
+                    style={{
+                      padding: '10px 12px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.15)',
+                      background: 'rgba(255,255,255,0.05)', color: '#b4a9c9', cursor: 'pointer',
+                      fontSize: '16px', lineHeight: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    }}
+                    title="추가 기능"
+                  >
+                    ⋯
+                  </button>
+                  {showOverflowMenu && (
+                    <div style={{
+                      position: 'absolute', top: '40px', right: 0, zIndex: 100,
+                      background: '#251e30', border: '1px solid rgba(255,255,255,0.12)',
+                      borderRadius: '12px', padding: '6px', minWidth: '150px',
+                      boxShadow: '0 8px 24px rgba(0,0,0,0.5)', display: 'flex', flexDirection: 'column', gap: '2px',
+                    }}>
+                      {hasOptimize && (
+                        <button onClick={() => { handleOptimizeRoute(); setShowOverflowMenu(false); }}
+                          style={overflowMenuItemStyle}>
+                          🪄 동선 최적화
+                        </button>
+                      )}
+                      {hasDistribute && (
+                        <button onClick={() => { handleAutoDistribute(); setShowOverflowMenu(false); }}
+                          style={overflowMenuItemStyle}>
+                          🤖 자동 분배
+                        </button>
+                      )}
+                      {hasReset && (
+                        <button onClick={() => { handleResetRoute(); setShowOverflowMenu(false); }}
+                          style={{ ...overflowMenuItemStyle, color: '#f87171' }}>
+                          🗑️ 경로 초기화
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
           </div>
 
           {/* Day Tabs */}
@@ -611,7 +625,7 @@ export default function CourseBuilder({
                     style={{
                       background: (activeDayTab === 0 && placeDay !== 0) ? 'rgba(255,255,255,0.01)' : 'rgba(255,255,255,0.03)',
                       border: '1px solid rgba(244,114,182,0.1)',
-                      borderRadius: '12px', padding: '16px', display: 'flex', gap: '12px', alignItems: 'center',
+                      borderRadius: '10px', padding: '10px', display: 'flex', gap: '10px', alignItems: 'center',
                       cursor: (isRouteCreated || isSelectMode || (activeDayTab === 0 && placeDay !== 0)) ? 'pointer' : 'grab',
                       opacity: (place.isHold || (activeDayTab === 0 && placeDay !== 0) || (activeDayTab === 0 && isAssigned)) ? 0.5 : 1,
                     }}

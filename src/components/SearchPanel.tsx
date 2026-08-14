@@ -21,6 +21,7 @@ export default function SearchPanel({
   const [results, setResults] = useState<Place[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showFilterSection, setShowFilterSection] = useState(false);
 
   const [selectedPlaceId, setSelectedPlaceId] = useState<string>('all');
   const [radiusKm, setRadiusKm] = useState<number>(5);
@@ -82,70 +83,87 @@ export default function SearchPanel({
     }
   };
 
+  const selectedCenter = uniqueCoursePlaces.find(p => p.id === selectedPlaceId);
+
   return (
     <div className="search-panel">
-      {/* ── 기준 장소 선택 ── */}
-      <div style={{
-        background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(244,114,182,0.15)',
-        borderRadius: '12px', padding: '14px', marginBottom: '12px',
-      }}>
-        <div style={{ fontSize: '12px', color: '#8b7fa8', marginBottom: '8px', fontWeight: 600, letterSpacing: '0.5px' }}>
-          📍 기준 장소 선택
-        </div>
-        <select
-          value={selectedPlaceId}
-          onChange={e => setSelectedPlaceId(e.target.value)}
-          style={{
-            width: '100%', padding: '8px 10px', borderRadius: '8px',
-            background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(244,114,182,0.2)',
-            color: '#f5f0ff', fontSize: '13px', cursor: 'pointer', outline: 'none',
-            marginBottom: uniqueCoursePlaces.length > 0 ? '10px' : '0',
-          }}
-        >
-          <option value="all" style={{ background: '#1a1520' }}>🌏 지역 전체 검색</option>
-          {uniqueCoursePlaces.map(p => (
-            <option key={p.id} value={p.id} style={{ background: '#1a1520' }}>
-              📍 {stripHtml(p.title)}
-            </option>
-          ))}
-        </select>
-
-        {selectedPlaceId !== 'all' && (
-          <div>
-            <div style={{ fontSize: '12px', color: '#8b7fa8', marginBottom: '6px' }}>
-              반경: <strong style={{ color: '#f472b6' }}>{radiusKm}km</strong>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <span style={{ fontSize: '11px', color: '#6b5f85' }}>1km</span>
-              <input
-                type="range"
-                min={1}
-                max={20}
-                step={1}
-                value={radiusKm}
-                onChange={e => setRadiusKm(Number(e.target.value))}
-                style={{
-                  flex: 1, accentColor: '#f472b6', cursor: 'pointer',
-                }}
-              />
-              <span style={{ fontSize: '11px', color: '#6b5f85' }}>20km</span>
-            </div>
-          </div>
-        )}
-      </div>
-
+      {/* Search box */}
       <div className="search-box">
         <input
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={onKeyDown}
-          placeholder="장소를 검색하세요 (예: 홍대 카페, 가로수길 맛집)"
+          placeholder="장소 검색 (예: 홍대 카페, 이태원 맛집)"
           className="input"
         />
         <div className="search-icon" onClick={() => handleSearch(query)} style={{ cursor: 'pointer' }}>
           🔍
         </div>
+      </div>
+
+      {/* Filter toggle — accordion */}
+      <div style={{ marginBottom: '8px' }}>
+        <button
+          onClick={() => setShowFilterSection(v => !v)}
+          style={{
+            width: '100%', padding: '7px 12px', borderRadius: '8px',
+            background: showFilterSection ? 'rgba(244,114,182,0.08)' : 'rgba(255,255,255,0.03)',
+            border: '1px solid rgba(244,114,182,0.15)',
+            color: selectedPlaceId !== 'all' ? '#f472b6' : '#8b7fa8',
+            fontSize: '12px', fontWeight: 600, cursor: 'pointer',
+            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+          }}
+        >
+          <span>
+            📍 {selectedPlaceId !== 'all' && selectedCenter
+              ? `${stripHtml(selectedCenter.title)} 반경 ${radiusKm}km`
+              : '기준 장소 필터 (선택)'}
+          </span>
+          <span style={{ fontSize: '10px' }}>{showFilterSection ? '▲' : '▼'}</span>
+        </button>
+
+        {showFilterSection && (
+          <div style={{
+            background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(244,114,182,0.12)',
+            borderTop: 'none', borderRadius: '0 0 8px 8px', padding: '10px',
+          }}>
+            <select
+              value={selectedPlaceId}
+              onChange={e => setSelectedPlaceId(e.target.value)}
+              style={{
+                width: '100%', padding: '7px 10px', borderRadius: '7px',
+                background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(244,114,182,0.2)',
+                color: '#f5f0ff', fontSize: '13px', cursor: 'pointer', outline: 'none',
+                marginBottom: '8px',
+              }}
+            >
+              <option value="all" style={{ background: '#1a1520' }}>🌏 전체 지역 검색</option>
+              {uniqueCoursePlaces.map(p => (
+                <option key={p.id} value={p.id} style={{ background: '#1a1520' }}>
+                  📍 {stripHtml(p.title)}
+                </option>
+              ))}
+            </select>
+
+            {selectedPlaceId !== 'all' && (
+              <div>
+                <div style={{ fontSize: '11px', color: '#8b7fa8', marginBottom: '4px' }}>
+                  반경: <strong style={{ color: '#f472b6' }}>{radiusKm}km</strong>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ fontSize: '10px', color: '#6b5f85' }}>1</span>
+                  <input
+                    type="range" min={1} max={20} step={1} value={radiusKm}
+                    onChange={e => setRadiusKm(Number(e.target.value))}
+                    style={{ flex: 1, accentColor: '#f472b6', cursor: 'pointer' }}
+                  />
+                  <span style={{ fontSize: '10px', color: '#6b5f85' }}>20km</span>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="search-results custom-scrollbar">
@@ -175,21 +193,23 @@ export default function SearchPanel({
                 <h3 className="place-card-title">{stripHtml(place.title)}</h3>
                 <span className="place-card-category">{place.category}</span>
               </div>
-              <div className="place-card-address">
+              <div className="place-card-address" style={{ marginBottom: '8px', WebkitLineClamp: 1 } as any}>
                 {place.roadAddress || place.address}
               </div>
               <div className="place-card-actions">
                 <button
                   className="btn btn-ghost"
+                  style={{ fontSize: '12px', padding: '4px 8px' }}
                   onClick={() => onShowReview(stripHtml(place.title))}
                 >
-                  📝 리뷰/후기
+                  후기
                 </button>
                 <button
                   className="btn btn-primary"
+                  style={{ fontSize: '12px', padding: '4px 10px' }}
                   onClick={() => onAddPlace(place)}
                 >
-                  + 경로 추가
+                  + 추가
                 </button>
               </div>
             </div>

@@ -9,7 +9,6 @@ import NaverMap from '@/components/NaverMap';
 import ReviewPanel from '@/components/ReviewPanel';
 import CourseManager from '@/components/CourseManager';
 import DashboardScreen from '@/components/DashboardScreen';
-import SessionBar from '@/components/SessionBar';
 import AuthScreen from '@/components/AuthScreen';
 import {
   User,
@@ -368,7 +367,8 @@ export default function HomePage() {
   if (!currentUser) {
     return <AuthScreen onLogin={(u) => {
       setCurrentUser(u);
-      localStorage.setItem('datingroute_user', JSON.stringify(u));
+      sessionStorage.setItem('datingroute_user', JSON.stringify(u));
+      localStorage.removeItem('datingroute_user');
     }} />;
   }
 
@@ -394,10 +394,6 @@ export default function HomePage() {
         courseCount={coursePlaces.filter(p => (p.day || 0) > 0).length || coursePlaces.length}
         currentUser={currentUser}
         onLogout={handleLogout}
-      />
-
-      {/* Session Bar */}
-      <SessionBar
         inviteCode={inviteCode}
         nickname={nickname}
         members={members}
@@ -406,7 +402,6 @@ export default function HomePage() {
         onUpdateCourseName={(name) => handleUpdateCourseName(name, courseDescription)}
         onCopyInviteCode={handleCopyInviteCode}
         onCopyInviteLink={handleCopyInviteLink}
-        onDisconnect={handleGoToDashboard}
       />
 
       <div className="app-main" ref={appMainRef}>

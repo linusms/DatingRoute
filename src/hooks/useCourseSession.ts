@@ -92,12 +92,22 @@ export function useCourseSession({ setActiveTab, showToastMsg, clearDirections, 
         }
       }
 
-      try {
-        const userRaw = localStorage.getItem('datingroute_user');
+      let userRaw = sessionStorage.getItem('datingroute_user');
+      
+      // Migration from localStorage to sessionStorage
+      if (!userRaw) {
+        userRaw = localStorage.getItem('datingroute_user');
         if (userRaw) {
-          setCurrentUser(JSON.parse(userRaw));
+          sessionStorage.setItem('datingroute_user', userRaw);
+          localStorage.removeItem('datingroute_user');
         }
-      } catch { /* ignore */ }
+      }
+
+      if (userRaw) {
+        try {
+          setCurrentUser(JSON.parse(userRaw));
+        } catch { /* ignore */ }
+      }
     }
     setIsInitializing(false);
   }, [setActiveTab, showToastMsg]);
@@ -361,9 +371,12 @@ export function useCourseSession({ setActiveTab, showToastMsg, clearDirections, 
 
   const handleLogout = useCallback(() => {
     setCurrentUser(null);
-    localStorage.removeItem('datingroute_user');
+    sessionStorage.removeItem('datingroute_user');
+    localStorage.removeItem('datingroute_user'); // Just in case
     handleGoToDashboard();
   }, [handleGoToDashboard]);
+
+
 
   useEffect(() => {
     if (schedule !== undefined && sessionId) {
@@ -378,6 +391,7 @@ export function useCourseSession({ setActiveTab, showToastMsg, clearDirections, 
   const handleSessionInvalidatedLogout = useCallback(() => {
     setSessionInvalidated(false);
     setCurrentUser(null);
+    sessionStorage.removeItem('datingroute_user');
     localStorage.removeItem('datingroute_user');
     handleGoToDashboard();
   }, [handleGoToDashboard]);

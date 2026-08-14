@@ -80,8 +80,10 @@ export default function AIRecommendPanel({
   const [showPopup, setShowPopup] = useState(false);
   const [showCategory, setShowCategory] = useState(true);
 
-  // Sorting
   const [sortOrder, setSortOrder] = useState<'default' | 'mention-desc' | 'mention-asc'>('default');
+
+  // Condition panel accordion state
+  const [showConditionPanel, setShowConditionPanel] = useState(true);
 
   // Resize state
   const panelRef = useRef<HTMLDivElement>(null);
@@ -183,6 +185,7 @@ export default function AIRecommendPanel({
     setRecommendations([]);
     setEvents([]);
     setSummary('');
+    setShowConditionPanel(true); // expand conditions on new search
   };
 
   const handleDeleteHistory = (id: string, e: React.MouseEvent) => {
@@ -233,6 +236,7 @@ export default function AIRecommendPanel({
       setHasSearched(false);
       setProgressStep(1);
       setStatusMessage('🚀 AI 데이터 분석 준비 중...');
+      setShowConditionPanel(false); // auto-collapse conditions when search starts
     }
 
     // 기준 장소 결정
@@ -503,147 +507,124 @@ export default function AIRecommendPanel({
         />
       </div>
       
-      <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', marginBottom: '16px' }}>
+      <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', marginBottom: '10px' }}>
         <button 
           onClick={() => handleAIRecommend()}
           disabled={isLoading}
           className="btn btn-primary"
-          style={{ padding: '10px 24px', fontSize: '14px', flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
+          style={{ padding: '10px 20px', fontSize: '14px', flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
         >
-          {isLoading ? (statusMessage || '분석 중...') : '🔍 추천 검색'}
+          {isLoading ? (statusMessage || '분석 중...') : '🔍 AI 추천 검색'}
         </button>
         {isLoading && (
           <button 
             onClick={handleCancelSearch}
             className="btn btn-secondary"
-            style={{ padding: '10px 16px', fontSize: '14px', background: 'rgba(239, 68, 68, 0.2)', color: '#ef4444', border: '1px solid rgba(239, 68, 68, 0.5)' }}
+            style={{ padding: '10px 14px', fontSize: '13px', background: 'rgba(239, 68, 68, 0.2)', color: '#ef4444', border: '1px solid rgba(239, 68, 68, 0.5)' }}
           >
             취소
           </button>
         )}
       </div>
 
-      {/* ── 기준 장소 선택 ── */}
-      <div style={{
-        background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(244,114,182,0.15)',
-        borderRadius: '12px', padding: '14px', marginBottom: '12px',
-      }}>
-        <div style={{ fontSize: '12px', color: '#8b7fa8', marginBottom: '8px', fontWeight: 600, letterSpacing: '0.5px' }}>
-          📍 기준 장소 선택
-        </div>
-        <select
-          value={selectedPlaceId}
-          onChange={e => setSelectedPlaceId(e.target.value)}
+      {/* ── 검색 조건 accordion ── */}
+      <div style={{ marginBottom: '10px' }}>
+        <button
+          onClick={() => setShowConditionPanel(v => !v)}
           style={{
-            width: '100%', padding: '8px 10px', borderRadius: '8px',
-            background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(244,114,182,0.2)',
-            color: '#f5f0ff', fontSize: '13px', cursor: 'pointer', outline: 'none',
-            marginBottom: coursePlaces.length > 0 ? '10px' : '0',
+            width: '100%', padding: '7px 12px', borderRadius: '8px',
+            background: showConditionPanel ? 'rgba(244,114,182,0.08)' : 'rgba(255,255,255,0.03)',
+            border: '1px solid rgba(244,114,182,0.15)',
+            color: '#8b7fa8', fontSize: '12px', fontWeight: 600, cursor: 'pointer',
+            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
           }}
         >
-          <option value="all" style={{ background: '#1a1520' }}>🌏 전체 코스 장소 기준</option>
-          {Array.from(new Map(coursePlaces.map(p => [p.title, p])).values()).map(p => (
-            <option key={p.id} value={p.id} style={{ background: '#1a1520' }}>
-              📍 {stripHtml(p.title)}
-            </option>
-          ))}
-        </select>
-
-        {selectedPlaceId !== 'all' && (
-          <div>
-            <div style={{ fontSize: '12px', color: '#8b7fa8', marginBottom: '6px' }}>
-              반경: <strong style={{ color: '#f472b6' }}>{radiusKm}km</strong>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <span style={{ fontSize: '11px', color: '#6b5f85' }}>1km</span>
-              <input
-                type="range"
-                min={1}
-                max={20}
-                step={1}
-                value={radiusKm}
-                onChange={e => setRadiusKm(Number(e.target.value))}
-                style={{
-                  flex: 1, accentColor: '#f472b6', cursor: 'pointer',
-                }}
-              />
-              <span style={{ fontSize: '11px', color: '#6b5f85' }}>20km</span>
-            </div>
-            {selectedCenterPlace && (
-              <div style={{ fontSize: '11px', color: '#8b7fa8', marginTop: '6px' }}>
-                📌 <strong style={{ color: '#c084fc' }}>{stripHtml(selectedCenterPlace.title)}</strong> 반경 {radiusKm}km 내 추천
+          <span>
+            🎛️ 검색 조건 — {selectedCategories.length}/ {AI_CATEGORIES.length} 카테고리
+            {selectedPlaceId !== 'all' ? ` · 반경 ${radiusKm}km` : ''}
+            {searchKeyword ? ` · "​${searchKeyword}"​` : ''}
+          </span>
+          <span style={{ fontSize: '10px' }}>{showConditionPanel ? '▲' : '▼'}</span>
+        </button>
+        {showConditionPanel && (
+          <div style={{
+            background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(244,114,182,0.12)',
+            borderTop: 'none', borderRadius: '0 0 10px 10px', padding: '12px',
+          }}>
+            {/* 기준 장소 */}
+            <div style={{ fontSize: '11px', color: '#8b7fa8', marginBottom: '6px', fontWeight: 600 }}>📍 기준 장소</div>
+            <select
+              value={selectedPlaceId}
+              onChange={e => setSelectedPlaceId(e.target.value)}
+              style={{
+                width: '100%', padding: '7px 10px', borderRadius: '7px',
+                background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(244,114,182,0.2)',
+                color: '#f5f0ff', fontSize: '13px', cursor: 'pointer', outline: 'none',
+                marginBottom: '8px',
+              }}
+            >
+              <option value="all" style={{ background: '#1a1520' }}>🌏 전체 코스 장소 기준</option>
+              {Array.from(new Map(coursePlaces.map(p => [p.title, p])).values()).map(p => (
+                <option key={p.id} value={p.id} style={{ background: '#1a1520' }}>
+                  📍 {stripHtml(p.title)}
+                </option>
+              ))}
+            </select>
+            {selectedPlaceId !== 'all' && (
+              <div style={{ marginBottom: '10px' }}>
+                <div style={{ fontSize: '11px', color: '#8b7fa8', marginBottom: '4px' }}>
+                  반경: <strong style={{ color: '#f472b6' }}>{radiusKm}km</strong>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ fontSize: '10px', color: '#6b5f85' }}>1km</span>
+                  <input type="range" min={1} max={20} step={1} value={radiusKm}
+                    onChange={e => setRadiusKm(Number(e.target.value))}
+                    style={{ flex: 1, accentColor: '#f472b6', cursor: 'pointer' }} />
+                  <span style={{ fontSize: '10px', color: '#6b5f85' }}>20km</span>
+                </div>
               </div>
             )}
-          </div>
-        )}
-      </div>
 
-      {/* ── 카테고리 필터 ── */}
-      <div style={{
-        background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(244,114,182,0.15)',
-        borderRadius: '12px', padding: '14px', marginBottom: '12px',
-      }}>
-        <div 
-          onClick={() => setShowCategory(!showCategory)}
-          style={{ fontSize: '12px', color: '#8b7fa8', marginBottom: showCategory ? '10px' : '0', fontWeight: 600, letterSpacing: '0.5px', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
-        >
-          <span>🏷️ 추천 카테고리</span>
-          <span>{showCategory ? '▲' : '▼'}</span>
-        </div>
-        {showCategory && (
-          <>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+
+
+            {/* 카테고리 */}
+            <div style={{ fontSize: '11px', color: '#8b7fa8', marginBottom: '6px', fontWeight: 600 }}>🏷️ 카테고리</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', marginBottom: '10px' }}>
               {AI_CATEGORIES.map(cat => {
                 const isActive = selectedCategories.includes(cat.id);
                 return (
-                  <button
-                    key={cat.id}
-                    onClick={() => toggleCategory(cat.id)}
+                  <button key={cat.id} onClick={() => toggleCategory(cat.id)}
                     style={{
-                      padding: '8px 10px', borderRadius: '8px', cursor: 'pointer',
+                      padding: '7px 8px', borderRadius: '8px', cursor: 'pointer',
                       border: isActive ? '1px solid rgba(244,114,182,0.5)' : '1px solid rgba(255,255,255,0.08)',
                       background: isActive ? 'rgba(244,114,182,0.12)' : 'rgba(255,255,255,0.04)',
                       color: isActive ? '#f472b6' : '#8b7fa8',
                       fontSize: '12px', fontWeight: isActive ? 600 : 400,
                       transition: 'all 0.2s', textAlign: 'left',
-                      display: 'flex', flexDirection: 'column', gap: '2px',
                     }}
                   >
-                    <span>{cat.label}</span>
-                    <span style={{ fontSize: '10px', opacity: 0.7 }}>{cat.desc}</span>
+                    {cat.label}
                   </button>
                 );
               })}
             </div>
             {selectedCategories.length === 0 && (
-              <div style={{ fontSize: '11px', color: '#ef4444', marginTop: '8px' }}>
-                ⚠️ 최소 1개 이상 카테고리를 선택해주세요
-              </div>
+              <div style={{ fontSize: '11px', color: '#ef4444', marginBottom: '8px' }}>⚠️ 최소 1개 선택 필요</div>
             )}
-            
-            <div style={{ marginTop: '12px' }}>
-              <div style={{ fontSize: '12px', color: '#8b7fa8', marginBottom: '6px' }}>
-                맞춤 키워드 추가 (선택)
-              </div>
-              <input
-                type="text"
-                value={searchKeyword}
-                onChange={e => setSearchKeyword(e.target.value)}
-                placeholder="예) 오션뷰, 떡볶이, 분위기 좋은"
-                style={{
-                  width: '100%', padding: '10px', borderRadius: '8px',
-                  background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(244,114,182,0.2)',
-                  color: '#f5f0ff', fontSize: '13px', outline: 'none'
-                }}
-                onKeyDown={e => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    handleAIRecommend();
-                  }
-                }}
-              />
-            </div>
-          </>
+            {/* 키워드 */}
+            <div style={{ fontSize: '11px', color: '#8b7fa8', marginBottom: '4px' }}>맞춤 키워드 (선택)</div>
+            <input
+              type="text" value={searchKeyword}
+              onChange={e => setSearchKeyword(e.target.value)}
+              placeholder="예) 오션뷰, 떡볶이"
+              style={{
+                width: '100%', padding: '8px 10px', borderRadius: '7px',
+                background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(244,114,182,0.2)',
+                color: '#f5f0ff', fontSize: '13px', outline: 'none',
+              }}
+              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleAIRecommend(); } }}
+            />
+          </div>
         )}
       </div>
 
