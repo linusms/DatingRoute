@@ -157,7 +157,8 @@ export function useCourseSession({ setActiveTab, showToastMsg, clearDirections, 
     },
     onMemberJoined: (member) => {
       setMembers((prev) => {
-        if (prev.find((m) => m.id === member.id)) return prev;
+        if (prev.find((m) => m.userId === member.userId)) return prev;
+        if (prev.length >= 10) return prev;
         return [...prev, member];
       });
       showToastMsg(`🎉 ${member.nickname}님이 참여했습니다!`);

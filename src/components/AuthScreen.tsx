@@ -43,30 +43,31 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
   };
 
   return (
-    <div className="auth-screen-container" style={{
+    <div style={{
       display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-      height: '100vh', width: '100vw', background: 'var(--color-bg-primary)', position: 'fixed', top: 0, left: 0, zIndex: 1000
+      height: '100dvh', width: '100vw', 
+      background: 'var(--color-bg-primary)', 
+      position: 'fixed', top: 0, left: 0, zIndex: 1000,
+      padding: '24px'
     }}>
-      <div className="auth-card" style={{
-        background: 'var(--color-bg-card)', padding: '40px', borderRadius: 'var(--radius-xl)',
-        boxShadow: 'var(--shadow-lg)', width: '100%', maxWidth: '360px', textAlign: 'center', 
-        backdropFilter: 'blur(10px)', border: '1px solid var(--color-border)'
+      <div style={{
+        background: 'var(--color-bg-card)', padding: '40px 32px', borderRadius: '12px',
+        boxShadow: '0 4px 12px rgba(0, 0, 0, 0.05)', 
+        width: '100%', maxWidth: '360px', textAlign: 'center', 
+        border: '1px solid var(--color-border)',
       }}>
-        <div style={{ marginBottom: '24px' }}>
+        <div style={{ marginBottom: '32px' }}>
           <h1 style={{ 
-            fontSize: 'var(--text-3xl)', 
+            fontSize: '24px', 
             color: 'var(--color-text-primary)',
-            background: 'var(--color-accent-gradient)',
-            WebkitBackgroundClip: 'text',
-            WebkitTextFillColor: 'transparent',
-            fontWeight: '800',
-            fontFamily: 'var(--font-display)',
-            letterSpacing: '-0.5px'
+            fontWeight: '700',
+            letterSpacing: '-0.5px',
+            margin: '0 0 8px 0'
           }}>
             DatingRoute
           </h1>
-          <p style={{ color: 'var(--color-text-secondary)', fontSize: 'var(--text-sm)', marginTop: '8px' }}>
-            {isLogin ? '로그인하여 당신만의 코스를 만들어보세요' : '가입하고 당신만의 코스를 만들어보세요'}
+          <p style={{ color: 'var(--color-text-secondary)', fontSize: '14px', lineHeight: 1.5, margin: 0, wordBreak: 'keep-all' }}>
+            {isLogin ? '계정에 로그인하고 계속 진행하세요.' : '새로운 계정을 생성하고 시작하세요.'}
           </p>
         </div>
 
@@ -77,11 +78,11 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
             value={nickname}
             onChange={(e) => setNickname(e.target.value)}
             style={{
-              padding: '14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', 
-              fontSize: 'var(--text-base)', background: 'var(--color-bg-input)', color: 'var(--color-text-primary)',
-              outline: 'none', transition: 'border-color var(--transition-fast)'
+              padding: '12px 16px', borderRadius: '8px', border: '1px solid var(--color-border)', 
+              fontSize: '14px', background: 'var(--color-bg-primary)', color: 'var(--color-text-primary)',
+              outline: 'none', transition: 'border-color 0.2s', fontWeight: 500
             }}
-            onFocus={(e) => e.target.style.borderColor = 'var(--color-accent-primary)'}
+            onFocus={(e) => e.target.style.borderColor = 'var(--color-text-primary)'}
             onBlur={(e) => e.target.style.borderColor = 'var(--color-border)'}
           />
           <input
@@ -90,44 +91,42 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             style={{
-              padding: '14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', 
-              fontSize: 'var(--text-base)', background: 'var(--color-bg-input)', color: 'var(--color-text-primary)',
-              outline: 'none', transition: 'border-color var(--transition-fast)'
+              padding: '12px 16px', borderRadius: '8px', border: '1px solid var(--color-border)', 
+              fontSize: '14px', background: 'var(--color-bg-primary)', color: 'var(--color-text-primary)',
+              outline: 'none', transition: 'border-color 0.2s', fontWeight: 500
             }}
-            onFocus={(e) => e.target.style.borderColor = 'var(--color-accent-primary)'}
+            onFocus={(e) => e.target.style.borderColor = 'var(--color-text-primary)'}
             onBlur={(e) => e.target.style.borderColor = 'var(--color-border)'}
           />
           <button
             type="submit"
             disabled={isLoading}
             style={{
-              padding: '14px', borderRadius: 'var(--radius-md)', border: 'none',
-              background: 'var(--color-accent-gradient)', color: 'var(--color-text-primary)', fontSize: 'var(--text-base)', 
+              padding: '12px 16px', borderRadius: '8px', border: 'none',
+              background: 'var(--color-text-primary)', color: 'var(--color-bg-primary)', fontSize: '14px', 
               fontWeight: '600', cursor: isLoading ? 'not-allowed' : 'pointer',
-              marginTop: '8px', boxShadow: 'var(--shadow-glow)', opacity: isLoading ? 0.7 : 1,
-              transition: 'opacity var(--transition-fast)'
+              marginTop: '8px', opacity: isLoading ? 0.7 : 1,
+              transition: 'background 0.2s'
             }}
+            onMouseOver={(e) => { if(!isLoading) e.currentTarget.style.background = '#000'; }}
+            onMouseOut={(e) => { if(!isLoading) e.currentTarget.style.background = 'var(--color-text-primary)'; }}
           >
-            {isLoading ? '처리 중...' : (isLogin ? '로그인' : '회원가입')}
+            {isLoading ? '진행 중...' : (isLogin ? '로그인' : '회원가입')}
           </button>
         </form>
         
-        <p style={{ marginTop: '24px', fontSize: 'var(--text-sm)', color: 'var(--color-text-tertiary)' }}>
-          {isLogin ? '아직 계정이 없으신가요?' : '이미 계정이 있으신가요?'}
+        <div style={{ marginTop: '24px', fontSize: '13px', color: 'var(--color-text-secondary)' }}>
           <button 
             type="button"
             onClick={() => setIsLogin(!isLogin)}
             style={{
-              background: 'none', border: 'none', color: 'var(--color-accent-primary)', 
-              marginLeft: '8px', cursor: 'pointer', fontWeight: '600',
-              textDecoration: 'none'
+              background: 'none', border: 'none', color: 'var(--color-text-secondary)', 
+              cursor: 'pointer', fontWeight: '500', textDecoration: 'underline', padding: '4px'
             }}
-            onMouseOver={(e) => e.currentTarget.style.textDecoration = 'underline'}
-            onMouseOut={(e) => e.currentTarget.style.textDecoration = 'none'}
           >
-            {isLogin ? '회원가입' : '로그인'}
+            {isLogin ? '계정이 없으신가요?' : '이미 계정이 있으신가요?'}
           </button>
-        </p>
+        </div>
       </div>
     </div>
   );

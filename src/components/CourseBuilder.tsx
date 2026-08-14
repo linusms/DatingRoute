@@ -315,6 +315,51 @@ export default function CourseBuilder({
 
 
 
+      {/* Course Name Header */}
+      <div style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px', background: 'var(--color-bg-secondary)', borderRadius: '12px', border: '1px solid var(--color-border)' }}>
+        {isEditingName ? (
+          <div style={{ display: 'flex', gap: '8px', flex: 1 }}>
+            <input
+              value={editName}
+              onChange={e => setEditName(e.target.value)}
+              placeholder="경로 이름을 입력하세요"
+              style={{
+                flex: 1, background: 'var(--color-bg-tertiary)', border: '1px solid var(--color-border-active)', color: 'var(--color-text-primary)',
+                padding: '8px 12px', borderRadius: '8px', fontSize: '15px', outline: 'none', fontWeight: 600
+              }}
+              onKeyDown={e => {
+                if (e.key === 'Enter') handleSaveName();
+                if (e.key === 'Escape') setIsEditingName(false);
+              }}
+              autoFocus
+            />
+            <button
+              onClick={handleSaveName}
+              disabled={nameSaving}
+              className="btn btn-primary"
+              style={{ padding: '8px 16px', fontSize: '13px' }}
+            >
+              {nameSaving ? '저장 중...' : '저장'}
+            </button>
+          </div>
+        ) : (
+          <>
+            <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
+              <span style={{ fontSize: '12px', color: 'var(--color-accent-primary)', fontWeight: 600, marginBottom: '2px' }}>나만의 데이트 코스 💖</span>
+              <span style={{ fontSize: '18px', fontWeight: 700, color: 'var(--color-text-primary)', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                {courseName || '새로운 코스'}
+              </span>
+            </div>
+            <button
+              onClick={handleStartEditName}
+              style={{ background: 'var(--color-bg-tertiary)', border: '1px solid var(--color-border)', cursor: 'pointer', fontSize: '13px', padding: '6px 12px', borderRadius: '8px', color: 'var(--color-text-secondary)', fontWeight: 600, flexShrink: 0 }}
+            >
+              이름 변경 ✏️
+            </button>
+          </>
+        )}
+      </div>
+
       {/* Empty state */}
       {places.length === 0 && (
         <div className="course-empty">

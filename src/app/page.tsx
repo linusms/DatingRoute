@@ -341,14 +341,38 @@ export default function HomePage() {
   // ──── Render: Session Invalidated ────
   if (sessionInvalidated) {
     return (
-      <div className="session-invalidated-overlay">
-        <div className="session-invalidated-card">
-          <div className="session-invalidated-icon">⚠️</div>
-          <div className="session-invalidated-title">다른 기기에서 로그인됨</div>
-          <div className="session-invalidated-text">
-            동일한 계정으로 다른 기기에서 로그인되어<br />현재 세션이 종료되었습니다.
-          </div>
-          <button className="session-invalidated-btn" onClick={handleSessionInvalidatedLogout}>
+      <div style={{
+        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+        height: '100dvh', width: '100vw', background: 'var(--color-bg-primary)',
+        position: 'fixed', top: 0, left: 0, zIndex: 9999, padding: '24px'
+      }}>
+        <div style={{
+          background: 'var(--color-bg-card)', padding: '32px', borderRadius: '12px',
+          width: '100%', maxWidth: '360px', textAlign: 'center',
+          border: '1px solid var(--color-border)', boxShadow: '0 4px 12px rgba(0, 0, 0, 0.05)'
+        }}>
+          <h2 style={{
+            fontSize: '18px', color: 'var(--color-text-primary)', fontWeight: '700',
+            margin: '0 0 12px 0', letterSpacing: '-0.3px'
+          }}>
+            다른 기기에서 로그인됨
+          </h2>
+          <p style={{
+            fontSize: '14px', color: 'var(--color-text-secondary)',
+            lineHeight: 1.6, margin: '0 0 24px 0', wordBreak: 'keep-all'
+          }}>
+            동일한 계정으로 다른 기기에서 접속하여<br />현재 세션이 종료되었습니다.
+          </p>
+          <button
+            onClick={handleSessionInvalidatedLogout}
+            style={{
+              padding: '12px 16px', borderRadius: '8px', border: 'none',
+              background: 'var(--color-text-primary)', color: 'var(--color-bg-primary)', fontSize: '14px',
+              fontWeight: '600', cursor: 'pointer', width: '100%', transition: 'background 0.2s'
+            }}
+            onMouseOver={(e) => e.currentTarget.style.background = '#000'}
+            onMouseOut={(e) => e.currentTarget.style.background = 'var(--color-text-primary)'}
+          >
             확인
           </button>
         </div>
@@ -384,7 +408,7 @@ export default function HomePage() {
     <div className="app-layout">
       <Header
         onGoToDashboard={handleGoToDashboard}
-        courseCount={coursePlaces.filter(p => (p.day || 0) > 0).length || coursePlaces.length}
+        courseCount={coursePlaces.length}
         currentUser={currentUser}
         onLogout={handleLogout}
         inviteCode={inviteCode}
@@ -425,9 +449,9 @@ export default function HomePage() {
             >
               🗺️ 경로 생성
               {(() => {
-                const storageCount = coursePlaces.filter((p) => (p.day ?? 0) === 0).length;
-                return storageCount > 0 ? (
-                  <span className="sidebar-tab-badge">{storageCount}</span>
+                const totalCount = coursePlaces.length;
+                return totalCount > 0 ? (
+                  <span className="sidebar-tab-badge">{totalCount}</span>
                 ) : null;
               })()}
             </button>

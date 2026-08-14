@@ -464,9 +464,10 @@ export default function AIRecommendPanel({
                 }
               }}
               style={{
-                flex: 1, padding: '8px 10px', borderRadius: '8px',
+                flex: 1, minWidth: 0, padding: '8px 10px', borderRadius: '8px',
                 background: 'var(--color-bg-tertiary)', border: '1px solid var(--color-border)',
-                color: 'var(--color-text-primary)', fontSize: '13px', cursor: 'pointer', outline: 'none'
+                color: 'var(--color-text-primary)', fontSize: '13px', cursor: 'pointer', outline: 'none',
+                textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap'
               }}
             >
               <option value="" style={{ background: 'var(--color-bg-card)' }}>새로운 조건으로 검색하기...</option>
