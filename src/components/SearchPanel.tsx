@@ -110,7 +110,7 @@ export default function SearchPanel({
             width: '100%', padding: '7px 12px', borderRadius: '8px',
             background: showFilterSection ? 'rgba(244,114,182,0.08)' : 'rgba(255,255,255,0.03)',
             border: '1px solid rgba(244,114,182,0.15)',
-            color: selectedPlaceId !== 'all' ? '#f472b6' : '#8b7fa8',
+            color: selectedPlaceId !== 'all' ? 'var(--color-accent-primary)' : 'var(--color-text-secondary)',
             fontSize: '12px', fontWeight: 600, cursor: 'pointer',
             display: 'flex', justifyContent: 'space-between', alignItems: 'center',
           }}
@@ -133,8 +133,8 @@ export default function SearchPanel({
               onChange={e => setSelectedPlaceId(e.target.value)}
               style={{
                 width: '100%', padding: '7px 10px', borderRadius: '7px',
-                background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(244,114,182,0.2)',
-                color: '#f5f0ff', fontSize: '13px', cursor: 'pointer', outline: 'none',
+                background: 'var(--color-bg-tertiary)', border: '1px solid var(--color-border)',
+                color: 'var(--color-text-primary)', fontSize: '13px', cursor: 'pointer', outline: 'none',
                 marginBottom: '8px',
               }}
             >
@@ -148,15 +148,15 @@ export default function SearchPanel({
 
             {selectedPlaceId !== 'all' && (
               <div>
-                <div style={{ fontSize: '11px', color: '#8b7fa8', marginBottom: '4px' }}>
-                  반경: <strong style={{ color: '#f472b6' }}>{radiusKm}km</strong>
+                <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)', marginBottom: '4px' }}>
+                  반경: <strong style={{ color: 'var(--color-accent-primary)' }}>{radiusKm}km</strong>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <span style={{ fontSize: '10px', color: '#6b5f85' }}>1</span>
                   <input
                     type="range" min={1} max={20} step={1} value={radiusKm}
                     onChange={e => setRadiusKm(Number(e.target.value))}
-                    style={{ flex: 1, accentColor: '#f472b6', cursor: 'pointer' }}
+                    style={{ flex: 1, accentColor: 'var(--color-accent-primary)', cursor: 'pointer' }}
                   />
                   <span style={{ fontSize: '10px', color: '#6b5f85' }}>20km</span>
                 </div>

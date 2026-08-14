@@ -13,164 +13,76 @@
 
 /* ===== Design Tokens ===== */
 :root {
-  /* Colors - Rose/Warm romantic palette */
-  --color-bg-primary: #0f0b13;
-  --color-bg-secondary: #1a1520;
-  --color-bg-tertiary: #241e2e;
-  --color-bg-card: rgba(36, 30, 46, 0.7);
-  --color-bg-glass: rgba(255, 255, 255, 0.05);
-  --color-bg-glass-hover: rgba(255, 255, 255, 0.08);
-  --color-bg-input: rgba(255, 255, 255, 0.06);
+  /* Colors - Premium Light Theme (Coolors) */
+  --color-bg-primary: #FCFCFC;
+  --color-bg-secondary: #F5F5F5;
+  --color-bg-tertiary: #EBEBEB;
+  --color-bg-card: #FFFFFF;
+  --color-bg-glass: rgba(255, 255, 255, 0.95);
+  --color-bg-glass-hover: #FFFFFF;
+  --color-bg-input: rgba(0, 0, 0, 0.03);
 
-  --color-accent-primary: #f472b6;
-  --color-accent-secondary: #c084fc;
-  --color-accent-tertiary: #fb923c;
-  --color-accent-gradient: linear-gradient(135deg, #f472b6, #c084fc, #818cf8);
-  --color-accent-gradient-warm: linear-gradient(135deg, #f472b6, #fb923c);
-  --color-accent-glow: rgba(244, 114, 182, 0.3);
-  --color-accent-glow-purple: rgba(192, 132, 252, 0.3);
+  --color-accent-primary: #D96C5C;
+  --color-accent-secondary: #5D7A68;
+  --color-accent-tertiary: #DF8F82;
+  --color-accent-gradient: #D96C5C;
+  --color-accent-gradient-warm: #D96C5C;
+  --color-accent-glow: rgba(217, 108, 92, 0.15);
+  --color-accent-glow-purple: rgba(93, 122, 104, 0.15);
 
-  --color-text-primary: #f5f0ff;
-  --color-text-secondary: #b4a9c9;
-  --color-text-tertiary: #8b7fa8;
-  --color-text-muted: #6b5f85;
+  --color-text-primary: #1F2220;
+  --color-text-secondary: #6B7270;
+  --color-text-tertiary: #9AA09D;
+  --color-text-muted: #B3B8B6;
 
-  --color-border: rgba(255, 255, 255, 0.08);
-  --color-border-hover: rgba(244, 114, 182, 0.3);
-  --color-border-active: rgba(244, 114, 182, 0.6);
+  --color-border: #EAEAEA;
+  --color-border-hover: #D96C5C;
+  --color-border-active: #C25647;
 
-  --color-success: #4ade80;
-  --color-warning: #fbbf24;
-  --color-error: #f87171;
+  --color-success: #5D7A68;
+  --color-warning: #E0A96D;
+  --color-error: #D96C5C;
 
   /* Typography */
   --font-primary: 'Pretendard Variable', 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
-  --font-display: 'Inter', var(--font-primary);
+  --font-display: var(--font-primary);
 
   --text-xs: 0.75rem;
-  --text-sm: 0.8125rem;
-  --text-base: 0.9375rem;
+  --text-sm: 0.875rem;
+  --text-base: 1rem;
   --text-lg: 1.125rem;
   --text-xl: 1.25rem;
   --text-2xl: 1.5rem;
   --text-3xl: 2rem;
 
   /* Spacing */
-  --space-xs: 0.25rem;
-  --space-sm: 0.5rem;
-  --space-md: 0.75rem;
-  --space-lg: 1rem;
-  --space-xl: 1.5rem;
-  --space-2xl: 2rem;
-  --space-3xl: 3rem;
+  --space-xs: 0.5rem;
+  --space-sm: 0.75rem;
+  --space-md: 1rem;
+  --space-lg: 1.5rem;
+  --space-xl: 2rem;
+  --space-2xl: 3rem;
+  --space-3xl: 4rem;
 
   /* Radius */
-  --radius-sm: 0.375rem;
-  --radius-md: 0.75rem;
-  --radius-lg: 1rem;
-  --radius-xl: 1.25rem;
+  --radius-sm: 0.25rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
   --radius-full: 9999px;
 
-  /* Shadows */
-  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
-  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
-  --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.5);
-  --shadow-glow: 0 0 20px var(--color-accent-glow);
-  --shadow-glow-purple: 0 0 20px var(--color-accent-glow-purple);
+  /* Shadows - Crisp */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -2px rgba(0, 0, 0, 0.02);
+  --shadow-glow: var(--shadow-sm);
+  --shadow-glow-purple: var(--shadow-sm);
 
   /* Transitions */
-  --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
-  --transition-base: 250ms cubic-bezier(0.4, 0, 0.2, 1);
-  --transition-slow: 400ms cubic-bezier(0.4, 0, 0.2, 1);
-  --transition-spring: 500ms cubic-bezier(0.34, 1.56, 0.64, 1);
-
-  /* Z-index */
-  --z-base: 1;
-/* ===== DatingRoute Design System ===== */
-@import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css');
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-
-/* ===== CSS Reset ===== */
-*,
-*::before,
-*::after {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-}
-
-/* ===== Design Tokens ===== */
-:root {
-  /* Colors - Rose/Warm romantic palette */
-  --color-bg-primary: #0f0b13;
-  --color-bg-secondary: #1a1520;
-  --color-bg-tertiary: #241e2e;
-  --color-bg-card: rgba(36, 30, 46, 0.7);
-  --color-bg-glass: rgba(255, 255, 255, 0.05);
-  --color-bg-glass-hover: rgba(255, 255, 255, 0.08);
-  --color-bg-input: rgba(255, 255, 255, 0.06);
-
-  --color-accent-primary: #f472b6;
-  --color-accent-secondary: #c084fc;
-  --color-accent-tertiary: #fb923c;
-  --color-accent-gradient: linear-gradient(135deg, #f472b6, #c084fc, #818cf8);
-  --color-accent-gradient-warm: linear-gradient(135deg, #f472b6, #fb923c);
-  --color-accent-glow: rgba(244, 114, 182, 0.3);
-  --color-accent-glow-purple: rgba(192, 132, 252, 0.3);
-
-  --color-text-primary: #f5f0ff;
-  --color-text-secondary: #b4a9c9;
-  --color-text-tertiary: #8b7fa8;
-  --color-text-muted: #6b5f85;
-
-  --color-border: rgba(255, 255, 255, 0.08);
-  --color-border-hover: rgba(244, 114, 182, 0.3);
-  --color-border-active: rgba(244, 114, 182, 0.6);
-
-  --color-success: #4ade80;
-  --color-warning: #fbbf24;
-  --color-error: #f87171;
-
-  /* Typography */
-  --font-primary: 'Pretendard Variable', 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
-  --font-display: 'Inter', var(--font-primary);
-
-  --text-xs: 0.75rem;
-  --text-sm: 0.8125rem;
-  --text-base: 0.9375rem;
-  --text-lg: 1.125rem;
-  --text-xl: 1.25rem;
-  --text-2xl: 1.5rem;
-  --text-3xl: 2rem;
-
-  /* Spacing */
-  --space-xs: 0.25rem;
-  --space-sm: 0.5rem;
-  --space-md: 0.75rem;
-  --space-lg: 1rem;
-  --space-xl: 1.5rem;
-  --space-2xl: 2rem;
-  --space-3xl: 3rem;
-
-  /* Radius */
-  --radius-sm: 0.375rem;
-  --radius-md: 0.75rem;
-  --radius-lg: 1rem;
-  --radius-xl: 1.25rem;
-  --radius-full: 9999px;
-
-  /* Shadows */
-  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
-  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
-  --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.5);
-  --shadow-glow: 0 0 20px var(--color-accent-glow);
-  --shadow-glow-purple: 0 0 20px var(--color-accent-glow-purple);
-
-  /* Transitions */
-  --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
-  --transition-base: 250ms cubic-bezier(0.4, 0, 0.2, 1);
-  --transition-slow: 400ms cubic-bezier(0.4, 0, 0.2, 1);
-  --transition-spring: 500ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  --transition-fast: 150ms ease-out;
+  --transition-base: 250ms ease-out;
+  --transition-slow: 400ms ease-out;
+  --transition-spring: 250ms ease-out;
 
   /* Z-index */
   --z-base: 1;
@@ -216,11 +128,9 @@ body {
   background: var(--color-text-tertiary);
 }
 
-/* ===== Glassmorphism Card ===== */
+/* ===== Glassmorphism Card (Now Solid Card) ===== */
 .glass-card {
-  background: var(--color-bg-glass);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+  background: var(--color-bg-card);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
   transition: border-color var(--transition-base), box-shadow var(--transition-base);
@@ -228,7 +138,7 @@ body {
 
 .glass-card:hover {
   border-color: var(--color-border-hover);
-  box-shadow: var(--shadow-glow);
+  box-shadow: var(--shadow-sm);
 }
 
 /* ===== Buttons ===== */
@@ -249,18 +159,17 @@ body {
 }
 
 .btn-primary {
-  background: var(--color-accent-gradient);
+  background: var(--color-accent-primary);
   color: white;
-  box-shadow: var(--shadow-glow);
+  box-shadow: var(--shadow-sm);
 }
 
 .btn-primary:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 0 30px var(--color-accent-glow);
+  background: var(--color-border-active);
 }
 
 .btn-primary:active {
-  transform: translateY(0);
+  transform: translateY(1px);
 }
 
 .btn-secondary {

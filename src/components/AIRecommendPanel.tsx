@@ -435,15 +435,15 @@ export default function AIRecommendPanel({
           borderRadius: '12px', padding: '14px', marginBottom: '16px',
         }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-            <div style={{ fontSize: '12px', color: '#8b7fa8', fontWeight: 600, letterSpacing: '0.5px' }}>
+            <div style={{ fontSize: '12px', color: 'var(--color-text-secondary)', fontWeight: 600, letterSpacing: '0.5px' }}>
               🕒 최근 검색 기록
             </div>
             {activeHistoryId && (
               <button
                 onClick={handleNewSearch}
                 style={{
-                  background: 'rgba(244,114,182,0.15)', border: '1px solid rgba(244,114,182,0.3)',
-                  color: '#f472b6', padding: '4px 8px', borderRadius: '4px', fontSize: '11px', cursor: 'pointer'
+                  background: 'rgba(244,114,182,0.15)', border: '1px solid var(--color-border-active)',
+                  color: 'var(--color-accent-primary)', padding: '4px 8px', borderRadius: '4px', fontSize: '11px', cursor: 'pointer'
                 }}
               >
                 + 새 검색
@@ -465,8 +465,8 @@ export default function AIRecommendPanel({
               }}
               style={{
                 flex: 1, padding: '8px 10px', borderRadius: '8px',
-                background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(244,114,182,0.2)',
-                color: '#f5f0ff', fontSize: '13px', cursor: 'pointer', outline: 'none'
+                background: 'var(--color-bg-tertiary)', border: '1px solid var(--color-border)',
+                color: 'var(--color-text-primary)', fontSize: '13px', cursor: 'pointer', outline: 'none'
               }}
             >
               <option value="" style={{ background: '#1a1520' }}>새로운 조건으로 검색하기...</option>
@@ -535,7 +535,7 @@ export default function AIRecommendPanel({
             width: '100%', padding: '7px 12px', borderRadius: '8px',
             background: showConditionPanel ? 'rgba(244,114,182,0.08)' : 'rgba(255,255,255,0.03)',
             border: '1px solid rgba(244,114,182,0.15)',
-            color: '#8b7fa8', fontSize: '12px', fontWeight: 600, cursor: 'pointer',
+            color: 'var(--color-text-secondary)', fontSize: '12px', fontWeight: 600, cursor: 'pointer',
             display: 'flex', justifyContent: 'space-between', alignItems: 'center',
           }}
         >
@@ -552,14 +552,14 @@ export default function AIRecommendPanel({
             borderTop: 'none', borderRadius: '0 0 10px 10px', padding: '12px',
           }}>
             {/* 기준 장소 */}
-            <div style={{ fontSize: '11px', color: '#8b7fa8', marginBottom: '6px', fontWeight: 600 }}>📍 기준 장소</div>
+            <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)', marginBottom: '6px', fontWeight: 600 }}>📍 기준 장소</div>
             <select
               value={selectedPlaceId}
               onChange={e => setSelectedPlaceId(e.target.value)}
               style={{
                 width: '100%', padding: '7px 10px', borderRadius: '7px',
-                background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(244,114,182,0.2)',
-                color: '#f5f0ff', fontSize: '13px', cursor: 'pointer', outline: 'none',
+                background: 'var(--color-bg-tertiary)', border: '1px solid var(--color-border)',
+                color: 'var(--color-text-primary)', fontSize: '13px', cursor: 'pointer', outline: 'none',
                 marginBottom: '8px',
               }}
             >
@@ -572,14 +572,14 @@ export default function AIRecommendPanel({
             </select>
             {selectedPlaceId !== 'all' && (
               <div style={{ marginBottom: '10px' }}>
-                <div style={{ fontSize: '11px', color: '#8b7fa8', marginBottom: '4px' }}>
-                  반경: <strong style={{ color: '#f472b6' }}>{radiusKm}km</strong>
+                <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)', marginBottom: '4px' }}>
+                  반경: <strong style={{ color: 'var(--color-accent-primary)' }}>{radiusKm}km</strong>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <span style={{ fontSize: '10px', color: '#6b5f85' }}>1km</span>
                   <input type="range" min={1} max={20} step={1} value={radiusKm}
                     onChange={e => setRadiusKm(Number(e.target.value))}
-                    style={{ flex: 1, accentColor: '#f472b6', cursor: 'pointer' }} />
+                    style={{ flex: 1, accentColor: 'var(--color-accent-primary)', cursor: 'pointer' }} />
                   <span style={{ fontSize: '10px', color: '#6b5f85' }}>20km</span>
                 </div>
               </div>
@@ -588,7 +588,7 @@ export default function AIRecommendPanel({
 
 
             {/* 카테고리 */}
-            <div style={{ fontSize: '11px', color: '#8b7fa8', marginBottom: '6px', fontWeight: 600 }}>🏷️ 카테고리</div>
+            <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)', marginBottom: '6px', fontWeight: 600 }}>🏷️ 카테고리</div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', marginBottom: '10px' }}>
               {AI_CATEGORIES.map(cat => {
                 const isActive = selectedCategories.includes(cat.id);
@@ -598,7 +598,7 @@ export default function AIRecommendPanel({
                       padding: '7px 8px', borderRadius: '8px', cursor: 'pointer',
                       border: isActive ? '1px solid rgba(244,114,182,0.5)' : '1px solid rgba(255,255,255,0.08)',
                       background: isActive ? 'rgba(244,114,182,0.12)' : 'rgba(255,255,255,0.04)',
-                      color: isActive ? '#f472b6' : '#8b7fa8',
+                      color: isActive ? 'var(--color-accent-primary)' : 'var(--color-text-secondary)',
                       fontSize: '12px', fontWeight: isActive ? 600 : 400,
                       transition: 'all 0.2s', textAlign: 'left',
                     }}
@@ -612,15 +612,15 @@ export default function AIRecommendPanel({
               <div style={{ fontSize: '11px', color: '#ef4444', marginBottom: '8px' }}>⚠️ 최소 1개 선택 필요</div>
             )}
             {/* 키워드 */}
-            <div style={{ fontSize: '11px', color: '#8b7fa8', marginBottom: '4px' }}>맞춤 키워드 (선택)</div>
+            <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)', marginBottom: '4px' }}>맞춤 키워드 (선택)</div>
             <input
               type="text" value={searchKeyword}
               onChange={e => setSearchKeyword(e.target.value)}
               placeholder="예) 오션뷰, 떡볶이"
               style={{
                 width: '100%', padding: '8px 10px', borderRadius: '7px',
-                background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(244,114,182,0.2)',
-                color: '#f5f0ff', fontSize: '13px', outline: 'none',
+                background: 'var(--color-bg-tertiary)', border: '1px solid var(--color-border)',
+                color: 'var(--color-text-primary)', fontSize: '13px', outline: 'none',
               }}
               onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleAIRecommend(); } }}
             />
@@ -636,7 +636,7 @@ export default function AIRecommendPanel({
           style={{
             width: '100%', padding: '16px', borderRadius: '12px', cursor: 'pointer',
             background: 'rgba(255,255,255,0.03)', border: '1px dashed rgba(244,114,182,0.4)',
-            color: '#8b7fa8', display: 'flex', flexDirection: 'column', gap: '10px',
+            color: 'var(--color-text-secondary)', display: 'flex', flexDirection: 'column', gap: '10px',
             marginTop: '16px', transition: 'all 0.2s'
           }}
           onMouseEnter={(e) => {
@@ -648,9 +648,9 @@ export default function AIRecommendPanel({
             e.currentTarget.style.borderColor = 'rgba(244,114,182,0.4)';
           }}
         >
-          <div style={{ fontSize: '14px', color: '#f5f0ff', fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ fontSize: '14px', color: 'var(--color-text-primary)', fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <span>✨ AI 추천 완료!</span>
-            <span style={{ fontSize: '12px', background: 'rgba(244,114,182,0.2)', padding: '2px 8px', borderRadius: '12px', color: '#f472b6' }}>열기 ↗</span>
+            <span style={{ fontSize: '12px', background: 'var(--color-border)', padding: '2px 8px', borderRadius: '12px', color: 'var(--color-accent-primary)' }}>열기 ↗</span>
           </div>
           <div style={{ fontSize: '12px', color: '#c084fc', marginBottom: '4px' }}>
             핫플 {recommendations.length}개, 행사 {events.length}개 발견
@@ -658,7 +658,7 @@ export default function AIRecommendPanel({
           
           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
             {recommendations.slice(0, 3).map((rec, idx) => (
-              <div key={idx} style={{ fontSize: '12px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: '#e2e8f0', display: 'flex', gap: '6px' }}>
+              <div key={idx} style={{ fontSize: '12px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: 'var(--color-text-primary)', display: 'flex', gap: '6px' }}>
                 <span style={{ opacity: 0.6 }}>📍</span>
                 <span>{rec.name}</span>
               </div>
@@ -666,7 +666,7 @@ export default function AIRecommendPanel({
           </div>
 
           {recommendations.length > 3 && (
-            <div style={{ fontSize: '11px', textAlign: 'center', marginTop: '6px', color: '#94a3b8', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '10px' }}>
+            <div style={{ fontSize: '11px', textAlign: 'center', marginTop: '6px', color: '#94a3b8', borderTop: '1px solid var(--color-bg-secondary)', paddingTop: '10px' }}>
               + {recommendations.length - 3}개 더보기 (클릭)
             </div>
           )}
@@ -689,18 +689,18 @@ export default function AIRecommendPanel({
               background: 'rgba(26,21,32,0.95)',
               backdropFilter: 'blur(20px)',
               borderRadius: '24px',
-              border: '1px solid rgba(244,114,182,0.3)',
+              border: '1px solid var(--color-border-active)',
               boxShadow: '0 20px 40px rgba(0,0,0,0.5)',
               display: 'flex', flexDirection: 'column', overflow: 'hidden',
               maxHeight: `${Math.min(panelSize.height, typeof window !== 'undefined' ? window.innerHeight * 0.95 : 1000)}px`,
             }}
           >
             {/* Header */}
-            <div style={{ padding: '16px 24px', borderBottom: '1px solid rgba(255,255,255,0.1)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(0,0,0,0.2)' }}>
-              <h3 style={{ margin: 0, color: '#f5f0ff', fontSize: '18px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div style={{ padding: '16px 24px', borderBottom: '1px solid var(--color-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--color-bg-tertiary)' }}>
+              <h3 style={{ margin: 0, color: 'var(--color-text-primary)', fontSize: '18px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                 ✨ AI 추천 결과
               </h3>
-              <button onClick={() => setShowPopup(false)} style={{ background: 'transparent', border: 'none', color: '#8b7fa8', cursor: 'pointer', fontSize: '20px', padding: '4px' }}>✕</button>
+              <button onClick={() => setShowPopup(false)} style={{ background: 'transparent', border: 'none', color: 'var(--color-text-secondary)', cursor: 'pointer', fontSize: '20px', padding: '4px' }}>✕</button>
             </div>
 
             {/* Content Area */}
@@ -738,7 +738,7 @@ export default function AIRecommendPanel({
                     <>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
                         <div style={{ marginBottom: 0 }}>
-                          <span style={{ fontSize: '15px', fontWeight: 600, color: '#f5f0ff' }}>✨ AI 추천 핫플/팝업</span>
+                          <span style={{ fontSize: '15px', fontWeight: 600, color: 'var(--color-text-primary)' }}>✨ AI 추천 핫플/팝업</span>
                           {recommendations.length > 0 && (
                             <span className="ai-count-badge" style={{ marginLeft: '8px' }}>{recommendations.length}</span>
                           )}
@@ -749,9 +749,9 @@ export default function AIRecommendPanel({
                             value={sortOrder}
                             onChange={e => setSortOrder(e.target.value as any)}
                             style={{
-                              background: 'rgba(255,255,255,0.05)',
-                              border: '1px solid rgba(255,255,255,0.1)',
-                              color: '#fff',
+                              background: 'var(--color-bg-secondary)',
+                              border: '1px solid var(--color-border)',
+                              color: 'var(--color-text-primary)',
                               padding: '6px 12px',
                               borderRadius: '8px',
                               fontSize: '13px',
@@ -799,7 +799,7 @@ export default function AIRecommendPanel({
                                 <div style={{ marginBottom: '6px', display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
                                   <span style={{
                                     fontSize: '11px', padding: '2px 6px', borderRadius: '4px',
-                                    background: 'rgba(255,255,255,0.06)', color: '#f472b6', fontWeight: 600,
+                                    background: 'rgba(255,255,255,0.06)', color: 'var(--color-accent-primary)', fontWeight: 600,
                                     cursor: rec.link ? 'pointer' : 'default',
                                     display: 'inline-block'
                                   }}
@@ -848,7 +848,7 @@ export default function AIRecommendPanel({
                           {recommendations.length > 0 && (
                             <button
                               className="btn btn-secondary"
-                              style={{ width: '100%', marginTop: '16px', padding: '12px', borderRadius: '8px', background: 'rgba(255,255,255,0.1)', color: 'white', border: 'none', cursor: 'pointer' }}
+                              style={{ width: '100%', marginTop: '16px', padding: '12px', borderRadius: '8px', background: 'var(--color-border)', color: 'white', border: 'none', cursor: 'pointer' }}
                               onClick={() => handleAIRecommend(true)}
                               disabled={isLoadingMore}
                             >
@@ -891,7 +891,7 @@ export default function AIRecommendPanel({
                                 </div>
 
                                 {expandedEventId === event.contentId && (
-                                  <div className="ai-event-details" style={{ padding: '0 16px 16px 16px', borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '16px' }} onClick={(e) => e.stopPropagation()}>
+                                  <div className="ai-event-details" style={{ padding: '0 16px 16px 16px', borderTop: '1px solid var(--color-border)', paddingTop: '16px' }} onClick={(e) => e.stopPropagation()}>
                                     {event.imageUrl && (
                                       /* eslint-disable-next-line @next/next/no-img-element */
                                       <img
@@ -917,8 +917,8 @@ export default function AIRecommendPanel({
                                             className="btn btn-sm"
                                             style={{
                                               background: 'rgba(255,255,255,0.08)',
-                                              color: '#f472b6',
-                                              border: '1px solid rgba(244,114,182,0.3)',
+                                              color: 'var(--color-accent-primary)',
+                                              border: '1px solid var(--color-border-active)',
                                               cursor: 'pointer',
                                               borderRadius: '6px',
                                               padding: '4px 10px',

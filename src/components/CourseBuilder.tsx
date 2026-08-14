@@ -89,7 +89,7 @@ export default function CourseBuilder({
 
   const overflowMenuItemStyle: React.CSSProperties = {
     padding: '8px 12px', borderRadius: '8px', border: 'none',
-    background: 'transparent', color: '#e2e8f0', cursor: 'pointer',
+    background: 'transparent', color: 'var(--color-text-primary)', cursor: 'pointer',
     fontSize: '13px', fontWeight: 500, textAlign: 'left',
     transition: 'background 0.15s', width: '100%',
   };
@@ -359,7 +359,7 @@ export default function CourseBuilder({
                     onClick={() => setShowOverflowMenu(prev => !prev)}
                     style={{
                       padding: '10px 12px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.15)',
-                      background: 'rgba(255,255,255,0.05)', color: '#b4a9c9', cursor: 'pointer',
+                      background: 'var(--color-bg-secondary)', color: '#b4a9c9', cursor: 'pointer',
                       fontSize: '16px', lineHeight: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
                     }}
                     title="추가 기능"
@@ -404,8 +404,8 @@ export default function CourseBuilder({
               onClick={() => setActiveDayTab('all')}
               style={{
                 padding: '6px 12px', borderRadius: '12px', fontSize: '13px', whiteSpace: 'nowrap',
-                background: activeDayTab === 'all' ? 'linear-gradient(135deg, #f472b6, #c084fc)' : 'rgba(255,255,255,0.05)',
-                color: activeDayTab === 'all' ? '#fff' : '#8b7fa8', border: 'none', cursor: 'pointer'
+                background: activeDayTab === 'all' ? 'var(--color-accent-primary)' : 'var(--color-bg-secondary)',
+                color: activeDayTab === 'all' ? 'var(--color-text-primary)' : 'var(--color-text-secondary)', border: 'none', cursor: 'pointer'
               }}
             >
               전체
@@ -418,8 +418,8 @@ export default function CourseBuilder({
                   onClick={() => setActiveDayTab(day)}
                   style={{
                     padding: '6px 12px', borderRadius: '12px', fontSize: '13px', whiteSpace: 'nowrap',
-                    background: activeDayTab === day ? 'linear-gradient(135deg, #f472b6, #c084fc)' : 'rgba(255,255,255,0.05)',
-                    color: activeDayTab === day ? '#fff' : '#8b7fa8', border: 'none', cursor: 'pointer'
+                    background: activeDayTab === day ? 'var(--color-accent-primary)' : 'var(--color-bg-secondary)',
+                    color: activeDayTab === day ? 'var(--color-text-primary)' : 'var(--color-text-secondary)', border: 'none', cursor: 'pointer'
                   }}
                 >
                   {getDayLabel(day)}
@@ -430,8 +430,8 @@ export default function CourseBuilder({
               onClick={() => setActiveDayTab(0)}
               style={{
                 padding: '6px 12px', borderRadius: '12px', fontSize: '13px', whiteSpace: 'nowrap',
-                background: activeDayTab === 0 ? 'linear-gradient(135deg, #f472b6, #c084fc)' : 'rgba(255,255,255,0.05)',
-                color: activeDayTab === 0 ? '#fff' : '#8b7fa8', border: 'none', cursor: 'pointer'
+                background: activeDayTab === 0 ? 'var(--color-accent-primary)' : 'var(--color-bg-secondary)',
+                color: activeDayTab === 0 ? 'var(--color-text-primary)' : 'var(--color-text-secondary)', border: 'none', cursor: 'pointer'
               }}
             >
               {getDayLabel(0)}
@@ -446,16 +446,16 @@ export default function CourseBuilder({
             }
             return (
               <div className="animate-fade-in" style={{
-                background: 'rgba(255,255,255,0.05)', borderRadius: '16px', padding: '16px',
-                border: '1px solid rgba(244,114,182,0.2)'
+                background: 'var(--color-bg-secondary)', borderRadius: '16px', padding: '16px',
+                border: '1px solid var(--color-border)'
               }}>
-                <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', background: 'rgba(0,0,0,0.2)', padding: '4px', borderRadius: '12px' }}>
+                <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', background: 'var(--color-bg-tertiary)', padding: '4px', borderRadius: '12px' }}>
                   <button 
                     onClick={() => onChangeTransitMode('driving')}
                     style={{
                       flex: 1, padding: '8px', borderRadius: '8px', border: 'none',
-                      background: transitMode === 'driving' ? 'linear-gradient(135deg, #f472b6, #c084fc)' : 'transparent',
-                      color: transitMode === 'driving' ? '#fff' : '#8b7fa8',
+                      background: transitMode === 'driving' ? 'var(--color-accent-primary)' : 'transparent',
+                      color: transitMode === 'driving' ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
                       fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s'
                     }}
                   >🚗 자동차</button>
@@ -463,8 +463,8 @@ export default function CourseBuilder({
                     onClick={() => onChangeTransitMode('walking')}
                     style={{
                       flex: 1, padding: '8px', borderRadius: '8px', border: 'none',
-                      background: transitMode === 'walking' ? 'linear-gradient(135deg, #f472b6, #c084fc)' : 'transparent',
-                      color: transitMode === 'walking' ? '#fff' : '#8b7fa8',
+                      background: transitMode === 'walking' ? 'var(--color-accent-primary)' : 'transparent',
+                      color: transitMode === 'walking' ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
                       fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s'
                     }}
                   >🚶‍♂️ 도보(예상)</button>
@@ -472,14 +472,14 @@ export default function CourseBuilder({
 
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div>
-                    <div style={{ fontSize: '12px', color: '#8b7fa8', marginBottom: '4px' }}>총 소요 시간</div>
-                    <div style={{ fontSize: '20px', fontWeight: 700, color: '#f5f0ff' }}>
+                    <div style={{ fontSize: '12px', color: 'var(--color-text-secondary)', marginBottom: '4px' }}>총 소요 시간</div>
+                    <div style={{ fontSize: '20px', fontWeight: 700, color: 'var(--color-text-primary)' }}>
                       {transitMode === 'driving' ? formatDuration(directions.totalDuration) : formatDuration(walkingDuration)}
                     </div>
                   </div>
                   <div style={{ textAlign: 'right' }}>
-                    <div style={{ fontSize: '12px', color: '#8b7fa8', marginBottom: '4px' }}>총 이동 거리</div>
-                    <div style={{ fontSize: '16px', fontWeight: 600, color: '#f472b6' }}>
+                    <div style={{ fontSize: '12px', color: 'var(--color-text-secondary)', marginBottom: '4px' }}>총 이동 거리</div>
+                    <div style={{ fontSize: '16px', fontWeight: 600, color: 'var(--color-accent-primary)' }}>
                       {(directions.totalDistance / 1000).toFixed(1)}km
                     </div>
                   </div>
@@ -491,7 +491,7 @@ export default function CourseBuilder({
           {/* Storage Actions */}
           {activeDayTab === 0 && filteredPlaces.length > 0 && (
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-              <div style={{ fontSize: '13px', color: '#8b7fa8' }}>
+              <div style={{ fontSize: '13px', color: 'var(--color-text-secondary)' }}>
                 보관함 목록 ({filteredPlaces.length}개)
               </div>
               {isSelectMode ? (
@@ -501,7 +501,7 @@ export default function CourseBuilder({
                     disabled={selectedPlaceIds.size === 0}
                     style={{
                       padding: '6px 12px', borderRadius: '8px', border: 'none',
-                      background: selectedPlaceIds.size > 0 ? 'rgba(239, 68, 68, 0.2)' : 'rgba(255,255,255,0.05)',
+                      background: selectedPlaceIds.size > 0 ? 'rgba(239, 68, 68, 0.2)' : 'var(--color-bg-secondary)',
                       color: selectedPlaceIds.size > 0 ? '#ef4444' : '#6b7280', fontSize: '12px', cursor: 'pointer'
                     }}
                   >
@@ -512,7 +512,7 @@ export default function CourseBuilder({
                     disabled={selectedPlaceIds.size === 0}
                     style={{
                       padding: '6px 12px', borderRadius: '8px', border: 'none',
-                      background: selectedPlaceIds.size > 0 ? 'rgba(245, 158, 11, 0.2)' : 'rgba(255,255,255,0.05)',
+                      background: selectedPlaceIds.size > 0 ? 'rgba(245, 158, 11, 0.2)' : 'var(--color-bg-secondary)',
                       color: selectedPlaceIds.size > 0 ? '#f59e0b' : '#6b7280', fontSize: '12px', cursor: 'pointer'
                     }}
                   >
@@ -532,8 +532,8 @@ export default function CourseBuilder({
                 <button
                   onClick={() => setIsSelectMode(true)}
                   style={{
-                    padding: '6px 12px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)',
-                    background: 'rgba(255,255,255,0.05)', color: '#8b7fa8', fontSize: '12px', cursor: 'pointer'
+                    padding: '6px 12px', borderRadius: '8px', border: '1px solid var(--color-border)',
+                    background: 'var(--color-bg-secondary)', color: 'var(--color-text-secondary)', fontSize: '12px', cursor: 'pointer'
                   }}
                 >
                   선택 모드
@@ -577,19 +577,19 @@ export default function CourseBuilder({
                     }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                         <div style={{
-                          background: 'linear-gradient(135deg, #f472b6, #c084fc)',
+                          background: 'var(--color-accent-primary)',
                           borderRadius: '8px', padding: '4px 14px',
-                          fontSize: '13px', fontWeight: 700, color: '#fff', flexShrink: 0,
+                          fontSize: '13px', fontWeight: 700, color: 'var(--color-text-primary)', flexShrink: 0,
                         }}>
                           📅 {getDayLabel(placeDay)}
                         </div>
-                        <div style={{ flex: 1, height: '1px', background: 'linear-gradient(to right, rgba(244,114,182,0.3), transparent)' }} />
+                        <div style={{ flex: 1, height: '1px', background: 'linear-gradient(to right, var(--color-border-active), transparent)' }} />
                       </div>
                       
                       {/* Day Stats summary */}
                       {isRouteCreated && dayStats[placeDay] && (
                         <div style={{
-                          marginTop: '8px', marginLeft: '4px', fontSize: '13px', color: '#f472b6', fontWeight: 600
+                          marginTop: '8px', marginLeft: '4px', fontSize: '13px', color: 'var(--color-accent-primary)', fontWeight: 600
                         }}>
                           전체 이동거리 {(dayStats[placeDay].distance / 1000).toFixed(1)}km, 
                           이동 시간 {transitMode === 'driving' 
@@ -636,14 +636,14 @@ export default function CourseBuilder({
                           type="checkbox"
                           checked={selectedPlaceIds.has(place.id)}
                           readOnly
-                          style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: '#f472b6' }}
+                          style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: 'var(--color-accent-primary)' }}
                         />
                       </div>
                     )}
                     {placeDay !== 0 && !isSelectMode && (
                       <div style={{
-                        width: '28px', height: '28px', borderRadius: '50%', background: 'linear-gradient(135deg, #f472b6, #c084fc)',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 700, fontSize: '13px',
+                        width: '28px', height: '28px', borderRadius: '50%', background: 'var(--color-accent-primary)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--color-text-primary)', fontWeight: 700, fontSize: '13px',
                         flexShrink: 0,
                       }}>
                         {idx + 1}
@@ -652,7 +652,7 @@ export default function CourseBuilder({
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '8px', marginBottom: '4px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', overflow: 'hidden' }}>
-                          <div style={{ cursor: 'pointer', fontSize: '15px', fontWeight: 600, color: '#f5f0ff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                          <div style={{ cursor: 'pointer', fontSize: '15px', fontWeight: 600, color: 'var(--color-text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
                                onClick={(e) => {
                                  if (isSelectMode) return;
                                  onShowReview(stripHtml(place.title));
@@ -677,12 +677,12 @@ export default function CourseBuilder({
                         </div>
                         {/* Naver Category Text */}
                         {place.category && (
-                          <span style={{ fontSize: '11px', color: '#f472b6', flexShrink: 0, textAlign: 'right' }}>
+                          <span style={{ fontSize: '11px', color: 'var(--color-accent-primary)', flexShrink: 0, textAlign: 'right' }}>
                             {place.category}
                           </span>
                         )}
                       </div>
-                      <div style={{ fontSize: '12px', color: '#8b7fa8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      <div style={{ fontSize: '12px', color: 'var(--color-text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {place.roadAddress || place.address}
                       </div>
                       {/* External links */}
@@ -843,7 +843,7 @@ export default function CourseBuilder({
                 style={{
                   width: '100%', padding: '12px', borderRadius: '12px',
                   background: 'rgba(255,255,255,0.03)', border: '1px dashed rgba(244,114,182,0.4)',
-                  color: '#f472b6', fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s',
+                  color: 'var(--color-accent-primary)', fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s',
                   display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px'
                 }}
               >
@@ -864,10 +864,10 @@ export default function CourseBuilder({
                 return (
                   <div className="animate-fade-in" style={{
                     marginTop: '8px', background: 'rgba(0,0,0,0.3)', borderRadius: '12px', padding: '12px',
-                    border: '1px solid rgba(255,255,255,0.05)', display: 'flex', flexDirection: 'column', gap: '8px'
+                    border: '1px solid var(--color-bg-secondary)', display: 'flex', flexDirection: 'column', gap: '8px'
                   }}>
                     {sortedStoragePlaces.length === 0 ? (
-                      <div style={{ color: '#8b7fa8', textAlign: 'center', fontSize: '13px', padding: '12px' }}>
+                      <div style={{ color: 'var(--color-text-secondary)', textAlign: 'center', fontSize: '13px', padding: '12px' }}>
                         보관함에 담은 장소가 없습니다.
                       </div>
                     ) : (
@@ -889,7 +889,7 @@ export default function CourseBuilder({
                               setShowStoragePins?.(false);
                             }}
                             style={{
-                              background: 'rgba(255,255,255,0.05)', padding: '12px', borderRadius: '8px',
+                              background: 'var(--color-bg-secondary)', padding: '12px', borderRadius: '8px',
                               display: 'flex', alignItems: 'center', gap: '12px',
                               cursor: 'pointer', border: '1px solid transparent', transition: 'all 0.2s',
                             }}
@@ -899,7 +899,7 @@ export default function CourseBuilder({
                           <div style={{ flex: 1, minWidth: 0 }}>
                             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '8px', marginBottom: '4px' }}>
                               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', overflow: 'hidden' }}>
-                                <div style={{ fontSize: '15px', fontWeight: 600, color: '#f5f0ff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                <div style={{ fontSize: '15px', fontWeight: 600, color: 'var(--color-text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                   {stripHtml(p.title)}
                                 </div>
                                 <span className="facility-badge" title={fLabel} style={{ flexShrink: 0 }}>
@@ -907,12 +907,12 @@ export default function CourseBuilder({
                                 </span>
                               </div>
                               {p.category && (
-                                <span style={{ fontSize: '11px', color: '#f472b6', flexShrink: 0, textAlign: 'right' }}>
+                                <span style={{ fontSize: '11px', color: 'var(--color-accent-primary)', flexShrink: 0, textAlign: 'right' }}>
                                   {p.category}
                                 </span>
                               )}
                             </div>
-                            <div style={{ fontSize: '12px', color: '#8b7fa8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            <div style={{ fontSize: '12px', color: 'var(--color-text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                               {p.roadAddress || p.address}
                             </div>
                             <div style={{ display: 'flex', gap: '6px', marginTop: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
@@ -933,7 +933,7 @@ export default function CourseBuilder({
                               }}>🗺️ 네이버맵</span>
                             </div>
                           </div>
-                          <div style={{ fontSize: '13px', color: '#f472b6', fontWeight: 700, padding: '6px 12px', background: 'rgba(244,114,182,0.1)', borderRadius: '8px' }}>
+                          <div style={{ fontSize: '13px', color: 'var(--color-accent-primary)', fontWeight: 700, padding: '6px 12px', background: 'rgba(244,114,182,0.1)', borderRadius: '8px' }}>
                             추가 +
                           </div>
                         </div>

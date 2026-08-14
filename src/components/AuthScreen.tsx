@@ -102,7 +102,7 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
             disabled={isLoading}
             style={{
               padding: '14px', borderRadius: 'var(--radius-md)', border: 'none',
-              background: 'var(--color-accent-gradient)', color: '#fff', fontSize: 'var(--text-base)', 
+              background: 'var(--color-accent-gradient)', color: 'var(--color-text-primary)', fontSize: 'var(--text-base)', 
               fontWeight: '600', cursor: isLoading ? 'not-allowed' : 'pointer',
               marginTop: '8px', boxShadow: 'var(--shadow-glow)', opacity: isLoading ? 0.7 : 1,
               transition: 'opacity var(--transition-fast)'
