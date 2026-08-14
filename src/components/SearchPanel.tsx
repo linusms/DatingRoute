@@ -147,22 +147,21 @@ export default function SearchPanel({
               ))}
             </select>
 
-            {selectedPlaceId !== 'all' && (
-              <div>
-                <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)', marginBottom: '4px' }}>
-                  반경: <strong style={{ color: 'var(--color-accent-primary)' }}>{radiusKm}km</strong>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span style={{ fontSize: '10px', color: 'var(--color-text-secondary)' }}>1</span>
-                  <input
-                    type="range" min={1} max={20} step={1} value={radiusKm}
-                    onChange={e => setRadiusKm(Number(e.target.value))}
-                    style={{ flex: 1, accentColor: 'var(--color-accent-primary)', cursor: 'pointer' }}
-                  />
-                  <span style={{ fontSize: '10px', color: 'var(--color-text-secondary)' }}>20km</span>
-                </div>
+            <div style={{ opacity: selectedPlaceId === 'all' ? 0.4 : 1, pointerEvents: selectedPlaceId === 'all' ? 'none' : 'auto' }}>
+              <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)', marginBottom: '4px' }}>
+                반경: <strong style={{ color: 'var(--color-accent-primary)' }}>{radiusKm}km</strong>
+                {selectedPlaceId === 'all' && <span style={{ marginLeft: '6px', fontSize: '10px' }}>(장소 선택 시 활성화)</span>}
               </div>
-            )}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontSize: '10px', color: 'var(--color-text-secondary)' }}>1</span>
+                <input
+                  type="range" min={1} max={20} step={1} value={radiusKm}
+                  onChange={e => setRadiusKm(Number(e.target.value))}
+                  style={{ flex: 1, accentColor: 'var(--color-accent-primary)', cursor: 'pointer' }}
+                />
+                <span style={{ fontSize: '10px', color: 'var(--color-text-secondary)' }}>20km</span>
+              </div>
+            </div>
           </div>
         )}
       </div>

@@ -572,20 +572,19 @@ export default function AIRecommendPanel({
                 </option>
               ))}
             </select>
-            {selectedPlaceId !== 'all' && (
-              <div style={{ marginBottom: '10px' }}>
-                <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)', marginBottom: '4px' }}>
-                  반경: <strong style={{ color: 'var(--color-accent-primary)' }}>{radiusKm}km</strong>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span style={{ fontSize: '10px', color: 'var(--color-text-secondary)' }}>1km</span>
-                  <input type="range" min={1} max={20} step={1} value={radiusKm}
-                    onChange={e => setRadiusKm(Number(e.target.value))}
-                    style={{ flex: 1, accentColor: 'var(--color-accent-primary)', cursor: 'pointer' }} />
-                  <span style={{ fontSize: '10px', color: 'var(--color-text-secondary)' }}>20km</span>
-                </div>
+            <div style={{ marginBottom: '10px', opacity: selectedPlaceId === 'all' ? 0.4 : 1, pointerEvents: selectedPlaceId === 'all' ? 'none' : 'auto' }}>
+              <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)', marginBottom: '4px' }}>
+                반경: <strong style={{ color: 'var(--color-accent-primary)' }}>{radiusKm}km</strong>
+                {selectedPlaceId === 'all' && <span style={{ marginLeft: '6px', fontSize: '10px' }}>(장소 선택 시 활성화)</span>}
               </div>
-            )}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontSize: '10px', color: 'var(--color-text-secondary)' }}>1km</span>
+                <input type="range" min={1} max={20} step={1} value={radiusKm}
+                  onChange={e => setRadiusKm(Number(e.target.value))}
+                  style={{ flex: 1, accentColor: 'var(--color-accent-primary)', cursor: 'pointer' }} />
+                <span style={{ fontSize: '10px', color: 'var(--color-text-secondary)' }}>20km</span>
+              </div>
+            </div>
 
 
 
