@@ -31,6 +31,15 @@ export function useCourseSession({ setActiveTab, showToastMsg, clearDirections, 
   const [sessionInvalidated, setSessionInvalidated] = useState(false);
 
   const skipNextSSERef = useRef(false);
+  // 항상 최신 coursePlaces를 참조하기 위한 ref (stale closure 방지)
+  const coursePlacesRef = useRef<CoursePlace[]>([]);
+  const sessionIdRef = useRef<string | null>(null);
+  const currentUserRef = useRef<User | null>(null);
+
+  // ref를 항상 최신 상태와 동기화
+  useEffect(() => { coursePlacesRef.current = coursePlaces; }, [coursePlaces]);
+  useEffect(() => { sessionIdRef.current = sessionId; }, [sessionId]);
+  useEffect(() => { currentUserRef.current = currentUser; }, [currentUser]);
 
   const validateSession = useCallback(async () => {
     if (!currentUser?.sessionToken || !currentUser?.id) return;
@@ -322,7 +331,22 @@ export function useCourseSession({ setActiveTab, showToastMsg, clearDirections, 
     }
   }, [inviteCode, showToastMsg]);
 
-  const handleGoToDashboard = useCallback(() => {
+  const handleGoToDashboard = useCallback(async () => {
+    // 대시보드로 나가기 전에 현재 보관함 포함 모든 장소를 DB에 확실히 저장합니다.
+    // 개별 POST가 완료되지 않았거나 실패했더라도 이 PUT이 최종 상태를 보장합니다.
+    const sid = sessionIdRef.current;
+    const user = currentUserRef.current;
+    const places = coursePlacesRef.current;
+    if (sid && user?.id && places.length > 0) {
+      try {
+        await fetch(`/api/sessions/${sid}/places`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'set', places, userId: user.id }),
+        });
+      } catch { /* ignore network errors */ }
+    }
+
     setSessionMode(null);
     setSessionId(null);
     setInviteCode(null);
