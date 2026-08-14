@@ -49,7 +49,7 @@ export function useCourseSession({ setActiveTab, showToastMsg, clearDirections, 
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: currentUser.id, sessionToken: currentUser.sessionToken }),
       });
-      if (!res.ok) {
+      if (res.status === 401) {
         setSessionInvalidated(true);
       }
     } catch { /* ignore network errors */ }

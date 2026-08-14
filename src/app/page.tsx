@@ -157,32 +157,25 @@ export default function HomePage() {
   // ──── Place Actions (with server sync) ────
   const handleAddPlace = useCallback(
     async (place: Place & { day?: number }) => {
-      let isDuplicate = false;
-      let newPlace: CoursePlace | null = null;
       const cleanTitle = stripHtml(place.title);
       const targetDay = place.day ?? 0;
 
-      setCoursePlaces((prev) => {
-        if (prev.some((p) => stripHtml(p.title) === cleanTitle && (p.day ?? 0) === targetDay)) {
-          isDuplicate = true;
-          return prev;
-        }
-
-        newPlace = {
-          ...place,
-          id: Math.random().toString(36).substring(2, 9),
-          order: prev.length,
-          memo: '',
-          day: targetDay,
-        };
-
-        return [...prev, newPlace];
-      });
-
-      if (isDuplicate) {
+      if (coursePlaces.some((p) => stripHtml(p.title) === cleanTitle && (p.day ?? 0) === targetDay)) {
         showToastMsg('이미 코스에 추가된 장소입니다');
         return;
       }
+
+      const newPlace: CoursePlace = {
+        ...place,
+        id: Math.random().toString(36).substring(2, 9),
+        order: coursePlaces.length,
+        memo: '',
+        day: targetDay,
+      };
+
+      setCoursePlaces((prev) => [...prev, newPlace]);
+
+
 
       setIsRouteCreated(false);
       showToastMsg(`"${cleanTitle}" 추가됨`);
