@@ -191,7 +191,7 @@ export default function SearchPanel({
           >
             <div className="place-card-content" style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
               <PlaceThumbnail 
-                query={`${place.roadAddress || place.address} ${stripHtml(place.title)}`}
+                query={`${place.address?.split(' ')[2] || ''} ${stripHtml(place.title)}`}
                 style={{ width: '60px', height: '60px', borderRadius: '8px', flexShrink: 0 }}
               />
               <div style={{ flex: 1, minWidth: 0 }}>

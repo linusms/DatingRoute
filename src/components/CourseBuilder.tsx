@@ -294,7 +294,7 @@ export default function CourseBuilder({
     setIsSelectMode(false);
   };
 
-  const isCollaborative = members && members.length > 1;
+  const isCollaborative = inviteCode != null;
 
   // Calculate per-day stats (distance and duration)
   const dayStats = useMemo(() => {
@@ -698,7 +698,7 @@ export default function CourseBuilder({
                       </div>
                     )}
                     <PlaceThumbnail
-                      query={`${place.roadAddress || place.address} ${stripHtml(place.title)}`}
+                      query={`${place.address?.split(' ')[2] || ''} ${stripHtml(place.title)}`}
                       style={{ width: '48px', height: '48px', borderRadius: '8px', flexShrink: 0 }}
                     />
                     <div style={{ flex: 1, minWidth: 0 }}>
@@ -836,7 +836,7 @@ export default function CourseBuilder({
                     </div>
                     </div>
                     {/* Reactions UI */}
-                    {isCollaborative && currentUserId && (
+                    {currentUserId && (
                       <div style={{ display: 'flex', gap: '4px', marginTop: '8px', paddingLeft: '38px' }} onClick={e => e.stopPropagation()}>
                         {['❤️', '👍', '🤔', '❌'].map(emoji => {
                           const reactions = place.reactions || {};

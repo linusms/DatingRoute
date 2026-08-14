@@ -11,6 +11,8 @@ interface PlaceThumbnailProps {
 export default function PlaceThumbnail({ query, className, style }: PlaceThumbnailProps) {
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [imgError, setImgError] = useState(false);
+  const fallbackImg = 'https://placehold.co/150x150/2a2a35/a3a3b2?text=No+Photo';
 
   useEffect(() => {
     let isMounted = true;
@@ -70,7 +72,11 @@ export default function PlaceThumbnail({ query, className, style }: PlaceThumbna
           ...style 
         }}
       >
-        📷
+        <img 
+          src={fallbackImg} 
+          alt="No Image Available"
+          style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }}
+        />
       </div>
     );
   }
@@ -78,10 +84,11 @@ export default function PlaceThumbnail({ query, className, style }: PlaceThumbna
   return (
     // eslint-disable-next-line @next/next/no-img-element
     <img 
-      src={imageUrl} 
+      src={imgError ? fallbackImg : imageUrl} 
       alt={query}
       className={className}
       style={{ objectFit: 'cover', ...style }}
+      onError={() => setImgError(true)}
     />
   );
 }

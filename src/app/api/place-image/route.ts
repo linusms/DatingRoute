@@ -16,7 +16,9 @@ export async function GET(request: Request) {
   }
 
   try {
-    const apiUrl = `https://openapi.naver.com/v1/search/image?query=${encodeURIComponent(query)}&display=1&sort=sim`;
+    // Append "업체" to the query to prefer official business photos over random blog posts
+    const searchQuery = `${query} 업체`.trim();
+    const apiUrl = `https://openapi.naver.com/v1/search/image?query=${encodeURIComponent(searchQuery)}&display=1&sort=sim`;
     
     const response = await fetch(apiUrl, {
       method: 'GET',
