@@ -431,7 +431,7 @@ export default function AIRecommendPanel({
       {/* ── 검색 기록 리스트 ── */}
       {searchHistory.length > 0 && (
         <div style={{
-          background: 'rgba(255,255,255,0.04)', border: '1px solid var(--color-border)',
+          background: 'var(--color-bg-secondary)', border: '1px solid var(--color-border)',
           borderRadius: '12px', padding: '14px', marginBottom: '16px',
         }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
@@ -486,8 +486,8 @@ export default function AIRecommendPanel({
               <button
                 onClick={(e) => handleDeleteHistory(activeHistoryId, e)}
                 style={{
-                  background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.4)',
-                  color: '#ef4444', padding: '8px', borderRadius: '8px', cursor: 'pointer',
+                  background: 'var(--color-border)', border: '1px solid var(--color-border)',
+                  color: 'var(--color-text-secondary)', padding: '8px', borderRadius: '8px', cursor: 'pointer',
                   flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center'
                 }}
                 title="현재 기록 삭제"
@@ -520,7 +520,7 @@ export default function AIRecommendPanel({
           <button 
             onClick={handleCancelSearch}
             className="btn btn-secondary"
-            style={{ padding: '10px 14px', fontSize: '13px', background: 'rgba(239, 68, 68, 0.2)', color: '#ef4444', border: '1px solid rgba(239, 68, 68, 0.5)' }}
+            style={{ padding: '10px 14px', fontSize: '13px', background: 'var(--color-border)', color: 'var(--color-text-secondary)', border: '1px solid var(--color-border)' }}
           >
             취소
           </button>
@@ -596,8 +596,8 @@ export default function AIRecommendPanel({
                   <button key={cat.id} onClick={() => toggleCategory(cat.id)}
                     style={{
                       padding: '7px 8px', borderRadius: '8px', cursor: 'pointer',
-                      border: isActive ? '1px solid var(--color-border)' : '1px solid rgba(255,255,255,0.08)',
-                      background: isActive ? 'var(--color-border)' : 'rgba(255,255,255,0.04)',
+                      border: isActive ? '1px solid var(--color-border)' : '1px solid var(--color-border)',
+                      background: isActive ? 'var(--color-border)' : 'var(--color-bg-secondary)',
                       color: isActive ? 'var(--color-accent-primary)' : 'var(--color-text-secondary)',
                       fontSize: '12px', fontWeight: isActive ? 600 : 400,
                       transition: 'all 0.2s', textAlign: 'left',
@@ -609,7 +609,7 @@ export default function AIRecommendPanel({
               })}
             </div>
             {selectedCategories.length === 0 && (
-              <div style={{ fontSize: '11px', color: '#ef4444', marginBottom: '8px' }}>⚠️ 최소 1개 선택 필요</div>
+              <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)', marginBottom: '8px' }}>⚠️ 최소 1개 선택 필요</div>
             )}
             {/* 키워드 */}
             <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)', marginBottom: '4px' }}>맞춤 키워드 (선택)</div>
@@ -677,7 +677,7 @@ export default function AIRecommendPanel({
       {showPopup && (
         <div style={{
           position: 'fixed', top: 0, left: 0, width: '100%', height: '100%',
-          background: 'rgba(0,0,0,0.6)', zIndex: 9999,
+          background: 'var(--color-bg-tertiary)', zIndex: 9999,
           display: 'flex', alignItems: 'center', justifyContent: 'center'
         }} onClick={() => setShowPopup(false)}>
           <div
@@ -686,11 +686,11 @@ export default function AIRecommendPanel({
             style={{
               position: 'relative',
               width: `${panelSize.width}px`,
-              background: 'rgba(26,21,32,0.95)',
+              background: 'var(--color-bg-primary)',
               backdropFilter: 'blur(20px)',
               borderRadius: '24px',
               border: '1px solid var(--color-border-active)',
-              boxShadow: '0 20px 40px rgba(0,0,0,0.5)',
+              boxShadow: '0 20px 40px var(--color-bg-tertiary)',
               display: 'flex', flexDirection: 'column', overflow: 'hidden',
               maxHeight: `${Math.min(panelSize.height, typeof window !== 'undefined' ? window.innerHeight * 0.95 : 1000)}px`,
             }}
@@ -799,7 +799,7 @@ export default function AIRecommendPanel({
                                 <div style={{ marginBottom: '6px', display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
                                   <span style={{
                                     fontSize: '11px', padding: '2px 6px', borderRadius: '4px',
-                                    background: 'rgba(255,255,255,0.06)', color: 'var(--color-accent-primary)', fontWeight: 600,
+                                    background: 'var(--color-bg-secondary)', color: 'var(--color-accent-primary)', fontWeight: 600,
                                     cursor: rec.link ? 'pointer' : 'default',
                                     display: 'inline-block'
                                   }}
@@ -818,8 +818,8 @@ export default function AIRecommendPanel({
                                     onClick={e => e.stopPropagation()}
                                     style={{
                                       fontSize: '11px', padding: '2px 6px', borderRadius: '4px',
-                                      background: 'rgba(255,255,255,0.06)', color: '#4ade80',
-                                      textDecoration: 'none', border: '1px solid rgba(74,222,128,0.2)',
+                                      background: 'var(--color-bg-secondary)', color: 'var(--color-text-secondary)',
+                                      textDecoration: 'none', border: '1px solid var(--color-border)',
                                     }}
                                   >🗺️ 네이버맵</a>
                                 </div>
@@ -883,7 +883,7 @@ export default function AIRecommendPanel({
                                 <div className="ai-event-header-compact" style={{ padding: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                   <div>
                                     <h3 className="ai-event-title" style={{ margin: 0, fontSize: '15px' }}>{stripHtml(event.title)}</h3>
-                                    <div className="ai-event-address" style={{ fontSize: '13px', color: 'rgba(255,255,255,0.6)', marginTop: '4px' }}>
+                                    <div className="ai-event-address" style={{ fontSize: '13px', color: 'var(--color-text-secondary)', marginTop: '4px' }}>
                                       📍 {event.address || '주소 정보 없음'}
                                     </div>
                                   </div>
@@ -916,7 +916,7 @@ export default function AIRecommendPanel({
                                           <button
                                             className="btn btn-sm"
                                             style={{
-                                              background: 'rgba(255,255,255,0.08)',
+                                              background: 'var(--color-border)',
                                               color: 'var(--color-accent-primary)',
                                               border: '1px solid var(--color-border-active)',
                                               cursor: 'pointer',
