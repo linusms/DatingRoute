@@ -200,7 +200,7 @@ export default function HomePage() {
         } catch { /* ignore */ }
       }
     },
-    [showToastMsg, sessionId, currentUser?.id]
+    [coursePlaces, showToastMsg, sessionId, currentUser?.id]
   );
 
   const handleRemovePlace = useCallback(
