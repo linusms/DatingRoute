@@ -3,7 +3,7 @@
 import React, { useState, useCallback, useMemo } from 'react';
 import { Place, CoursePlace } from '@/lib/types';
 import { stripHtml, katechToWgs84 } from '@/lib/utils';
-import React, { useState, useEffect } from 'react';
+
 
 interface SearchPanelProps {
   coursePlaces?: CoursePlace[];
