@@ -3,7 +3,7 @@
 import React, { useState, useCallback, useMemo } from 'react';
 import { Place, CoursePlace } from '@/lib/types';
 import { stripHtml, katechToWgs84 } from '@/lib/utils';
-import PlaceThumbnail from './PlaceThumbnail';
+import React, { useState, useEffect } from 'react';
 
 interface SearchPanelProps {
   coursePlaces?: CoursePlace[];
@@ -189,10 +189,6 @@ export default function SearchPanel({
             onMouseLeave={() => onHighlightPlace?.(null)}
           >
             <div className="place-card-content" style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
-              <PlaceThumbnail 
-                query={`${place.address?.split(' ')[2] || ''} ${stripHtml(place.title)}`}
-                style={{ width: '60px', height: '60px', borderRadius: '8px', flexShrink: 0 }}
-              />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div className="place-card-header" style={{ marginBottom: '4px' }}>
                   <h3 className="place-card-title">{stripHtml(place.title)}</h3>

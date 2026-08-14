@@ -4,7 +4,7 @@ import { formatDuration, formatDistance, getWalkingTimeMs, stripHtml, parseCateg
 import { useDragAndDrop } from '@/lib/useDragAndDrop';
 import ShareCard from './ShareCard';
 import DateSchedulePicker from './DateSchedulePicker';
-import PlaceThumbnail from './PlaceThumbnail';
+
 
 interface CourseBuilderProps {
   places: CoursePlace[];
@@ -697,10 +697,6 @@ export default function CourseBuilder({
                         {idx + 1}
                       </div>
                     )}
-                    <PlaceThumbnail
-                      query={`${place.address?.split(' ')[2] || ''} ${stripHtml(place.title)}`}
-                      style={{ width: '48px', height: '48px', borderRadius: '8px', flexShrink: 0 }}
-                    />
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '8px', marginBottom: '4px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', overflow: 'hidden' }}>
