@@ -26,7 +26,7 @@ interface CourseBuilderProps {
   onJoinByInviteCode?: (code: string) => void;
   onCopyInviteCode?: () => void;
   onCopyInviteLink?: () => void;
-  members?: { nickname?: string; isOwner?: boolean }[];
+  members?: { nickname?: string; isOwner?: boolean; userId?: string }[];
   currentUserId?: string;
   // Course naming (auto-save)
   schedule?: DateSchedule | null;
@@ -837,11 +837,22 @@ export default function CourseBuilder({
                         {['❤️', '👍', '🤔', '❌'].map(emoji => {
                           const reactions = place.reactions || {};
                           const hasReacted = reactions[currentUserId] === emoji;
-                          // count total of this emoji
-                          const count = Object.values(reactions).filter(v => v === emoji).length;
+                          const reactorIds = Object.entries(reactions)
+                            .filter(([_, reactionEmoji]) => reactionEmoji === emoji)
+                            .map(([uid, _]) => uid);
+                          const count = reactorIds.length;
+                          
+                          // Map user IDs to nicknames
+                          const reactorNames = reactorIds.map(uid => {
+                            if (uid === currentUserId) return '나';
+                            const member = members?.find(m => m.userId === uid);
+                            return member?.nickname || '참여자';
+                          });
+
                           return (
                             <button
                               key={emoji}
+                              title={reactorNames.length > 0 ? reactorNames.join(', ') : ''}
                               onClick={(e) => {
                                 e.stopPropagation();
                                 const updatedReactions = { ...reactions };
@@ -864,7 +875,12 @@ export default function CourseBuilder({
                               }}
                             >
                               <span>{emoji}</span>
-                              {count > 0 && <span style={{ fontSize: '11px', fontWeight: 600 }}>{count}</span>}
+                              {count > 0 && (
+                                <span style={{ fontSize: '11px', fontWeight: 500, display: 'flex', gap: '4px', alignItems: 'center' }}>
+                                  <span style={{ fontWeight: 600 }}>{count}</span>
+                                  <span style={{ opacity: 0.7, fontSize: '10px' }}>({reactorNames.join(', ')})</span>
+                                </span>
+                              )}
                             </button>
                           );
                         })}
