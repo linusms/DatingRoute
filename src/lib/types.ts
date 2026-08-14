@@ -15,6 +15,7 @@ export interface CoursePlace extends Place {
   memo: string;
   day?: number;
   isHold?: boolean;
+  reactions?: Record<string, string>; // userId -> emoji
 }
 
 export interface DirectionLeg {

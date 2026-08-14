@@ -70,7 +70,8 @@ CREATE TABLE course_places (
   memo TEXT NOT NULL DEFAULT '',
   order_index INTEGER NOT NULL DEFAULT 0,
   day_index INTEGER NOT NULL DEFAULT 1,
-  added_by TEXT NOT NULL DEFAULT '' -- 유저 닉네임
+  added_by TEXT NOT NULL DEFAULT '', -- 유저 닉네임
+  reactions JSONB DEFAULT '{}'::jsonb
 );
 
 -- 6. 실시간 이벤트 (Realtime Events)

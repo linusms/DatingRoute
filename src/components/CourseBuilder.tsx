@@ -4,6 +4,7 @@ import { formatDuration, formatDistance, getWalkingTimeMs, stripHtml, parseCateg
 import { useDragAndDrop } from '@/lib/useDragAndDrop';
 import ShareCard from './ShareCard';
 import DateSchedulePicker from './DateSchedulePicker';
+import PlaceThumbnail from './PlaceThumbnail';
 
 interface CourseBuilderProps {
   places: CoursePlace[];
@@ -26,6 +27,7 @@ interface CourseBuilderProps {
   onCopyInviteCode?: () => void;
   onCopyInviteLink?: () => void;
   members?: { nickname?: string; isOwner?: boolean }[];
+  currentUserId?: string;
   // Course naming (auto-save)
   schedule?: DateSchedule | null;
   onScheduleChange?: (schedule: DateSchedule | null) => void;
@@ -59,6 +61,7 @@ export default function CourseBuilder({
   onCopyInviteCode,
   onCopyInviteLink,
   members,
+  currentUserId,
   schedule,
   onScheduleChange,
   courseName = '',
@@ -694,6 +697,10 @@ export default function CourseBuilder({
                         {idx + 1}
                       </div>
                     )}
+                    <PlaceThumbnail
+                      query={`${place.roadAddress || place.address} ${stripHtml(place.title)}`}
+                      style={{ width: '48px', height: '48px', borderRadius: '8px', flexShrink: 0 }}
+                    />
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '8px', marginBottom: '4px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', overflow: 'hidden' }}>
@@ -828,6 +835,45 @@ export default function CourseBuilder({
                         )}
                     </div>
                     </div>
+                    {/* Reactions UI */}
+                    {isCollaborative && currentUserId && (
+                      <div style={{ display: 'flex', gap: '4px', marginTop: '8px', paddingLeft: '38px' }} onClick={e => e.stopPropagation()}>
+                        {['❤️', '👍', '🤔', '❌'].map(emoji => {
+                          const reactions = place.reactions || {};
+                          const hasReacted = reactions[currentUserId] === emoji;
+                          // count total of this emoji
+                          const count = Object.values(reactions).filter(v => v === emoji).length;
+                          return (
+                            <button
+                              key={emoji}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const updatedReactions = { ...reactions };
+                                if (hasReacted) {
+                                  delete updatedReactions[currentUserId];
+                                } else {
+                                  updatedReactions[currentUserId] = emoji;
+                                }
+                                const updatedPlace = { ...place, reactions: updatedReactions };
+                                const newPlaces = places.map(p => p.id === place.id ? updatedPlace : p);
+                                onReorderPlaces(newPlaces);
+                              }}
+                              style={{
+                                padding: '4px 8px', borderRadius: '12px',
+                                background: hasReacted ? 'rgba(255, 60, 100, 0.2)' : 'var(--color-bg-tertiary)',
+                                border: hasReacted ? '1px solid rgba(255, 60, 100, 0.5)' : '1px solid var(--color-border)',
+                                cursor: 'pointer', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '4px',
+                                color: hasReacted ? '#ff3c64' : 'var(--color-text-secondary)',
+                                transition: 'all 0.2s',
+                              }}
+                            >
+                              <span>{emoji}</span>
+                              {count > 0 && <span style={{ fontSize: '11px', fontWeight: 600 }}>{count}</span>}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
                     {!isRouteCreated && (
                       <button
                         onClick={() => {

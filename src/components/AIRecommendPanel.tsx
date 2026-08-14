@@ -626,6 +626,36 @@ export default function AIRecommendPanel({
               }}
               onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleAIRecommend(); } }}
             />
+            
+            {/* AI Preset Chips */}
+            <div style={{ display: 'flex', gap: '6px', marginTop: '10px', overflowX: 'auto', paddingBottom: '4px' }} className="custom-scrollbar">
+              {[
+                { icon: '🌧️', label: '비 오는 날 실내', keyword: '비 오는 날 실내 데이트' },
+                { icon: '☕', label: '조용한 대화', keyword: '분위기 좋은 조용한 대화 카페' },
+                { icon: '🍽️', label: '기념일 분위기', keyword: '기념일 파인다이닝 레스토랑' },
+                { icon: '🚶‍♀️', label: '걷기 좋은 길', keyword: '걷기 좋은 예쁜 산책로' }
+              ].map(preset => (
+                <button
+                  key={preset.label}
+                  onClick={() => {
+                    setSearchKeyword(preset.keyword);
+                    // Timeout to let state update before fetching
+                    setTimeout(() => handleAIRecommend(), 0);
+                  }}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0,
+                    padding: '6px 10px', borderRadius: '16px', background: 'var(--color-bg-tertiary)',
+                    border: '1px solid var(--color-border)', color: 'var(--color-text-secondary)',
+                    fontSize: '11px', cursor: 'pointer', transition: 'all 0.2s'
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--color-text-primary)'; e.currentTarget.style.borderColor = 'var(--color-accent-primary)'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--color-text-secondary)'; e.currentTarget.style.borderColor = 'var(--color-border)'; }}
+                >
+                  <span>{preset.icon}</span>
+                  <span>{preset.label}</span>
+                </button>
+              ))}
+            </div>
           </div>
         )}
       </div>

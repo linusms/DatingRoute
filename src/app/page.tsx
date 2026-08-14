@@ -497,6 +497,7 @@ export default function HomePage() {
                 onCopyInviteCode={handleCopyInviteCode}
                 onCopyInviteLink={handleCopyInviteLink}
                 members={members}
+                currentUserId={currentUser?.id}
                 schedule={schedule}
                 onScheduleChange={setSchedule}
                 courseName={courseName}

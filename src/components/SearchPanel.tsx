@@ -3,6 +3,7 @@
 import React, { useState, useCallback, useMemo } from 'react';
 import { Place, CoursePlace } from '@/lib/types';
 import { stripHtml, katechToWgs84 } from '@/lib/utils';
+import PlaceThumbnail from './PlaceThumbnail';
 
 interface SearchPanelProps {
   coursePlaces?: CoursePlace[];
@@ -188,22 +189,27 @@ export default function SearchPanel({
             onMouseEnter={() => onHighlightPlace?.(place)}
             onMouseLeave={() => onHighlightPlace?.(null)}
           >
-            <div className="place-card-content">
-              <div className="place-card-header">
-                <h3 className="place-card-title">{stripHtml(place.title)}</h3>
-                <span className="place-card-category">{place.category}</span>
-              </div>
-              <div className="place-card-address" style={{ marginBottom: '8px', WebkitLineClamp: 1 } as any}>
-                {place.roadAddress || place.address}
-              </div>
-              <div className="place-card-actions">
-                <button
-                  className="btn btn-ghost"
-                  style={{ fontSize: '12px', padding: '4px 8px' }}
-                  onClick={() => onShowReview(stripHtml(place.title))}
-                >
-                  후기
-                </button>
+            <div className="place-card-content" style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
+              <PlaceThumbnail 
+                query={`${place.roadAddress || place.address} ${stripHtml(place.title)}`}
+                style={{ width: '60px', height: '60px', borderRadius: '8px', flexShrink: 0 }}
+              />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div className="place-card-header" style={{ marginBottom: '4px' }}>
+                  <h3 className="place-card-title">{stripHtml(place.title)}</h3>
+                  <span className="place-card-category">{place.category}</span>
+                </div>
+                <div className="place-card-address" style={{ marginBottom: '8px', WebkitLineClamp: 1 } as any}>
+                  {place.roadAddress || place.address}
+                </div>
+                <div className="place-card-actions">
+                  <button
+                    className="btn btn-ghost"
+                    style={{ fontSize: '12px', padding: '4px 8px' }}
+                    onClick={() => onShowReview(stripHtml(place.title))}
+                  >
+                    후기
+                  </button>
                 {(() => {
                   const isAlreadyAdded = coursePlaces.some(p => stripHtml(p.title) === stripHtml(place.title) && (p.day ?? 0) === 0);
                   return (
@@ -218,6 +224,7 @@ export default function SearchPanel({
                   );
                 })()}
               </div>
+            </div>
             </div>
           </div>
         ))}

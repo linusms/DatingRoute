@@ -69,6 +69,7 @@ function mapDbPlaceToCoursePlace(row: any): CoursePlace {
     roadAddress: row.road_address,
     order: row.order_index,
     day: row.day_index ?? 1,
+    reactions: row.reactions || {},
   } as CoursePlace;
 }
 
@@ -309,6 +310,7 @@ export async function addLivePlace(roomId: string, ownerId: string, placeData: P
     memo: placeData.memo || '',
     order_index: placeData.order || 0,
     day_index: placeData.day ?? 1,
+    reactions: placeData.reactions || {},
   };
   const { error } = await supabase.from('course_places').insert(newPlaceDb);
   if (error) console.error('Add live place error:', error);
@@ -341,6 +343,7 @@ export async function updateLivePlaces(roomId: string, ownerId: string, places: 
     memo: p.memo || '',
     order_index: i,
     day_index: p.day ?? 1,
+    reactions: p.reactions || {},
   }));
 
   const { error } = await supabase
