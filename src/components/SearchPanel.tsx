@@ -1,11 +1,11 @@
 'use client';
 
 import React, { useState, useCallback, useMemo } from 'react';
-import { Place } from '@/lib/types';
+import { Place, CoursePlace } from '@/lib/types';
 import { stripHtml, katechToWgs84 } from '@/lib/utils';
 
 interface SearchPanelProps {
-  coursePlaces?: Place[];
+  coursePlaces?: CoursePlace[];
   onAddPlace: (place: Place) => void;
   onShowReview: (placeName: string) => void;
   onHighlightPlace?: (place: Place | null) => void;
@@ -204,13 +204,19 @@ export default function SearchPanel({
                 >
                   후기
                 </button>
-                <button
-                  className="btn btn-primary"
-                  style={{ fontSize: '12px', padding: '4px 10px' }}
-                  onClick={() => onAddPlace(place)}
-                >
-                  + 추가
-                </button>
+                {(() => {
+                  const isAlreadyAdded = coursePlaces.some(p => stripHtml(p.title) === stripHtml(place.title) && (p.day ?? 0) === 0);
+                  return (
+                    <button
+                      className="btn btn-primary"
+                      style={{ fontSize: '12px', padding: '4px 10px', opacity: isAlreadyAdded ? 0.5 : 1, cursor: isAlreadyAdded ? 'default' : 'pointer' }}
+                      onClick={() => !isAlreadyAdded && onAddPlace(place)}
+                      disabled={isAlreadyAdded}
+                    >
+                      {isAlreadyAdded ? '추가됨' : '+ 추가'}
+                    </button>
+                  );
+                })()}
               </div>
             </div>
           </div>

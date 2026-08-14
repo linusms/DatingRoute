@@ -172,7 +172,7 @@ export default function ReviewPanel({ placeName, onClose }: ReviewPanelProps) {
           height: `${panelSize.height}px`,
           maxWidth: '95vw',
           maxHeight: '98vh',
-          background: 'rgba(26,21,32,0.97)',
+          background: 'var(--color-bg-glass)',
           backdropFilter: 'blur(20px)',
           border: '1px solid var(--color-border)',
           borderRadius: '16px',
@@ -180,7 +180,7 @@ export default function ReviewPanel({ placeName, onClose }: ReviewPanelProps) {
           flexDirection: 'column',
           overflow: 'hidden',
           position: 'relative',
-          boxShadow: '0 24px 64px rgba(0,0,0,0.6), 0 0 0 1px var(--color-border)',
+          boxShadow: '0 24px 64px rgba(0,0,0,0.1), 0 0 0 1px var(--color-border)',
         }}
       >
         {/* Top resize handle */}
@@ -259,7 +259,7 @@ export default function ReviewPanel({ placeName, onClose }: ReviewPanelProps) {
               ) : (
                 <>
                   <div className="ai-recommendation animate-fade-in" style={{
-                    background: 'var(--color-border)',
+                    background: 'var(--color-bg-tertiary)',
                     border: '1px solid var(--color-border)',
                     borderRadius: '12px',
                     padding: '16px',
@@ -302,7 +302,7 @@ export default function ReviewPanel({ placeName, onClose }: ReviewPanelProps) {
               ) : (
                 <>
                   <div className="ai-recommendation animate-fade-in" style={{
-                    background: 'var(--color-border)',
+                    background: 'var(--color-bg-tertiary)',
                     border: '1px solid var(--color-border)',
                     borderRadius: '12px',
                     padding: '16px',
