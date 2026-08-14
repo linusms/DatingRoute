@@ -56,12 +56,12 @@ export default function SessionBar({
   };
 
   const isCollaborative = members.length > 1;
-  const memberColors = ['#f472b6', '#c084fc', '#60a5fa', '#34d399', '#fbbf24', '#f87171'];
+  const memberColors = ['var(--color-accent-primary)', '#c084fc', '#60a5fa', '#34d399', '#fbbf24', '#f87171'];
 
   return (
-    <div className="session-bar" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 24px', background: 'rgba(255,255,255,0.03)', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+    <div className="session-bar" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 24px', background: 'var(--color-bg-secondary)', borderBottom: '1px solid var(--color-border)' }}>
       <div className="session-bar-left" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-        <span className="session-bar-mode" style={{ fontSize: '13px', background: 'rgba(255,255,255,0.1)', padding: '4px 8px', borderRadius: '4px' }}>
+        <span className="session-bar-mode" style={{ fontSize: '13px', background: 'var(--color-border)', padding: '4px 8px', borderRadius: '4px' }}>
           {isCollaborative ? '👥 협업 중' : '✏️ 편집 중'}
         </span>
         <span className="session-bar-nickname" style={{ fontSize: '14px', fontWeight: 600 }}>{nickname}</span>
@@ -78,7 +78,7 @@ export default function SessionBar({
                 <input
                   value={tempCourseName}
                   onChange={(e) => setTempCourseName(e.target.value)}
-                  style={{ background: 'rgba(255,255,255,0.1)', border: 'none', color: '#fff', padding: '4px 8px', borderRadius: '4px', fontSize: '14px', outline: 'none' }}
+                  style={{ background: 'var(--color-border)', border: 'none', color: '#fff', padding: '4px 8px', borderRadius: '4px', fontSize: '14px', outline: 'none' }}
                   onKeyDown={(e) => { if (e.key === 'Enter') handleSaveName(); if (e.key === 'Escape') setIsEditingName(false); }}
                   autoFocus
                 />
@@ -94,8 +94,8 @@ export default function SessionBar({
         )}
 
         {inviteCode && (
-          <div className="session-bar-invite" style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(244,114,182,0.1)', padding: '6px 12px', borderRadius: '20px' }}>
-            <span className="session-bar-invite-label" style={{ fontSize: '12px', color: '#f472b6' }}>초대코드</span>
+          <div className="session-bar-invite" style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'var(--color-border)', padding: '6px 12px', borderRadius: '20px' }}>
+            <span className="session-bar-invite-label" style={{ fontSize: '12px', color: 'var(--color-accent-primary)' }}>초대코드</span>
             <span className="session-bar-invite-code" style={{ fontSize: '14px', fontWeight: 'bold', letterSpacing: '1px' }}>{inviteCode}</span>
             <button
               className="session-bar-copy-btn"
@@ -132,7 +132,7 @@ export default function SessionBar({
                 style={{
                   backgroundColor: memberColors[i % memberColors.length],
                   zIndex: members.length - i,
-                  width: '28px', height: '28px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '12px', fontWeight: 'bold', marginLeft: i > 0 ? '-8px' : '0', border: '2px solid #1a1520'
+                  width: '28px', height: '28px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '12px', fontWeight: 'bold', marginLeft: i > 0 ? '-8px' : '0', border: '2px solid var(--color-bg-card)'
                 }}
               >
                 {(m.nickname || 'U').charAt(0).toUpperCase()}
@@ -146,18 +146,18 @@ export default function SessionBar({
 
         {showMembersPopup && (
           <div style={{
-            position: 'absolute', top: '40px', right: '100px', background: '#251e30', border: '1px solid rgba(244,114,182,0.3)', borderRadius: '12px', padding: '12px', zIndex: 1000, minWidth: '200px', boxShadow: '0 10px 25px rgba(0,0,0,0.5)'
+            position: 'absolute', top: '40px', right: '100px', background: 'var(--color-bg-primary)', border: '1px solid var(--color-border)', borderRadius: '12px', padding: '12px', zIndex: 1000, minWidth: '200px', boxShadow: '0 10px 25px rgba(0,0,0,0.5)'
           }}>
-            <h4 style={{ margin: '0 0 10px 0', fontSize: '13px', color: '#f472b6', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '8px' }}>참가자 목록</h4>
+            <h4 style={{ margin: '0 0 10px 0', fontSize: '13px', color: 'var(--color-accent-primary)', borderBottom: '1px solid var(--color-border)', paddingBottom: '8px' }}>참가자 목록</h4>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               {members.map(m => (
                 <div key={m.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <span style={{ fontSize: '14px', fontWeight: 600 }}>{m.nickname || 'Unknown'}</span>
-                    {m.isOwner && <span style={{ fontSize: '10px', background: 'rgba(244,114,182,0.2)', color: '#f472b6', padding: '2px 4px', borderRadius: '4px' }}>호스트</span>}
+                    {m.isOwner && <span style={{ fontSize: '10px', background: 'var(--color-border)', color: 'var(--color-accent-primary)', padding: '2px 4px', borderRadius: '4px' }}>호스트</span>}
                   </div>
                   {m.joinedAt && (
-                    <span style={{ fontSize: '11px', color: '#8b7fa8' }}>
+                    <span style={{ fontSize: '11px', color: 'var(--color-text-secondary)' }}>
                       {new Date(m.joinedAt).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' })}
                     </span>
                   )}

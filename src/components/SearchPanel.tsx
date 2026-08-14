@@ -108,8 +108,8 @@ export default function SearchPanel({
           onClick={() => setShowFilterSection(v => !v)}
           style={{
             width: '100%', padding: '7px 12px', borderRadius: '8px',
-            background: showFilterSection ? 'rgba(244,114,182,0.08)' : 'rgba(255,255,255,0.03)',
-            border: '1px solid rgba(244,114,182,0.15)',
+            background: showFilterSection ? 'var(--color-border)' : 'var(--color-bg-secondary)',
+            border: '1px solid var(--color-border)',
             color: selectedPlaceId !== 'all' ? 'var(--color-accent-primary)' : 'var(--color-text-secondary)',
             fontSize: '12px', fontWeight: 600, cursor: 'pointer',
             display: 'flex', justifyContent: 'space-between', alignItems: 'center',
@@ -125,7 +125,7 @@ export default function SearchPanel({
 
         {showFilterSection && (
           <div style={{
-            background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(244,114,182,0.12)',
+            background: 'var(--color-bg-secondary)', border: '1px solid var(--color-border)',
             borderTop: 'none', borderRadius: '0 0 8px 8px', padding: '10px',
           }}>
             <select
@@ -138,9 +138,9 @@ export default function SearchPanel({
                 marginBottom: '8px',
               }}
             >
-              <option value="all" style={{ background: '#1a1520' }}>🌏 전체 지역 검색</option>
+              <option value="all" style={{ background: 'var(--color-bg-card)' }}>🌏 전체 지역 검색</option>
               {uniqueCoursePlaces.map(p => (
-                <option key={p.id} value={p.id} style={{ background: '#1a1520' }}>
+                <option key={p.id} value={p.id} style={{ background: 'var(--color-bg-card)' }}>
                   📍 {stripHtml(p.title)}
                 </option>
               ))}
@@ -152,13 +152,13 @@ export default function SearchPanel({
                   반경: <strong style={{ color: 'var(--color-accent-primary)' }}>{radiusKm}km</strong>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span style={{ fontSize: '10px', color: '#6b5f85' }}>1</span>
+                  <span style={{ fontSize: '10px', color: 'var(--color-text-secondary)' }}>1</span>
                   <input
                     type="range" min={1} max={20} step={1} value={radiusKm}
                     onChange={e => setRadiusKm(Number(e.target.value))}
                     style={{ flex: 1, accentColor: 'var(--color-accent-primary)', cursor: 'pointer' }}
                   />
-                  <span style={{ fontSize: '10px', color: '#6b5f85' }}>20km</span>
+                  <span style={{ fontSize: '10px', color: 'var(--color-text-secondary)' }}>20km</span>
                 </div>
               </div>
             )}

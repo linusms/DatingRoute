@@ -431,7 +431,7 @@ export default function AIRecommendPanel({
       {/* ── 검색 기록 리스트 ── */}
       {searchHistory.length > 0 && (
         <div style={{
-          background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(244,114,182,0.15)',
+          background: 'rgba(255,255,255,0.04)', border: '1px solid var(--color-border)',
           borderRadius: '12px', padding: '14px', marginBottom: '16px',
         }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
@@ -442,7 +442,7 @@ export default function AIRecommendPanel({
               <button
                 onClick={handleNewSearch}
                 style={{
-                  background: 'rgba(244,114,182,0.15)', border: '1px solid var(--color-border-active)',
+                  background: 'var(--color-border)', border: '1px solid var(--color-border-active)',
                   color: 'var(--color-accent-primary)', padding: '4px 8px', borderRadius: '4px', fontSize: '11px', cursor: 'pointer'
                 }}
               >
@@ -469,14 +469,14 @@ export default function AIRecommendPanel({
                 color: 'var(--color-text-primary)', fontSize: '13px', cursor: 'pointer', outline: 'none'
               }}
             >
-              <option value="" style={{ background: '#1a1520' }}>새로운 조건으로 검색하기...</option>
+              <option value="" style={{ background: 'var(--color-bg-card)' }}>새로운 조건으로 검색하기...</option>
               {searchHistory.map(h => {
                 const date = new Date(h.timestamp);
                 const timeStr = `${date.getMonth()+1}/${date.getDate()} ${date.getHours()}:${String(date.getMinutes()).padStart(2, '0')}`;
                 const cats = h.conditions.categories.map(c => AI_CATEGORIES.find(ac => ac.id === c)?.label.split(' ')[1] || c).join(', ');
                 const kw = h.conditions.searchKeyword ? ` "${h.conditions.searchKeyword}"` : '';
                 return (
-                  <option key={h.id} value={h.id} style={{ background: '#1a1520' }}>
+                  <option key={h.id} value={h.id} style={{ background: 'var(--color-bg-card)' }}>
                     [{timeStr}] 반경 {h.conditions.radiusKm}km / {cats || '전체'}{kw}
                   </option>
                 );
@@ -533,8 +533,8 @@ export default function AIRecommendPanel({
           onClick={() => setShowConditionPanel(v => !v)}
           style={{
             width: '100%', padding: '7px 12px', borderRadius: '8px',
-            background: showConditionPanel ? 'rgba(244,114,182,0.08)' : 'rgba(255,255,255,0.03)',
-            border: '1px solid rgba(244,114,182,0.15)',
+            background: showConditionPanel ? 'var(--color-border)' : 'var(--color-bg-secondary)',
+            border: '1px solid var(--color-border)',
             color: 'var(--color-text-secondary)', fontSize: '12px', fontWeight: 600, cursor: 'pointer',
             display: 'flex', justifyContent: 'space-between', alignItems: 'center',
           }}
@@ -548,7 +548,7 @@ export default function AIRecommendPanel({
         </button>
         {showConditionPanel && (
           <div style={{
-            background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(244,114,182,0.12)',
+            background: 'var(--color-bg-secondary)', border: '1px solid var(--color-border)',
             borderTop: 'none', borderRadius: '0 0 10px 10px', padding: '12px',
           }}>
             {/* 기준 장소 */}
@@ -563,9 +563,9 @@ export default function AIRecommendPanel({
                 marginBottom: '8px',
               }}
             >
-              <option value="all" style={{ background: '#1a1520' }}>🌏 전체 코스 장소 기준</option>
+              <option value="all" style={{ background: 'var(--color-bg-card)' }}>🌏 전체 코스 장소 기준</option>
               {Array.from(new Map(coursePlaces.map(p => [p.title, p])).values()).map(p => (
-                <option key={p.id} value={p.id} style={{ background: '#1a1520' }}>
+                <option key={p.id} value={p.id} style={{ background: 'var(--color-bg-card)' }}>
                   📍 {stripHtml(p.title)}
                 </option>
               ))}
@@ -576,11 +576,11 @@ export default function AIRecommendPanel({
                   반경: <strong style={{ color: 'var(--color-accent-primary)' }}>{radiusKm}km</strong>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span style={{ fontSize: '10px', color: '#6b5f85' }}>1km</span>
+                  <span style={{ fontSize: '10px', color: 'var(--color-text-secondary)' }}>1km</span>
                   <input type="range" min={1} max={20} step={1} value={radiusKm}
                     onChange={e => setRadiusKm(Number(e.target.value))}
                     style={{ flex: 1, accentColor: 'var(--color-accent-primary)', cursor: 'pointer' }} />
-                  <span style={{ fontSize: '10px', color: '#6b5f85' }}>20km</span>
+                  <span style={{ fontSize: '10px', color: 'var(--color-text-secondary)' }}>20km</span>
                 </div>
               </div>
             )}
@@ -596,8 +596,8 @@ export default function AIRecommendPanel({
                   <button key={cat.id} onClick={() => toggleCategory(cat.id)}
                     style={{
                       padding: '7px 8px', borderRadius: '8px', cursor: 'pointer',
-                      border: isActive ? '1px solid rgba(244,114,182,0.5)' : '1px solid rgba(255,255,255,0.08)',
-                      background: isActive ? 'rgba(244,114,182,0.12)' : 'rgba(255,255,255,0.04)',
+                      border: isActive ? '1px solid var(--color-border)' : '1px solid rgba(255,255,255,0.08)',
+                      background: isActive ? 'var(--color-border)' : 'rgba(255,255,255,0.04)',
                       color: isActive ? 'var(--color-accent-primary)' : 'var(--color-text-secondary)',
                       fontSize: '12px', fontWeight: isActive ? 600 : 400,
                       transition: 'all 0.2s', textAlign: 'left',
@@ -635,17 +635,17 @@ export default function AIRecommendPanel({
           className="animate-fade-in"
           style={{
             width: '100%', padding: '16px', borderRadius: '12px', cursor: 'pointer',
-            background: 'rgba(255,255,255,0.03)', border: '1px dashed rgba(244,114,182,0.4)',
+            background: 'var(--color-bg-secondary)', border: '1px dashed var(--color-border)',
             color: 'var(--color-text-secondary)', display: 'flex', flexDirection: 'column', gap: '10px',
             marginTop: '16px', transition: 'all 0.2s'
           }}
           onMouseEnter={(e) => {
-            e.currentTarget.style.background = 'rgba(244,114,182,0.08)';
-            e.currentTarget.style.borderColor = 'rgba(244,114,182,0.6)';
+            e.currentTarget.style.background = 'var(--color-border)';
+            e.currentTarget.style.borderColor = 'var(--color-border)';
           }}
           onMouseLeave={(e) => {
-            e.currentTarget.style.background = 'rgba(255,255,255,0.03)';
-            e.currentTarget.style.borderColor = 'rgba(244,114,182,0.4)';
+            e.currentTarget.style.background = 'var(--color-bg-secondary)';
+            e.currentTarget.style.borderColor = 'var(--color-border)';
           }}
         >
           <div style={{ fontSize: '14px', color: 'var(--color-text-primary)', fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -958,7 +958,7 @@ export default function AIRecommendPanel({
               }}
             >
               <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                <path d="M11 1L1 11M11 6L6 11M11 11L11 11" stroke="rgba(244,114,182,0.5)" strokeWidth="1.5" strokeLinecap="round"/>
+                <path d="M11 1L1 11M11 6L6 11M11 11L11 11" stroke="var(--color-border)" strokeWidth="1.5" strokeLinecap="round"/>
               </svg>
             </div>
           </div>

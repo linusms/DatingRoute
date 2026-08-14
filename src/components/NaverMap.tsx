@@ -79,8 +79,8 @@ export default function NaverMap({
     mapObjRef.current = map;
   }, []);
 
-  const DAY_COLORS = ['#f472b6', '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ef4444'];
-  const getDayColor = (day: number) => DAY_COLORS[(day - 1) % DAY_COLORS.length] || '#f472b6';
+  const DAY_COLORS = ['var(--color-accent-primary)', '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ef4444'];
+  const getDayColor = (day: number) => DAY_COLORS[(day - 1) % DAY_COLORS.length] || 'var(--color-accent-primary)';
 
   // Update course markers + polyline
   useEffect(() => {
@@ -116,7 +116,7 @@ export default function NaverMap({
           <div style="
             width:16px;height:16px;
             border-radius:50%;
-            background:#8b7fa8;
+            background:var(--color-text-secondary);
             border:2px solid white;
             box-shadow:0 2px 4px rgba(0,0,0,0.3);
           "></div>
@@ -153,15 +153,15 @@ export default function NaverMap({
             padding:10px 14px;
             font-family:Pretendard,sans-serif;
             font-size:13px;
-            background:#1a1520;
-            color:#f5f0ff;
-            border:1px solid rgba(244,114,182,0.3);
+            background:var(--color-bg-card);
+            color:var(--color-text-primary);
+            border:1px solid var(--color-border);
             border-radius:10px;
             box-shadow:0 4px 16px rgba(0,0,0,0.5);
             max-width:220px;
           ">
             <div style="font-weight:600;margin-bottom:4px;">${place.title}</div>
-            <div style="font-size:11px;color:#8b7fa8;">${place.roadAddress || place.address}</div>
+            <div style="font-size:11px;color:var(--color-text-secondary);">${place.roadAddress || place.address}</div>
           </div>
         `,
         borderWidth: 0,
@@ -255,9 +255,9 @@ export default function NaverMap({
           <div style="
             width:20px;height:20px;
             border-radius:50%;
-            background:rgba(244,114,182,0.4);
-            border:3px solid #f472b6;
-            box-shadow:0 0 12px rgba(244,114,182,0.6);
+            background:var(--color-border);
+            border:3px solid var(--color-accent-primary);
+            box-shadow:0 0 12px var(--color-border);
             animation:pulse 1.5s infinite;
           "></div>
         `,

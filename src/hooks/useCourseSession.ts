@@ -231,7 +231,8 @@ export function useCourseSession({ setActiveTab, showToastMsg, clearDirections, 
           setSessionId(course.roomId);
           setInviteCode(data.room?.inviteCode || data.room?.invite_code || null);
           setNickname(currentUser.nickname);
-          setMembers(data.room?.members || []);
+          const uniqueMembers = (data.room?.members || []).filter((v: any, i: number, a: any[]) => a.findIndex(t => (t.userId === v.userId)) === i);
+          setMembers(uniqueMembers);
           setIsOwner(data.room?.ownerId === currentUser.id);
 
           if (data.courseDetails) {
@@ -312,7 +313,8 @@ export function useCourseSession({ setActiveTab, showToastMsg, clearDirections, 
     setSessionId(data.room.id);
     setInviteCode(data.room.inviteCode);
     setNickname(currentUser.nickname);
-    setMembers(data.room.members || []);
+    const uniqueMembers = (data.room.members || []).filter((v: any, i: number, a: any[]) => a.findIndex(t => (t.userId === v.userId)) === i);
+    setMembers(uniqueMembers);
     setIsOwner(false);
     setPendingInviteCode(null);
 

@@ -203,9 +203,9 @@ export async function joinRoom(roomId: string, userId: string): Promise<void> {
     .select('id')
     .eq('room_id', roomId)
     .eq('user_id', userId)
-    .maybeSingle();
+    .limit(1);
 
-  if (!existing) {
+  if (!existing || existing.length === 0) {
     await supabase.from('room_members').insert({
       room_id: roomId,
       user_id: userId,

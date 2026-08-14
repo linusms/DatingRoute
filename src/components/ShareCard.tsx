@@ -65,8 +65,8 @@ export default function ShareCard({ places, directions, courseName }: ShareCardP
               <div key={`day-${day}`} className="share-card-day-section">
                 {days.length > 1 && (
                   <div className="share-card-day-header" style={{
-                    fontSize: '14px', fontWeight: 'bold', color: '#f472b6', 
-                    padding: '8px 0 4px', borderBottom: '1px dashed rgba(244,114,182,0.3)',
+                    fontSize: '14px', fontWeight: 'bold', color: 'var(--color-accent-primary)', 
+                    padding: '8px 0 4px', borderBottom: '1px dashed var(--color-border)',
                     marginBottom: '8px'
                   }}>
                     Day {day}

@@ -211,8 +211,8 @@ export default function DashboardScreen({
                               placeholder="경로 이름"
                               style={{
                                 width: '100%', padding: '6px 10px', borderRadius: '6px',
-                                background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(244,114,182,0.4)',
-                                color: '#f5f0ff', fontSize: '14px', outline: 'none',
+                                background: 'rgba(255,255,255,0.08)', border: '1px solid var(--color-border)',
+                                color: 'var(--color-text-primary)', fontSize: '14px', outline: 'none',
                               }}
                               autoFocus
                               onKeyDown={e => {
@@ -237,7 +237,7 @@ export default function DashboardScreen({
                                 disabled={editSaving || !editState!.name.trim()}
                                 style={{
                                   padding: '4px 12px', borderRadius: '6px', fontSize: '12px',
-                                  background: 'linear-gradient(135deg, #f472b6, #c084fc)',
+                                  background: 'linear-gradient(135deg, var(--color-accent-primary), #c084fc)',
                                   color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 600,
                                   opacity: (!editState!.name.trim() || editSaving) ? 0.5 : 1,
                                 }}
@@ -248,8 +248,8 @@ export default function DashboardScreen({
                                 onClick={handleEditCancel}
                                 style={{
                                   padding: '4px 10px', borderRadius: '6px', fontSize: '12px',
-                                  background: 'rgba(255,255,255,0.08)', color: '#8b7fa8',
-                                  border: '1px solid rgba(255,255,255,0.1)', cursor: 'pointer',
+                                  background: 'rgba(255,255,255,0.08)', color: 'var(--color-text-secondary)',
+                                  border: '1px solid var(--color-border)', cursor: 'pointer',
                                 }}
                               >
                                 취소
@@ -261,7 +261,7 @@ export default function DashboardScreen({
                             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                               <span className="dashboard-course-name">
                                 {isUnsaved ? (
-                                  <span style={{ color: '#f5f0ff' }}>{course.displayName || '이름 없는 경로'}</span>
+                                  <span style={{ color: 'var(--color-text-primary)' }}>{course.displayName || '이름 없는 경로'}</span>
                                 ) : course.name}
                               </span>
                               {course.memberCount && course.memberCount > 1 && (
@@ -269,7 +269,7 @@ export default function DashboardScreen({
                               )}
                             </div>
                             {course.description && (
-                              <div style={{ fontSize: '12px', color: '#8b7fa8', marginTop: '2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              <div style={{ fontSize: '12px', color: 'var(--color-text-secondary)', marginTop: '2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                 {course.description}
                               </div>
                             )}
@@ -285,7 +285,7 @@ export default function DashboardScreen({
                             onClick={(e) => handleEditStart(e, course)}
                             title="이름/설명 편집"
                             style={{
-                              background: 'rgba(244,114,182,0.1)', color: '#f472b6',
+                              background: 'var(--color-border)', color: 'var(--color-accent-primary)',
                               border: 'none', width: '30px', height: '30px', borderRadius: '6px',
                               cursor: 'pointer', display: 'flex', alignItems: 'center',
                               justifyContent: 'center', fontSize: '14px',

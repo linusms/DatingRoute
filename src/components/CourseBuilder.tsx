@@ -369,7 +369,7 @@ export default function CourseBuilder({
                   {showOverflowMenu && (
                     <div style={{
                       position: 'absolute', top: '40px', right: 0, zIndex: 100,
-                      background: '#251e30', border: '1px solid rgba(255,255,255,0.12)',
+                      background: 'var(--color-bg-primary)', border: '1px solid rgba(255,255,255,0.12)',
                       borderRadius: '12px', padding: '6px', minWidth: '150px',
                       boxShadow: '0 8px 24px rgba(0,0,0,0.5)', display: 'flex', flexDirection: 'column', gap: '2px',
                     }}>
@@ -623,8 +623,8 @@ export default function CourseBuilder({
                       }
                     }}
                     style={{
-                      background: (activeDayTab === 0 && placeDay !== 0) ? 'rgba(255,255,255,0.01)' : 'rgba(255,255,255,0.03)',
-                      border: '1px solid rgba(244,114,182,0.1)',
+                      background: (activeDayTab === 0 && placeDay !== 0) ? 'rgba(255,255,255,0.01)' : 'var(--color-bg-secondary)',
+                      border: '1px solid var(--color-border)',
                       borderRadius: '10px', padding: '10px', display: 'flex', gap: '10px', alignItems: 'center',
                       cursor: (isRouteCreated || isSelectMode || (activeDayTab === 0 && placeDay !== 0)) ? 'pointer' : 'grab',
                       opacity: (place.isHold || (activeDayTab === 0 && placeDay !== 0) || (activeDayTab === 0 && isAssigned)) ? 0.5 : 1,
@@ -773,9 +773,9 @@ export default function CourseBuilder({
                               outline: 'none',
                             }}
                           >
-                            <option value={0} style={{ background: '#1a1520' }}>보관함</option>
+                            <option value={0} style={{ background: 'var(--color-bg-card)' }}>보관함</option>
                             {Array.from({ length: dayCount }, (_, i) => i + 1).map(d => (
-                              <option key={d} value={d} style={{ background: '#1a1520' }}>
+                              <option key={d} value={d} style={{ background: 'var(--color-bg-card)' }}>
                                 Day {d}
                               </option>
                             ))}
@@ -842,7 +842,7 @@ export default function CourseBuilder({
                 onClick={() => setShowStoragePins?.(!showStoragePins)}
                 style={{
                   width: '100%', padding: '12px', borderRadius: '12px',
-                  background: 'rgba(255,255,255,0.03)', border: '1px dashed rgba(244,114,182,0.4)',
+                  background: 'var(--color-bg-secondary)', border: '1px dashed var(--color-border)',
                   color: 'var(--color-accent-primary)', fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s',
                   display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px'
                 }}
@@ -893,7 +893,7 @@ export default function CourseBuilder({
                               display: 'flex', alignItems: 'center', gap: '12px',
                               cursor: 'pointer', border: '1px solid transparent', transition: 'all 0.2s',
                             }}
-                            onMouseEnter={(e) => e.currentTarget.style.borderColor = 'rgba(244,114,182,0.4)'}
+                            onMouseEnter={(e) => e.currentTarget.style.borderColor = 'var(--color-border)'}
                             onMouseLeave={(e) => e.currentTarget.style.borderColor = 'transparent'}
                           >
                           <div style={{ flex: 1, minWidth: 0 }}>
@@ -933,7 +933,7 @@ export default function CourseBuilder({
                               }}>🗺️ 네이버맵</span>
                             </div>
                           </div>
-                          <div style={{ fontSize: '13px', color: 'var(--color-accent-primary)', fontWeight: 700, padding: '6px 12px', background: 'rgba(244,114,182,0.1)', borderRadius: '8px' }}>
+                          <div style={{ fontSize: '13px', color: 'var(--color-accent-primary)', fontWeight: 700, padding: '6px 12px', background: 'var(--color-border)', borderRadius: '8px' }}>
                             추가 +
                           </div>
                         </div>
