@@ -104,12 +104,27 @@ export default function Header({
             onClick={() => handleCopy('link')}
             title="초대 링크 복사"
             style={{
-              background: 'var(--color-bg-secondary)', border: '1px solid var(--color-border)', cursor: 'pointer',
+              background: 'transparent', border: 'none', cursor: 'pointer',
               width: '32px', height: '32px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: '14px'
+              color: copied === 'link' ? 'var(--color-accent-primary)' : 'var(--color-text-secondary)',
+              transition: 'background 0.2s, color 0.2s'
             }}
+            onMouseEnter={e => e.currentTarget.style.background = 'var(--color-bg-secondary)'}
+            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
           >
-            {copied === 'link' ? '✅' : '🔗'}
+            {copied === 'link' ? (
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+            ) : (
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="18" cy="5" r="3" />
+                <circle cx="6" cy="12" r="3" />
+                <circle cx="18" cy="19" r="3" />
+                <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
+                <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
+              </svg>
+            )}
           </button>
         )}
 
@@ -152,6 +167,26 @@ export default function Header({
             </div>
           </div>
         )}
+
+        {/* Dashboard Icon */}
+        <button
+          onClick={onGoToDashboard}
+          title="대시보드로 이동"
+          style={{
+            fontSize: '16px', color: 'var(--color-text-secondary)',
+            border: 'none', background: 'transparent',
+            width: '32px', height: '32px', borderRadius: '50%',
+            cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+            transition: 'background 0.2s, color 0.2s', marginLeft: '4px'
+          }}
+          onMouseEnter={e => { e.currentTarget.style.background = 'var(--color-bg-secondary)'; e.currentTarget.style.color = 'var(--color-text-primary)'; }}
+          onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--color-text-secondary)'; }}
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+            <polyline points="9 22 9 12 15 12 15 22" />
+          </svg>
+        </button>
 
         {/* Logout Icon */}
         {currentUser && onLogout && (

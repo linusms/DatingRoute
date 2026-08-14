@@ -107,7 +107,7 @@ export default function CourseBuilder({
 
   // Day label helper
   const getDayLabel = (dayNum: number) => {
-    if (dayNum === 0) return '보관함 (미지정)';
+    if (dayNum === 0) return '보관함';
     if (!schedule?.startDate) return `Day ${dayNum}`;
     const date = new Date(schedule.startDate);
     date.setDate(date.getDate() + dayNum - 1);

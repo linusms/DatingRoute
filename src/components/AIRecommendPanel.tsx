@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useCallback, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { CoursePlace, DateSchedule, RecommendedPlace, RegionEvent, Place } from '@/lib/types';
 import { useResizable } from '@/hooks/useResizable';
 import { stripHtml, tourDateToISO } from '@/lib/utils';
@@ -675,7 +676,7 @@ export default function AIRecommendPanel({
       )}
 
       {/* Search Results Popup Overlay */}
-      {showPopup && (
+      {showPopup && typeof document !== 'undefined' && createPortal(
         <div style={{
           position: 'fixed', top: 0, left: 0, width: '100%', height: '100%',
           background: 'var(--color-bg-tertiary)', zIndex: 9999,
@@ -963,7 +964,8 @@ export default function AIRecommendPanel({
               </svg>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

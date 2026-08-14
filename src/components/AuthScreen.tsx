@@ -58,11 +58,15 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
       }}>
         <div style={{ marginBottom: '32px' }}>
           <h1 style={{ 
-            fontSize: '24px', 
-            color: 'var(--color-text-primary)',
+            fontSize: '28px', 
+            fontFamily: 'var(--font-display)',
             fontWeight: '700',
             letterSpacing: '-0.5px',
-            margin: '0 0 8px 0'
+            margin: '0 0 8px 0',
+            background: 'var(--color-accent-gradient)',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+            backgroundClip: 'text',
           }}>
             DatingRoute
           </h1>
@@ -82,7 +86,7 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
               fontSize: '14px', background: 'var(--color-bg-primary)', color: 'var(--color-text-primary)',
               outline: 'none', transition: 'border-color 0.2s', fontWeight: 500
             }}
-            onFocus={(e) => e.target.style.borderColor = 'var(--color-text-primary)'}
+            onFocus={(e) => e.target.style.borderColor = 'var(--color-accent-primary)'}
             onBlur={(e) => e.target.style.borderColor = 'var(--color-border)'}
           />
           <input
@@ -95,7 +99,7 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
               fontSize: '14px', background: 'var(--color-bg-primary)', color: 'var(--color-text-primary)',
               outline: 'none', transition: 'border-color 0.2s', fontWeight: 500
             }}
-            onFocus={(e) => e.target.style.borderColor = 'var(--color-text-primary)'}
+            onFocus={(e) => e.target.style.borderColor = 'var(--color-accent-primary)'}
             onBlur={(e) => e.target.style.borderColor = 'var(--color-border)'}
           />
           <button
@@ -103,13 +107,13 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
             disabled={isLoading}
             style={{
               padding: '12px 16px', borderRadius: '8px', border: 'none',
-              background: 'var(--color-text-primary)', color: 'var(--color-bg-primary)', fontSize: '14px', 
+              background: 'var(--color-accent-primary)', color: '#FFFFFF', fontSize: '14px', 
               fontWeight: '600', cursor: isLoading ? 'not-allowed' : 'pointer',
               marginTop: '8px', opacity: isLoading ? 0.7 : 1,
               transition: 'background 0.2s'
             }}
-            onMouseOver={(e) => { if(!isLoading) e.currentTarget.style.background = '#000'; }}
-            onMouseOut={(e) => { if(!isLoading) e.currentTarget.style.background = 'var(--color-text-primary)'; }}
+            onMouseOver={(e) => { if(!isLoading) e.currentTarget.style.background = 'var(--color-accent-secondary)'; }}
+            onMouseOut={(e) => { if(!isLoading) e.currentTarget.style.background = 'var(--color-accent-primary)'; }}
           >
             {isLoading ? '진행 중...' : (isLogin ? '로그인' : '회원가입')}
           </button>

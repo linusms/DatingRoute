@@ -449,7 +449,7 @@ export default function HomePage() {
             >
               🗺️ 경로 생성
               {(() => {
-                const totalCount = coursePlaces.length;
+                const totalCount = coursePlaces.filter(p => (p.day || 0) > 0).length;
                 return totalCount > 0 ? (
                   <span className="sidebar-tab-badge">{totalCount}</span>
                 ) : null;
