@@ -89,6 +89,8 @@ export default function CourseBuilder({
   const [isSelectMode, setIsSelectMode] = useState(false);
   const [selectedPlaceIds, setSelectedPlaceIds] = useState<Set<string>>(new Set());
   const [showOverflowMenu, setShowOverflowMenu] = useState(false);
+  const [openEmojiPickerId, setOpenEmojiPickerId] = useState<string | null>(null);
+  const [openReactionListId, setOpenReactionListId] = useState<string | null>(null);
 
   const overflowMenuItemStyle: React.CSSProperties = {
     padding: '8px 12px', borderRadius: '8px', border: 'none',
@@ -833,57 +835,141 @@ export default function CourseBuilder({
                     </div>
                     {/* Reactions UI */}
                     {currentUserId && (
-                      <div style={{ display: 'flex', gap: '4px', marginTop: '8px', paddingLeft: '38px' }} onClick={e => e.stopPropagation()}>
-                        {['❤️', '👍', '🤔', '❌'].map(emoji => {
+                      <div style={{ display: 'flex', gap: '4px', marginTop: '8px', paddingLeft: '38px', position: 'relative', flexWrap: 'wrap' }} onClick={e => e.stopPropagation()}>
+                        {/* Emojis added */}
+                        {(() => {
                           const reactions = place.reactions || {};
-                          const hasReacted = reactions[currentUserId] === emoji;
-                          const reactorIds = Object.entries(reactions)
-                            .filter(([_, reactionEmoji]) => reactionEmoji === emoji)
-                            .map(([uid, _]) => uid);
-                          const count = reactorIds.length;
-                          
-                          // Map user IDs to nicknames
-                          const reactorNames = reactorIds.map(uid => {
-                            if (uid === currentUserId) return '나';
-                            const member = members?.find(m => m.userId === uid);
-                            return member?.nickname || '참여자';
-                          });
+                          const aggregated = Object.entries(reactions).reduce((acc, [uid, emoji]) => {
+                            if (!acc[emoji]) acc[emoji] = [];
+                            acc[emoji].push(uid);
+                            return acc;
+                          }, {} as Record<string, string[]>);
 
-                          return (
+                          return Object.entries(aggregated).map(([emoji, uids]) => {
+                            const count = uids.length;
+                            const hasReacted = uids.includes(currentUserId);
+                            return (
+                              <button
+                                key={emoji}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  const updatedReactions = { ...reactions };
+                                  if (hasReacted) {
+                                    delete updatedReactions[currentUserId];
+                                  } else {
+                                    updatedReactions[currentUserId] = emoji;
+                                  }
+                                  const updatedPlace = { ...place, reactions: updatedReactions };
+                                  const newPlaces = places.map(p => p.id === place.id ? updatedPlace : p);
+                                  onReorderPlaces(newPlaces);
+                                }}
+                                style={{
+                                  padding: '4px 8px', borderRadius: '12px',
+                                  background: hasReacted ? 'rgba(255, 60, 100, 0.2)' : 'var(--color-bg-tertiary)',
+                                  border: hasReacted ? '1px solid rgba(255, 60, 100, 0.5)' : '1px solid var(--color-border)',
+                                  cursor: 'pointer', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '4px',
+                                  color: hasReacted ? '#ff3c64' : 'var(--color-text-secondary)',
+                                  transition: 'all 0.2s',
+                                }}
+                              >
+                                <span>{emoji}</span>
+                                <span style={{ fontSize: '11px', fontWeight: 600 }}>{count}</span>
+                              </button>
+                            );
+                          });
+                        })()}
+
+                        {/* Add Emoji Button */}
+                        <div style={{ position: 'relative' }}>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setOpenEmojiPickerId(openEmojiPickerId === place.id ? null : place.id);
+                              setOpenReactionListId(null);
+                            }}
+                            style={{
+                              padding: '4px 8px', borderRadius: '12px', background: 'var(--color-bg-tertiary)',
+                              border: '1px solid var(--color-border)', cursor: 'pointer', fontSize: '12px', color: 'var(--color-text-secondary)',
+                              display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.2s',
+                            }}
+                            onMouseEnter={(e) => e.currentTarget.style.background = 'var(--color-border)'}
+                            onMouseLeave={(e) => e.currentTarget.style.background = 'var(--color-bg-tertiary)'}
+                          >
+                            😀+
+                          </button>
+                          {openEmojiPickerId === place.id && (
+                            <div style={{
+                              position: 'absolute', top: '100%', left: 0, marginTop: '4px', background: 'var(--color-bg-primary)',
+                              border: '1px solid var(--color-border)', borderRadius: '8px', padding: '6px',
+                              display: 'flex', gap: '4px', zIndex: 10, boxShadow: '0 4px 12px rgba(0,0,0,0.2)'
+                            }}>
+                              {['❤️', '👍', '🤔', '❌'].map(emoji => (
+                                <button
+                                  key={emoji}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    const reactions = place.reactions || {};
+                                    const updatedReactions = { ...reactions, [currentUserId]: emoji };
+                                    const updatedPlace = { ...place, reactions: updatedReactions };
+                                    const newPlaces = places.map(p => p.id === place.id ? updatedPlace : p);
+                                    onReorderPlaces(newPlaces);
+                                    setOpenEmojiPickerId(null);
+                                  }}
+                                  style={{
+                                    padding: '4px', background: 'transparent', border: 'none', cursor: 'pointer',
+                                    fontSize: '16px', borderRadius: '4px', transition: 'transform 0.1s'
+                                  }}
+                                  onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.2)'}
+                                  onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+                                >
+                                  {emoji}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Reaction List Button */}
+                        {place.reactions && Object.keys(place.reactions).length > 0 && (
+                          <div style={{ position: 'relative' }}>
                             <button
-                              key={emoji}
-                              title={reactorNames.length > 0 ? reactorNames.join(', ') : ''}
                               onClick={(e) => {
                                 e.stopPropagation();
-                                const updatedReactions = { ...reactions };
-                                if (hasReacted) {
-                                  delete updatedReactions[currentUserId];
-                                } else {
-                                  updatedReactions[currentUserId] = emoji;
-                                }
-                                const updatedPlace = { ...place, reactions: updatedReactions };
-                                const newPlaces = places.map(p => p.id === place.id ? updatedPlace : p);
-                                onReorderPlaces(newPlaces);
+                                setOpenReactionListId(openReactionListId === place.id ? null : place.id);
+                                setOpenEmojiPickerId(null);
                               }}
                               style={{
-                                padding: '4px 8px', borderRadius: '12px',
-                                background: hasReacted ? 'rgba(255, 60, 100, 0.2)' : 'var(--color-bg-tertiary)',
-                                border: hasReacted ? '1px solid rgba(255, 60, 100, 0.5)' : '1px solid var(--color-border)',
-                                cursor: 'pointer', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '4px',
-                                color: hasReacted ? '#ff3c64' : 'var(--color-text-secondary)',
+                                padding: '4px 8px', borderRadius: '12px', background: 'var(--color-bg-tertiary)',
+                                border: '1px solid var(--color-border)', cursor: 'pointer', fontSize: '12px', color: 'var(--color-text-secondary)',
                                 transition: 'all 0.2s',
                               }}
+                              onMouseEnter={(e) => e.currentTarget.style.background = 'var(--color-border)'}
+                              onMouseLeave={(e) => e.currentTarget.style.background = 'var(--color-bg-tertiary)'}
                             >
-                              <span>{emoji}</span>
-                              {count > 0 && (
-                                <span style={{ fontSize: '11px', fontWeight: 500, display: 'flex', gap: '4px', alignItems: 'center' }}>
-                                  <span style={{ fontWeight: 600 }}>{count}</span>
-                                  <span style={{ opacity: 0.7, fontSize: '10px' }}>({reactorNames.join(', ')})</span>
-                                </span>
-                              )}
+                              목록 💬
                             </button>
-                          );
-                        })}
+                            {openReactionListId === place.id && (
+                              <div style={{
+                                position: 'absolute', top: '100%', left: 0, marginTop: '4px', background: 'var(--color-bg-primary)',
+                                border: '1px solid var(--color-border)', borderRadius: '8px', padding: '8px',
+                                minWidth: '120px', zIndex: 10, boxShadow: '0 4px 12px rgba(0,0,0,0.2)'
+                              }}>
+                                <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: '6px', borderBottom: '1px solid var(--color-border)', paddingBottom: '4px' }}>반응한 사람</div>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                  {Object.entries(place.reactions).map(([uid, emoji]) => {
+                                    const memberName = uid === currentUserId ? '나' : (members?.find(m => m.userId === uid)?.nickname || '참여자');
+                                    return (
+                                      <div key={uid} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px', color: 'var(--color-text-primary)' }}>
+                                        <span>{memberName}</span>
+                                        <span>{emoji}</span>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
                     )}
                     {!isRouteCreated && (

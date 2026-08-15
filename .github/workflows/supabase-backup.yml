@@ -1,0 +1,55 @@
+name: Supabase Database Backup to GCS
+
+on:
+  schedule:
+    # 매일 UTC 기준 새벽 3시 (한국 시간 낮 12시)에 실행
+    - cron: '0 3 * * *'
+  # GitHub Actions 탭에서 수동으로 실행할 수 있도록 허용
+  workflow_dispatch:
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install PostgreSQL client (for pg_dump)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+
+      - name: Create Backup File
+        env:
+          DATABASE_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          # 현재 날짜를 YYYY-MM-DD 형식으로 가져와서 파일명 생성
+          DATE=$(date +'%Y-%m-%d')
+          BACKUP_FILE="supabase_backup_${DATE}.sql"
+          
+          echo "Starting database backup..."
+          # Supabase DB에서 스키마와 데이터를 모두 덤프
+          pg_dump "$DATABASE_URL" --clean --if-exists > $BACKUP_FILE
+          
+          echo "Backup completed: $BACKUP_FILE"
+          
+          # 다음 스텝에서 사용할 수 있도록 환경 변수에 저장
+          echo "BACKUP_FILE=$BACKUP_FILE" >> $GITHUB_ENV
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_CREDENTIALS }}
+
+      - name: Set up Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Upload Backup to GCS
+        env:
+          GCS_BUCKET: ${{ secrets.GCS_BUCKET_NAME }}
+        run: |
+          echo "Uploading $BACKUP_FILE to gs://$GCS_BUCKET/backups/"
+          gcloud storage cp $BACKUP_FILE "gs://$GCS_BUCKET/backups/$BACKUP_FILE"
+          
+          echo "Upload complete!"

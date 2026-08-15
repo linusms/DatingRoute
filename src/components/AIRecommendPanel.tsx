@@ -128,7 +128,7 @@ export default function AIRecommendPanel({
             if (parsed.activeId) {
               setActiveHistoryId(parsed.activeId);
               const activeItem = parsed.history.find((h: SearchHistoryItem) => h.id === parsed.activeId);
-              if (activeItem) loadHistoryItem(activeItem);
+              if (activeItem) loadHistoryItem(activeItem, false);
             }
           }
         }
@@ -165,7 +165,7 @@ export default function AIRecommendPanel({
     }));
   }, [activeHistoryId, recommendations, events, summary, hasSearched]);
 
-  const loadHistoryItem = (item: SearchHistoryItem) => {
+  const loadHistoryItem = (item: SearchHistoryItem, openPopup = true) => {
     setSelectedPlaceId(item.conditions.selectedPlaceId);
     setRadiusKm(item.conditions.radiusKm);
     setSelectedCategories(item.conditions.categories);
@@ -176,7 +176,9 @@ export default function AIRecommendPanel({
     setEvents(item.results.events);
     setSummary(item.results.summary);
     setHasSearched(true);
-    setShowPopup(true);
+    if (openPopup) {
+      setShowPopup(true);
+    }
   };
 
   const handleNewSearch = () => {
