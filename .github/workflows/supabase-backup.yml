@@ -33,7 +33,7 @@ jobs:
           
           echo "Starting database backup..."
           # Supabase DB에서 스키마와 데이터를 모두 덤프
-          pg_dump "$DATABASE_URL" --clean --if-exists > $BACKUP_FILE
+          /usr/lib/postgresql/17/bin/pg_dump "$DATABASE_URL" --clean --if-exists > $BACKUP_FILE
           
           echo "Backup completed: $BACKUP_FILE"
           
