@@ -45,6 +45,12 @@ export default function HomePage() {
   const [reviewPlace, setReviewPlace] = useState<string | null>(null);
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  
+  const showToastMsg = useCallback((msg: string) => {
+    setToast(msg);
+    setTimeout(() => setToast(null), 2500);
+  }, []);
+
   const [showStoragePins, setShowStoragePins] = useState(false);
 
   const {
@@ -80,10 +86,7 @@ export default function HomePage() {
     handleSessionInvalidatedLogout,
   } = useCourseSession({
     setActiveTab,
-    showToastMsg: (msg) => {
-      setToast(msg);
-      setTimeout(() => setToast(null), 2500);
-    },
+    showToastMsg,
     clearDirections,
     setIsRouteCreated,
   });
@@ -119,10 +122,6 @@ export default function HomePage() {
     }
   }, [hookSidebarSize.width, hookSidebarSize.height, isMobile]);
 
-  const showToastMsg = useCallback((msg: string) => {
-    setToast(msg);
-    setTimeout(() => setToast(null), 2500);
-  }, []);
 
   // Initialize Kakao SDK
   useEffect(() => {

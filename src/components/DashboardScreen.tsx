@@ -46,7 +46,8 @@ export default function DashboardScreen({
     if (pendingInviteCode && onJoinByInviteCode) {
       onJoinByInviteCode(pendingInviteCode);
     }
-  }, [pendingInviteCode, onJoinByInviteCode]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingInviteCode]);
 
   const handleDelete = async (e: React.MouseEvent, courseId: string) => {
     e.stopPropagation();

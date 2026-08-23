@@ -414,11 +414,16 @@ export async function getUserCoursesWithCollaborative(userId: string): Promise<C
   if (roomIds.length > 0) {
     const { data: allMembers } = await supabase
       .from('room_members')
-      .select('room_id')
+      .select('room_id, user_id')
       .in('room_id', roomIds);
     
+    const uniqueMembers = new Set<string>();
     (allMembers || []).forEach(m => {
-      memberCountByRoom[m.room_id] = (memberCountByRoom[m.room_id] || 0) + 1;
+      const key = `${m.room_id}-${m.user_id}`;
+      if (!uniqueMembers.has(key)) {
+        uniqueMembers.add(key);
+        memberCountByRoom[m.room_id] = (memberCountByRoom[m.room_id] || 0) + 1;
+      }
     });
   }
 
