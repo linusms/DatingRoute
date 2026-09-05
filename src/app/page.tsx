@@ -425,7 +425,7 @@ export default function HomePage() {
           className="sidebar"
           style={sidebarSize != null ? (
             isMobile
-              ? { height: `${sidebarSize}vh`, maxHeight: `${sidebarSize}vh` }
+              ? { height: `${sidebarSize}dvh`, maxHeight: `${sidebarSize}dvh` }
               : { width: `${sidebarSize}%`, minWidth: `${sidebarSize}%` }
           ) : undefined}
         >
