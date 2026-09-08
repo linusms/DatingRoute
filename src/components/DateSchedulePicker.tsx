@@ -207,16 +207,15 @@ export default function DateSchedulePicker({
             <button
               onClick={handleApply}
               disabled={!startDate}
+              className="btn btn-primary"
               style={{
                 width: '100%',
                 padding: '10px',
                 borderRadius: '8px',
-                background: !startDate ? 'var(--color-bg-secondary)' : 'linear-gradient(135deg, var(--color-accent-primary), #c084fc)',
-                color: !startDate ? 'var(--color-text-secondary)' : '#fff',
-                border: 'none',
+                fontSize: '14px',
                 fontWeight: 600,
+                opacity: !startDate ? 0.4 : 1,
                 cursor: !startDate ? 'not-allowed' : 'pointer',
-                transition: 'all 0.2s',
               }}
             >
               확인

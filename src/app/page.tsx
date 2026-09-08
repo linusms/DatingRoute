@@ -52,6 +52,7 @@ export default function HomePage() {
   }, []);
 
   const [showStoragePins, setShowStoragePins] = useState(false);
+  const [aiRadiusCircle, setAiRadiusCircle] = useState<{ center: { lat: number; lng: number }; radiusKm: number } | null>(null);
 
   const {
     currentUser,
@@ -472,6 +473,7 @@ export default function HomePage() {
                 onScheduleChange={setSchedule}
                 onAddPlace={handleAddPlace}
                 onHighlightPlace={setHighlightPlace}
+                onRadiusCircleChange={setAiRadiusCircle}
                 roomId={sessionId}
               />
             </div>
@@ -528,6 +530,7 @@ export default function HomePage() {
           transitMode={transitMode}
           activeDayTab={activeDayTab}
           showStoragePins={showStoragePins}
+          searchRadiusCircle={activeTab === 'ai' ? aiRadiusCircle : null}
         />
 
         {reviewPlace && (

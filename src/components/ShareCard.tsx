@@ -18,7 +18,7 @@ export default function ShareCard({ places, directions, courseName }: ShareCardP
     try {
       const html2canvas = (await import('html2canvas')).default;
       const canvas = await html2canvas(cardRef.current, {
-        backgroundColor: '#1e1826',
+        backgroundColor: '#FCFCFC',
         scale: 2,
         useCORS: true,
         allowTaint: true,

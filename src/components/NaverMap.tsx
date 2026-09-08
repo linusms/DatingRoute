@@ -19,6 +19,7 @@ interface NaverMapProps {
   transitMode: TransitMode;
   activeDayTab: 'all' | number;
   showStoragePins?: boolean;
+  searchRadiusCircle?: { center: { lat: number; lng: number }; radiusKm: number } | null;
 }
 
 export default function NaverMap({
@@ -28,12 +29,14 @@ export default function NaverMap({
   transitMode,
   activeDayTab,
   showStoragePins = false,
+  searchRadiusCircle = null,
 }: NaverMapProps) {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapObjRef = useRef<any>(null);
   const markersRef = useRef<any[]>([]);
   const polylineRef = useRef<any>(null);
   const highlightMarkerRef = useRef<any>(null);
+  const circleRef = useRef<any>(null);
 
   const clientId = process.env.NEXT_PUBLIC_NCP_CLIENT_ID;
 
@@ -55,6 +58,13 @@ export default function NaverMap({
     if (highlightMarkerRef.current) {
       highlightMarkerRef.current.setMap(null);
       highlightMarkerRef.current = null;
+    }
+  }, []);
+
+  const clearCircle = useCallback(() => {
+    if (circleRef.current) {
+      circleRef.current.setMap(null);
+      circleRef.current = null;
     }
   }, []);
 
@@ -269,6 +279,34 @@ export default function NaverMap({
 
     map.panTo(pos);
   }, [highlightPlace, clearHighlight]);
+
+  // Radius circle overlay for AI recommend location
+  useEffect(() => {
+    const map = mapObjRef.current;
+    if (!map || !window.naver) return;
+
+    clearCircle();
+
+    if (!searchRadiusCircle) return;
+
+    const { center, radiusKm } = searchRadiusCircle;
+    const centerLatLng = new window.naver.maps.LatLng(center.lat, center.lng);
+
+    circleRef.current = new window.naver.maps.Circle({
+      map,
+      center: centerLatLng,
+      radius: radiusKm * 1000,
+      fillColor: '#D96C5C',
+      fillOpacity: 0.1,
+      strokeColor: '#D96C5C',
+      strokeOpacity: 0.85,
+      strokeWeight: 2,
+      strokeStyle: 'dash',
+      zIndex: 10,
+    });
+
+    map.panTo(centerLatLng);
+  }, [searchRadiusCircle, clearCircle]);
 
   return (
     <div className="map-container">

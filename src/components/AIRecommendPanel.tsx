@@ -4,7 +4,7 @@ import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { CoursePlace, DateSchedule, RecommendedPlace, RegionEvent, Place } from '@/lib/types';
 import { useResizable } from '@/hooks/useResizable';
-import { stripHtml, tourDateToISO } from '@/lib/utils';
+import { stripHtml, tourDateToISO, katechToWgs84 } from '@/lib/utils';
 import DateSchedulePicker from './DateSchedulePicker';
 
 interface AIRecommendPanelProps {
@@ -13,6 +13,7 @@ interface AIRecommendPanelProps {
   onScheduleChange: (s: DateSchedule | null) => void;
   onAddPlace: (place: Place) => void;
   onHighlightPlace?: (place: Place | null) => void;
+  onRadiusCircleChange?: (circle: { center: { lat: number; lng: number }; radiusKm: number } | null) => void;
   roomId?: string | null;
 }
 
@@ -29,6 +30,7 @@ export type SearchHistoryItem = {
   timestamp: number;
   conditions: {
     selectedPlaceId: string;
+    selectedPlaceTitle?: string;
     radiusKm: number;
     categories: string[];
     sortOrder: string;
@@ -47,6 +49,7 @@ export default function AIRecommendPanel({
   onScheduleChange,
   onAddPlace,
   onHighlightPlace,
+  onRadiusCircleChange,
   roomId,
 }: AIRecommendPanelProps) {
   const [searchHistory, setSearchHistory] = useState<SearchHistoryItem[]>([]);
@@ -59,6 +62,25 @@ export default function AIRecommendPanel({
   // 기준 장소 및 반경
   const [selectedPlaceId, setSelectedPlaceId] = useState<string>('all');
   const [radiusKm, setRadiusKm] = useState<number>(5);
+
+  // Sync radius circle to parent/map
+  useEffect(() => {
+    if (!onRadiusCircleChange) return;
+    if (selectedPlaceId === 'all') {
+      onRadiusCircleChange(null);
+      return;
+    }
+    const center = coursePlaces.find(p => p.id === selectedPlaceId);
+    if (!center) {
+      onRadiusCircleChange(null);
+      return;
+    }
+    const { lng, lat } = katechToWgs84(center.mapx, center.mapy);
+    onRadiusCircleChange({
+      center: { lat, lng },
+      radiusKm,
+    });
+  }, [selectedPlaceId, radiusKm, coursePlaces, onRadiusCircleChange]);
 
   // 카테고리 필터 및 키워드
   const [selectedCategories, setSelectedCategories] = useState<string[]>(['restaurant', 'cafe', 'activity', 'accommodation']);
@@ -321,11 +343,15 @@ export default function AIRecommendPanel({
                   setShowPopup(true);
 
                   const newId = Date.now().toString();
+                  const targetCenterPlace = coursePlaces.find(p => p.id === selectedPlaceId);
+                  const currentPlaceTitle = selectedPlaceId === 'all' ? '전체' : (targetCenterPlace ? stripHtml(targetCenterPlace.title) : '');
+
                   const newItem: SearchHistoryItem = {
                     id: newId,
                     timestamp: Date.now(),
                     conditions: {
                       selectedPlaceId,
+                      selectedPlaceTitle: currentPlaceTitle,
                       radiusKm,
                       categories: selectedCategories,
                       sortOrder,
@@ -479,9 +505,22 @@ export default function AIRecommendPanel({
                 const timeStr = `${date.getMonth()+1}/${date.getDate()} ${date.getHours()}:${String(date.getMinutes()).padStart(2, '0')}`;
                 const cats = h.conditions.categories.map(c => AI_CATEGORIES.find(ac => ac.id === c)?.label.split(' ')[1] || c).join(', ');
                 const kw = h.conditions.searchKeyword ? ` "${h.conditions.searchKeyword}"` : '';
+
+                // 기준 장소 이름 추출
+                let placeLabel = h.conditions.selectedPlaceTitle;
+                if (!placeLabel) {
+                  if (h.conditions.selectedPlaceId === 'all') {
+                    placeLabel = '전체';
+                  } else {
+                    const found = coursePlaces.find(p => p.id === h.conditions.selectedPlaceId);
+                    placeLabel = found ? stripHtml(found.title) : '';
+                  }
+                }
+                const placePrefix = placeLabel ? `'${placeLabel}' 기준 ` : '';
+
                 return (
                   <option key={h.id} value={h.id} style={{ background: 'var(--color-bg-card)' }}>
-                    [{timeStr}] 반경 {h.conditions.radiusKm}km / {cats || '전체'}{kw}
+                    [{timeStr}] {placePrefix}반경 {h.conditions.radiusKm}km / {cats || '전체'}{kw}
                   </option>
                 );
               })}

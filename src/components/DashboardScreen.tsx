@@ -277,7 +277,7 @@ export default function DashboardScreen({
                           </div>
                         ) : (
                           <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
                               <span className="dashboard-course-name">
                                 {isUnsaved ? (
                                   <span style={{ color: 'var(--color-text-primary)' }}>{course.displayName || '이름 없는 경로'}</span>
