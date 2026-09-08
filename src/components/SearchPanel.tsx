@@ -148,18 +148,30 @@ export default function SearchPanel({
             </select>
 
             <div style={{ opacity: selectedPlaceId === 'all' ? 0.4 : 1, pointerEvents: selectedPlaceId === 'all' ? 'none' : 'auto' }}>
-              <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)', marginBottom: '4px' }}>
+              <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)', marginBottom: '6px' }}>
                 반경: <strong style={{ color: 'var(--color-accent-primary)' }}>{radiusKm}km</strong>
                 {selectedPlaceId === 'all' && <span style={{ marginLeft: '6px', fontSize: '10px' }}>(장소 선택 시 활성화)</span>}
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span style={{ fontSize: '10px', color: 'var(--color-text-secondary)' }}>1</span>
-                <input
-                  type="range" min={1} max={20} step={1} value={radiusKm}
-                  onChange={e => setRadiusKm(Number(e.target.value))}
-                  style={{ flex: 1, accentColor: 'var(--color-accent-primary)', cursor: 'pointer' }}
-                />
-                <span style={{ fontSize: '10px', color: 'var(--color-text-secondary)' }}>20km</span>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '4px' }}>
+                {([{ icon: '📍', label: '바로 옆', km: 0.5 }, { icon: '🚶', label: '도보 10분', km: 1 }, { icon: '🚇', label: '2~3정거장', km: 3 }, { icon: '🚗', label: '차 30분', km: 10 }, { icon: '🛣️', label: '차 1시간', km: 25 }] as { icon: string; label: string; km: number }[]).map(preset => (
+                  <button
+                    key={preset.km}
+                    onClick={() => setRadiusKm(preset.km)}
+                    title={`반경 ${preset.km}km`}
+                    style={{
+                      display: 'flex', flexDirection: 'column', alignItems: 'center',
+                      gap: '2px', padding: '6px 2px', borderRadius: '8px', cursor: 'pointer',
+                      border: radiusKm === preset.km ? '1.5px solid var(--color-accent-primary)' : '1.5px solid var(--color-border)',
+                      background: radiusKm === preset.km ? 'rgba(217,108,92,0.1)' : 'var(--color-bg-tertiary)',
+                      color: radiusKm === preset.km ? 'var(--color-accent-primary)' : 'var(--color-text-secondary)',
+                      transition: 'all 0.15s',
+                    }}
+                  >
+                    <span style={{ fontSize: '16px' }}>{preset.icon}</span>
+                    <span style={{ fontSize: '9px', fontWeight: 600, textAlign: 'center', lineHeight: 1.2 }}>{preset.label}</span>
+                    <span style={{ fontSize: '9px', opacity: 0.7 }}>{preset.km}km</span>
+                  </button>
+                ))}
               </div>
             </div>
           </div>
