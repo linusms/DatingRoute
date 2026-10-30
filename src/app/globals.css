@@ -1967,9 +1967,6 @@ body {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  max-height: calc(100vh - 480px);
-  overflow-y: auto;
-  padding-right: 4px;
 }
 
 .ai-empty-section {

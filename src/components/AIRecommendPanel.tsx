@@ -772,6 +772,7 @@ export default function AIRecommendPanel({
             style={{
               position: 'relative',
               width: `${panelSize.width}px`,
+              maxWidth: '95vw',
               background: 'var(--color-bg-primary)',
               backdropFilter: 'blur(20px)',
               borderRadius: '24px',
@@ -790,7 +791,7 @@ export default function AIRecommendPanel({
             </div>
 
             {/* Content Area */}
-            <div style={{ overflowY: 'auto', padding: '20px', minHeight: '300px' }} className="custom-scrollbar">
+            <div style={{ flex: 1, overflowY: 'auto', padding: '20px', minHeight: 'min(300px, 40vh)' }} className="custom-scrollbar">
               {isLoading && (
                 <div className="ai-realtime-loading-card animate-scale-in" style={{ margin: '40px auto' }}>
                   <div className="ai-loading-spinner-wrapper">
