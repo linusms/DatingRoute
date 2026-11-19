@@ -48,3 +48,6 @@ next-env.d.ts
 backups_*.sql
 supabase_backup_*.sql
 *.dump
+
+# local DB snapshots (contain user data)
+/backups/
