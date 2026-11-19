@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import type { Course, User } from '@/lib/types';
+import ChangePasswordModal from './ChangePasswordModal';
 
 interface DashboardScreenProps {
   currentUser: User;
@@ -30,6 +31,7 @@ export default function DashboardScreen({
   const [loading, setLoading] = useState(true);
   const [editState, setEditState] = useState<EditState | null>(null);
   const [editSaving, setEditSaving] = useState(false);
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
 
   useEffect(() => {
     if (!currentUser?.id) return;
@@ -146,6 +148,24 @@ export default function DashboardScreen({
         </div>
           <div className="dashboard-user-info">
             <span className="dashboard-nickname">👋 {currentUser.nickname}님</span>
+            <button
+              onClick={() => setShowPasswordModal(true)}
+              title="비밀번호 변경"
+              style={{
+                fontSize: '16px', color: 'var(--color-text-secondary)',
+                border: 'none', background: 'transparent',
+                width: '32px', height: '32px', borderRadius: '50%',
+                cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                transition: 'background 0.2s, color 0.2s'
+              }}
+              onMouseEnter={e => { e.currentTarget.style.background = 'var(--color-bg-secondary)'; e.currentTarget.style.color = 'var(--color-text-primary)'; }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--color-text-secondary)'; }}
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+              </svg>
+            </button>
             <button
               onClick={onLogout}
               title="로그아웃"
@@ -355,6 +375,8 @@ export default function DashboardScreen({
           )}
         </div>
       </div>
+
+      {showPasswordModal && <ChangePasswordModal onClose={() => setShowPasswordModal(false)} />}
     </div>
   );
 }

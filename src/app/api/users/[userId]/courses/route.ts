@@ -1,12 +1,15 @@
 export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { getUserCoursesWithCollaborative } from '@/lib/db';
+import { requireSelf } from '@/lib/session';
 
 type RouteContext = { params: Promise<{ userId: string }> };
 
 export async function GET(request: NextRequest, context: RouteContext) {
   try {
     const { userId } = await context.params;
+    const auth = await requireSelf(request, userId);
+    if (!auth.ok) return auth.response;
     
     if (!userId) {
       return NextResponse.json({ error: '유저 ID가 필요합니다.' }, { status: 400 });

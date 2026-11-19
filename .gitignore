@@ -43,3 +43,8 @@ next-env.d.ts
 
 # database
 /data/
+
+# database dumps — never commit (may contain user data)
+backups_*.sql
+supabase_backup_*.sql
+*.dump

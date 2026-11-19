@@ -187,7 +187,7 @@ export default function HomePage() {
           const res = await fetch(`/api/sessions/${sessionId}/places`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ place: newPlace, userId: currentUser?.id }),
+            body: JSON.stringify({ place: newPlace }),
           });
           if (res.ok) {
             const data = await res.json();
@@ -200,7 +200,7 @@ export default function HomePage() {
         } catch { /* ignore */ }
       }
     },
-    [coursePlaces, showToastMsg, sessionId, currentUser?.id]
+    [coursePlaces, showToastMsg, sessionId]
   );
 
   const handleRemovePlace = useCallback(
@@ -213,13 +213,13 @@ export default function HomePage() {
       if (sessionId) {
         skipNextSSERef.current = true;
         try {
-          await fetch(`/api/sessions/${sessionId}/places?id=${id}&userId=${currentUser?.id}`, {
+          await fetch(`/api/sessions/${sessionId}/places?id=${encodeURIComponent(id)}`, {
             method: 'DELETE',
           });
         } catch { /* ignore */ }
       }
     },
-    [coursePlaces, sessionId, currentUser?.id]
+    [coursePlaces, sessionId]
   );
 
   const handleReorderPlaces = useCallback(
@@ -241,13 +241,12 @@ export default function HomePage() {
             body: JSON.stringify({
               action: 'set',
               places: newPlaces,
-              userId: currentUser?.id,
             }),
           });
         } catch { /* ignore */ }
       }
     },
-    [isRouteCreated, sessionId, currentUser?.id]
+    [isRouteCreated, sessionId]
   );
 
   // ──── Course Save ────
@@ -258,7 +257,7 @@ export default function HomePage() {
           const res = await fetch(`/api/sessions/${sessionId}/courses`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name, description, userId: currentUser?.id, nickname: currentUser?.nickname, schedule }),
+            body: JSON.stringify({ name, description, schedule }),
           });
           if (!res.ok) {
             throw new Error('Save failed');
@@ -269,7 +268,7 @@ export default function HomePage() {
         }
       }
     },
-    [showToastMsg, sessionId, currentUser?.id, currentUser?.nickname]
+    [showToastMsg, sessionId, schedule]
   );
 
   // ──── Share ────
@@ -355,13 +354,13 @@ export default function HomePage() {
             fontSize: '18px', color: 'var(--color-text-primary)', fontWeight: '700',
             margin: '0 0 12px 0', letterSpacing: '-0.3px'
           }}>
-            다른 기기에서 로그인됨
+            세션이 종료됨
           </h2>
           <p style={{
             fontSize: '14px', color: 'var(--color-text-secondary)',
             lineHeight: 1.6, margin: '0 0 24px 0', wordBreak: 'keep-all'
           }}>
-            동일한 계정으로 다른 기기에서 접속하여<br />현재 세션이 종료되었습니다.
+            같은 계정으로 다른 기기에서 로그인했거나 로그아웃해서<br />현재 세션이 종료되었습니다.
           </p>
           <button
             onClick={handleSessionInvalidatedLogout}
@@ -380,13 +379,14 @@ export default function HomePage() {
     );
   }
 
+  // ──── Render: Restoring session from cookie ────
+  if (isInitializing) {
+    return <div style={{ height: '100dvh', background: 'var(--color-bg-primary)' }} />;
+  }
+
   // ──── Render: Auth Screen ────
   if (!currentUser) {
-    return <AuthScreen onLogin={(u) => {
-      setCurrentUser(u);
-      sessionStorage.setItem('datingroute_user', JSON.stringify(u));
-      localStorage.removeItem('datingroute_user');
-    }} />;
+    return <AuthScreen onLogin={setCurrentUser} />;
   }
 
   // ──── Render: Dashboard (no session mode selected) ────

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { updateLiveCourseName } from '@/lib/db';
+import { requireRoomMember } from '@/lib/session';
 
 type RouteContext = { params: Promise<{ sessionId: string }> };
 
@@ -10,6 +11,8 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     if (!sessionId) {
       return NextResponse.json({ error: 'Session ID가 필요합니다.' }, { status: 400 });
     }
+    const auth = await requireRoomMember(request, sessionId);
+    if (!auth.ok) return auth.response;
 
     const body = await request.json();
     const { displayName, description } = body;

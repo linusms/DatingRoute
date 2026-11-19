@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { updateCourse } from '@/lib/db';
+import { requireSelf } from '@/lib/session';
 
 type RouteContext = { params: Promise<{ userId: string; courseId: string }> };
 
@@ -10,6 +11,8 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     if (!userId || !courseId) {
       return NextResponse.json({ error: '유저 ID와 코스 ID가 필요합니다.' }, { status: 400 });
     }
+    const auth = await requireSelf(request, userId);
+    if (!auth.ok) return auth.response;
 
     const body = await request.json();
     const { name, description } = body;

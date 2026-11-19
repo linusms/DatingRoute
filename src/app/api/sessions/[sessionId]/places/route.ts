@@ -1,20 +1,25 @@
 export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
-import { addLivePlace, updateLivePlaces, deleteLivePlace, broadcastSSE } from '@/lib/db';
+import { addLivePlace, updateLivePlaces, deleteLivePlace, broadcastRoomEvent } from '@/lib/db';
+import { requireRoomMember } from '@/lib/session';
 
 type RouteContext = { params: Promise<{ sessionId: string }> };
 
 export async function POST(request: NextRequest, context: RouteContext) {
   try {
     const { sessionId } = await context.params;
-    const { place, userId } = await request.json();
+    const auth = await requireRoomMember(request, sessionId);
+    if (!auth.ok) return auth.response;
+    const userId = auth.user.id;
 
-    if (!place || !userId) {
+    const { place } = await request.json();
+
+    if (!place) {
       return NextResponse.json({ error: '데이터가 누락되었습니다.' }, { status: 400 });
     }
 
     const newPlace = await addLivePlace(sessionId, userId, place);
-    await broadcastSSE(sessionId, 'place_added', { place: newPlace }, userId);
+    await broadcastRoomEvent(sessionId, 'place_added', { place: newPlace }, userId);
 
     return NextResponse.json({ place: newPlace }, { status: 201 });
   } catch (error: any) {
@@ -26,14 +31,18 @@ export async function POST(request: NextRequest, context: RouteContext) {
 export async function PUT(request: NextRequest, context: RouteContext) {
   try {
     const { sessionId } = await context.params;
-    const { places, userId } = await request.json();
+    const auth = await requireRoomMember(request, sessionId);
+    if (!auth.ok) return auth.response;
+    const userId = auth.user.id;
 
-    if (!places || !userId) {
+    const { places } = await request.json();
+
+    if (!places) {
       return NextResponse.json({ error: '데이터가 누락되었습니다.' }, { status: 400 });
     }
 
     await updateLivePlaces(sessionId, userId, places);
-    await broadcastSSE(sessionId, 'places_reordered', { places }, userId);
+    await broadcastRoomEvent(sessionId, 'places_reordered', { places }, userId);
 
     return NextResponse.json({ success: true });
   } catch (error: any) {
@@ -45,16 +54,18 @@ export async function PUT(request: NextRequest, context: RouteContext) {
 export async function DELETE(request: NextRequest, context: RouteContext) {
   try {
     const { sessionId } = await context.params;
-    const { searchParams } = new URL(request.url);
-    const placeId = searchParams.get('id');
-    const userId = searchParams.get('userId');
+    const auth = await requireRoomMember(request, sessionId);
+    if (!auth.ok) return auth.response;
+    const userId = auth.user.id;
 
-    if (!placeId || !userId) {
-      return NextResponse.json({ error: 'placeId와 userId가 필요합니다.' }, { status: 400 });
+    const placeId = request.nextUrl.searchParams.get('id');
+
+    if (!placeId) {
+      return NextResponse.json({ error: 'placeId가 필요합니다.' }, { status: 400 });
     }
 
     await deleteLivePlace(sessionId, userId, placeId);
-    await broadcastSSE(sessionId, 'place_removed', { id: placeId }, userId);
+    await broadcastRoomEvent(sessionId, 'place_removed', { id: placeId }, userId);
 
     return NextResponse.json({ success: true });
   } catch (error: any) {

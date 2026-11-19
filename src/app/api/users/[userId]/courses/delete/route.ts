@@ -1,12 +1,15 @@
 export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { deleteCourse } from '@/lib/db';
+import { requireSelf } from '@/lib/session';
 
 type RouteContext = { params: Promise<{ userId: string }> };
 
 export async function DELETE(request: NextRequest, context: RouteContext) {
   try {
     const { userId } = await context.params;
+    const auth = await requireSelf(request, userId);
+    if (!auth.ok) return auth.response;
     const { searchParams } = new URL(request.url);
     const courseId = searchParams.get('id');
     

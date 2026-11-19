@@ -1,7 +1,11 @@
 import { NextRequest } from 'next/server';
+import { requireUser } from '@/lib/session';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
 export async function GET(request: NextRequest) {
+  const auth = await requireUser(request);
+  if (!auth.ok) return auth.response;
+
   const placeTitle = request.nextUrl.searchParams.get('place');
   const category = request.nextUrl.searchParams.get('category');
 

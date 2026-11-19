@@ -16,8 +16,8 @@ DROP TABLE IF EXISTS sessions CASCADE;
 CREATE TABLE users (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   nickname TEXT UNIQUE NOT NULL,
-  password TEXT NOT NULL,
-  session_token TEXT,  -- 단일 기기 로그인 강제용
+  password TEXT NOT NULL,  -- scrypt$<salt>$<key> (구버전 SHA-256 hex는 로그인 시 자동 변환)
+  session_token TEXT,  -- 세션 토큰의 SHA-256 해시 (원본은 httpOnly 쿠키에만 존재, 단일 기기 로그인 강제용)
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -91,11 +91,18 @@ CREATE INDEX idx_courses_owner ON courses(owner_id);
 CREATE INDEX idx_courses_room ON courses(room_id);
 CREATE INDEX idx_places_course ON course_places(course_id);
 CREATE INDEX idx_events_room ON events(room_id);
+CREATE INDEX idx_users_session_token ON users(session_token);
 
--- 실시간 통신(Realtime)을 위해 테이블 설정 활성화
+-- 실시간 동기화는 Broadcast 채널(session-<roomId>)을 쓰므로 테이블을 발행하지 않습니다.
 CREATE PUBLICATION supabase_realtime;
-ALTER PUBLICATION supabase_realtime ADD TABLE rooms;
-ALTER PUBLICATION supabase_realtime ADD TABLE room_members;
-ALTER PUBLICATION supabase_realtime ADD TABLE courses;
-ALTER PUBLICATION supabase_realtime ADD TABLE course_places;
-ALTER PUBLICATION supabase_realtime ADD TABLE events;
+
+-- 보안: RLS를 켜고 정책을 두지 않아 공개 키(anon/authenticated)로는 접근할 수 없게 합니다.
+-- 서버는 RLS를 우회하는 secret 키(SUPABASE_SECRET_KEY)로만 접속합니다.
+ALTER TABLE users         ENABLE ROW LEVEL SECURITY;
+ALTER TABLE rooms         ENABLE ROW LEVEL SECURITY;
+ALTER TABLE room_members  ENABLE ROW LEVEL SECURITY;
+ALTER TABLE courses       ENABLE ROW LEVEL SECURITY;
+ALTER TABLE course_places ENABLE ROW LEVEL SECURITY;
+ALTER TABLE events        ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON ALL TABLES IN SCHEMA public FROM anon, authenticated;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON TABLES FROM anon, authenticated;

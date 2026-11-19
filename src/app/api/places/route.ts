@@ -1,8 +1,12 @@
 import { NextRequest } from 'next/server';
+import { requireUser } from '@/lib/session';
 import { katechToWgs84, getStraightLineDistance } from '@/lib/utils';
 import { getCache, setCache } from '@/lib/cache';
 
 export async function GET(request: NextRequest) {
+  const auth = await requireUser(request);
+  if (!auth.ok) return auth.response;
+
   const query = request.nextUrl.searchParams.get('query');
   if (!query) {
     return Response.json({ error: 'query parameter is required' }, { status: 400 });

@@ -1,21 +1,66 @@
+import 'server-only';
 import { createClient } from '@supabase/supabase-js';
 import { v4 as uuidv4 } from 'uuid';
-import type { Course, CoursePlace, User, Room, RoomMember } from './types';
-import { createHash, randomBytes } from 'crypto';
+import { ROOM_EVENT, type Course, type CoursePlace, type User, type Room, type RoomMember } from './types';
+import { createHash, randomBytes, scrypt, timingSafeEqual } from 'crypto';
 
-export const supabase = createClient(
+// 서버 전용 키(secret / service_role)로 접속합니다. RLS를 우회하므로 절대 클라이언트로 노출하면 안 됩니다.
+const serverKey = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
+if (!serverKey) {
+  console.warn('[db] SUPABASE_SECRET_KEY가 설정되지 않아 공개 키로 접속합니다. RLS를 켜기 전에 반드시 설정하세요.');
+}
+
+const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co',
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || 'placeholder'
+  serverKey || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || 'placeholder',
+  { auth: { persistSession: false, autoRefreshToken: false } }
 );
 
 const LIVE_COURSE_NAME = '__live__';
 
+/* ─────────── Password & Session Token Hashing ─────────── */
+
+const SCRYPT_PREFIX = 'scrypt';
+const SCRYPT_KEYLEN = 64;
+
+function scryptAsync(password: string, salt: Buffer, keylen: number): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    scrypt(password, salt, keylen, (err, key) => (err ? reject(err) : resolve(key)));
+  });
+}
+
+/** Format: scrypt$<salt base64>$<key base64> */
 async function hashPassword(password: string): Promise<string> {
-  return createHash('sha256').update(password).digest('hex');
+  const salt = randomBytes(16);
+  const key = await scryptAsync(password, salt, SCRYPT_KEYLEN);
+  return `${SCRYPT_PREFIX}$${salt.toString('base64')}$${key.toString('base64')}`;
+}
+
+/**
+ * Verifies a password against a stored hash.
+ * Legacy rows hold an unsalted SHA-256 hex digest; those verify once and are flagged for rehashing.
+ */
+async function verifyPassword(password: string, stored: string): Promise<{ ok: boolean; needsRehash: boolean }> {
+  if (stored.startsWith(`${SCRYPT_PREFIX}$`)) {
+    const [, saltB64, keyB64] = stored.split('$');
+    const expected = Buffer.from(keyB64, 'base64');
+    const actual = await scryptAsync(password, Buffer.from(saltB64, 'base64'), expected.length);
+    return { ok: actual.length === expected.length && timingSafeEqual(actual, expected), needsRehash: false };
+  }
+
+  const legacy = Buffer.from(createHash('sha256').update(password).digest('hex'));
+  const storedBuf = Buffer.from(stored);
+  const ok = legacy.length === storedBuf.length && timingSafeEqual(legacy, storedBuf);
+  return { ok, needsRehash: ok };
+}
+
+/** The raw token lives only in the user's httpOnly cookie; the DB keeps its SHA-256 hash. */
+function hashSessionToken(token: string): string {
+  return createHash('sha256').update(token).digest('hex');
 }
 
 function generateSessionToken(): string {
-  return randomBytes(32).toString('hex');
+  return randomBytes(32).toString('base64url');
 }
 
 function generateInviteCode(): string {
@@ -34,7 +79,6 @@ function mapDbUserToUser(row: any): User {
   return {
     id: row.id,
     nickname: row.nickname,
-    sessionToken: row.session_token,
     createdAt: row.created_at,
   } as User;
 }
@@ -75,56 +119,83 @@ function mapDbPlaceToCoursePlace(row: any): CoursePlace {
 
 /* ─────────── Auth (Users) ─────────── */
 
-export async function registerUser(nickname: string, password: string): Promise<User | null> {
+/**
+ * Issues a new session token for the user. Overwriting the stored hash
+ * invalidates any previous session on other devices (single-device login).
+ */
+async function startSession(userId: string): Promise<string> {
+  const sessionToken = generateSessionToken();
+  const { error } = await supabase
+    .from('users')
+    .update({ session_token: hashSessionToken(sessionToken) })
+    .eq('id', userId);
+  if (error) throw new Error(`Session start failed: ${error.message}`);
+  return sessionToken;
+}
+
+export async function registerUser(nickname: string, password: string): Promise<{ user: User; sessionToken: string } | null> {
   const hashedPassword = await hashPassword(password);
   const { data, error } = await supabase
     .from('users')
     .insert({ nickname, password: hashedPassword })
-    .select('*')
+    .select('id, nickname, created_at')
     .single();
 
   if (error) {
     console.error('Register error:', error);
-    return null; // or throw error
+    return null;
   }
-  return mapDbUserToUser(data);
+  const sessionToken = await startSession(data.id);
+  return { user: mapDbUserToUser(data), sessionToken };
 }
 
-export async function loginUser(nickname: string, password: string): Promise<User | null> {
-  const hashedPassword = await hashPassword(password);
+export async function loginUser(nickname: string, password: string): Promise<{ user: User; sessionToken: string } | null> {
   const { data, error } = await supabase
     .from('users')
-    .select('*')
+    .select('id, nickname, password, created_at')
     .eq('nickname', nickname)
-    .eq('password', hashedPassword)
-    .single();
+    .maybeSingle();
 
   if (error || !data) return null;
 
-  // Generate new session token (invalidates any previous session on other devices)
-  const sessionToken = generateSessionToken();
-  await supabase
-    .from('users')
-    .update({ session_token: sessionToken })
-    .eq('id', data.id);
+  const { ok, needsRehash } = await verifyPassword(password, data.password);
+  if (!ok) return null;
 
-  data.session_token = sessionToken;
-  return mapDbUserToUser(data);
+  if (needsRehash) {
+    await supabase.from('users').update({ password: await hashPassword(password) }).eq('id', data.id);
+  }
+
+  const sessionToken = await startSession(data.id);
+  return { user: mapDbUserToUser(data), sessionToken };
 }
 
-export async function validateSessionToken(userId: string, sessionToken: string): Promise<boolean> {
+export async function getUserBySessionToken(sessionToken: string): Promise<User | null> {
   const { data } = await supabase
     .from('users')
-    .select('session_token')
-    .eq('id', userId)
-    .single();
+    .select('id, nickname, created_at')
+    .eq('session_token', hashSessionToken(sessionToken))
+    .maybeSingle();
+  return data ? mapDbUserToUser(data) : null;
+}
 
+export async function endSession(userId: string): Promise<void> {
+  await supabase.from('users').update({ session_token: null }).eq('id', userId);
+}
+
+/** Returns false when the current password is wrong. */
+export async function changePassword(userId: string, currentPassword: string, newPassword: string): Promise<boolean> {
+  const { data } = await supabase.from('users').select('password').eq('id', userId).single();
   if (!data) return false;
-  return data.session_token === sessionToken;
+
+  const { ok } = await verifyPassword(currentPassword, data.password);
+  if (!ok) return false;
+
+  const { error } = await supabase.from('users').update({ password: await hashPassword(newPassword) }).eq('id', userId);
+  return !error;
 }
 
 export async function getUserById(userId: string): Promise<User | null> {
-  const { data } = await supabase.from('users').select('*').eq('id', userId).single();
+  const { data } = await supabase.from('users').select('id, nickname, created_at').eq('id', userId).single();
   return mapDbUserToUser(data);
 }
 
@@ -195,6 +266,16 @@ export async function getRoomById(roomId: string): Promise<any | null> {
     data.members = data.members.map(mapDbRoomMemberToRoomMember);
   }
   return data ? mapDbRoomToRoom(data) : null;
+}
+
+export async function isRoomMember(roomId: string, userId: string): Promise<boolean> {
+  const { data } = await supabase
+    .from('room_members')
+    .select('id')
+    .eq('room_id', roomId)
+    .eq('user_id', userId)
+    .limit(1);
+  return !!data && data.length > 0;
 }
 
 export async function joinRoom(roomId: string, userId: string): Promise<void> {
@@ -545,12 +626,20 @@ export async function updateLiveCourseName(
 
 /* ─────────── Realtime Events ─────────── */
 
-export async function broadcastSSE(roomId: string, type: string, payload: any, sender: string) {
+/**
+ * Sends a room event over Supabase Realtime Broadcast (REST, no subscription needed).
+ * Clients listen on channel `session-<roomId>`; postgres_changes on `events` is no longer used
+ * because RLS blocks it for the public key.
+ */
+export async function broadcastRoomEvent(roomId: string, type: string, payload: any, sender: string) {
   if (!roomId) return;
-  await supabase.from('events').insert({
-    room_id: roomId,
-    type,
-    data: payload,
-    sender
-  });
+  const channel = supabase.channel(`session-${roomId}`);
+  try {
+    const result = await channel.httpSend(ROOM_EVENT, { type, data: payload, sender });
+    if (!result.success) console.error('Broadcast error:', result.status, result.error);
+  } catch (err) {
+    console.error('Broadcast error:', err);
+  } finally {
+    await supabase.removeChannel(channel);
+  }
 }

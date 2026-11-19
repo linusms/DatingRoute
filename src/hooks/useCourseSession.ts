@@ -41,36 +41,34 @@ export function useCourseSession({ setActiveTab, showToastMsg, clearDirections, 
   useEffect(() => { sessionIdRef.current = sessionId; }, [sessionId]);
   useEffect(() => { currentUserRef.current = currentUser; }, [currentUser]);
 
+  // 세션은 httpOnly 쿠키로 유지됩니다. 401이면 다른 기기에서 로그인했거나 세션이 만료된 것입니다.
   const validateSession = useCallback(async () => {
-    if (!currentUser?.sessionToken || !currentUser?.id) return;
+    if (!currentUser?.id) return;
     try {
-      const res = await fetch('/api/auth/validate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: currentUser.id, sessionToken: currentUser.sessionToken }),
-      });
+      const res = await fetch('/api/auth/me');
       if (res.status === 401) {
         setSessionInvalidated(true);
       }
     } catch { /* ignore network errors */ }
-  }, [currentUser?.id, currentUser?.sessionToken]);
+  }, [currentUser?.id]);
 
   useEffect(() => {
-    if (!currentUser?.sessionToken) return;
-    
+    if (!currentUser?.id) return;
+
     const handleFocus = () => validateSession();
-    window.addEventListener('focus', handleFocus);
-    window.addEventListener('visibilitychange', () => {
+    const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') validateSession();
-    });
+    };
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
 
     const interval = setInterval(validateSession, 5 * 60 * 1000);
     return () => {
       window.removeEventListener('focus', handleFocus);
-      window.removeEventListener('visibilitychange', handleFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
       clearInterval(interval);
     };
-  }, [validateSession, currentUser?.sessionToken]);
+  }, [validateSession, currentUser?.id]);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -92,24 +90,19 @@ export function useCourseSession({ setActiveTab, showToastMsg, clearDirections, 
         }
       }
 
-      let userRaw = sessionStorage.getItem('datingroute_user');
-      
-      // Migration from localStorage to sessionStorage
-      if (!userRaw) {
-        userRaw = localStorage.getItem('datingroute_user');
-        if (userRaw) {
-          sessionStorage.setItem('datingroute_user', userRaw);
-          localStorage.removeItem('datingroute_user');
-        }
-      }
-
-      if (userRaw) {
-        try {
-          setCurrentUser(JSON.parse(userRaw));
-        } catch { /* ignore */ }
-      }
+      // Older builds kept the user (with a raw session token) in web storage; clear it.
+      sessionStorage.removeItem('datingroute_user');
+      localStorage.removeItem('datingroute_user');
     }
-    setIsInitializing(false);
+
+    // Restore the logged-in user from the session cookie
+    fetch('/api/auth/me')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data?.user) setCurrentUser(data.user);
+      })
+      .catch(() => { /* treat as logged out */ })
+      .finally(() => setIsInitializing(false));
   }, [setActiveTab, showToastMsg]);
 
   const { isConnected } = useSessionSync({
@@ -171,7 +164,7 @@ export function useCourseSession({ setActiveTab, showToastMsg, clearDirections, 
       const res = await fetch('/api/sessions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ownerId: currentUser.id, expiresInDays: 30 }),
+        body: JSON.stringify({ expiresInDays: 30 }),
       });
       if (!res.ok) throw new Error('방 생성 실패');
       const data = await res.json();
@@ -225,7 +218,7 @@ export function useCourseSession({ setActiveTab, showToastMsg, clearDirections, 
 
     if (course.roomId) {
       try {
-        const res = await fetch(`/api/sessions/${course.roomId}?userId=${currentUser.id}`);
+        const res = await fetch(`/api/sessions/${course.roomId}`);
         if (res.ok) {
           const data = await res.json();
           setSessionMode('builder');
@@ -259,7 +252,7 @@ export function useCourseSession({ setActiveTab, showToastMsg, clearDirections, 
       const res = await fetch('/api/sessions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ownerId: currentUser.id, expiresInDays: 30 }),
+        body: JSON.stringify({ expiresInDays: 30 }),
       });
       if (!res.ok) throw new Error('방 생성 실패');
       const data = await res.json();
@@ -284,7 +277,7 @@ export function useCourseSession({ setActiveTab, showToastMsg, clearDirections, 
         await fetch(`/api/sessions/${data.room.id}/places`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'set', places: course.places, userId: currentUser.id }),
+          body: JSON.stringify({ action: 'set', places: course.places }),
         });
       }
 
@@ -301,7 +294,7 @@ export function useCourseSession({ setActiveTab, showToastMsg, clearDirections, 
     const res = await fetch('/api/sessions/join', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ inviteCode: code, userId: currentUser.id }),
+      body: JSON.stringify({ inviteCode: code }),
     });
     if (!res.ok) {
       const err = await res.json();
@@ -320,7 +313,7 @@ export function useCourseSession({ setActiveTab, showToastMsg, clearDirections, 
     setPendingInviteCode(null);
 
     try {
-      const placesRes = await fetch(`/api/sessions/${data.room.id}?userId=${currentUser.id}`);
+      const placesRes = await fetch(`/api/sessions/${data.room.id}`);
       if (placesRes.ok) {
         const placesData = await placesRes.json();
         if (placesData.courseDetails) {
@@ -355,7 +348,7 @@ export function useCourseSession({ setActiveTab, showToastMsg, clearDirections, 
         await fetch(`/api/sessions/${sid}/places`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'set', places, userId: user.id }),
+          body: JSON.stringify({ action: 'set', places }),
         });
       } catch { /* ignore network errors */ }
     }
@@ -372,11 +365,11 @@ export function useCourseSession({ setActiveTab, showToastMsg, clearDirections, 
     setSchedule(null);
   }, [clearDirections, setIsRouteCreated]);
 
-  const handleLogout = useCallback(() => {
+  const handleLogout = useCallback(async () => {
+    // Save places first, while the session cookie is still valid
+    await handleGoToDashboard();
+    await fetch('/api/auth/logout', { method: 'POST' }).catch(() => { /* ignore */ });
     setCurrentUser(null);
-    sessionStorage.removeItem('datingroute_user');
-    localStorage.removeItem('datingroute_user'); // Just in case
-    handleGoToDashboard();
   }, [handleGoToDashboard]);
 
 
@@ -394,8 +387,8 @@ export function useCourseSession({ setActiveTab, showToastMsg, clearDirections, 
   const handleSessionInvalidatedLogout = useCallback(() => {
     setSessionInvalidated(false);
     setCurrentUser(null);
-    sessionStorage.removeItem('datingroute_user');
-    localStorage.removeItem('datingroute_user');
+    // Clears only this browser's stale cookie; the other device's session stays valid
+    fetch('/api/auth/logout', { method: 'POST' }).catch(() => { /* ignore */ });
     handleGoToDashboard();
   }, [handleGoToDashboard]);
 

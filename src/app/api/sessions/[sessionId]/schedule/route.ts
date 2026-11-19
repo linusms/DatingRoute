@@ -1,6 +1,7 @@
 export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { saveLiveSchedule, getLiveCourseDetails } from '@/lib/db';
+import { requireRoomMember } from '@/lib/session';
 
 type RouteContext = { params: Promise<{ sessionId: string }> };
 
@@ -8,6 +9,8 @@ type RouteContext = { params: Promise<{ sessionId: string }> };
 export async function GET(request: NextRequest, context: RouteContext) {
   try {
     const { sessionId } = await context.params;
+    const auth = await requireRoomMember(request, sessionId);
+    if (!auth.ok) return auth.response;
     const details = await getLiveCourseDetails(sessionId);
     return NextResponse.json({ schedule: details?.schedule ?? null });
   } catch (error: any) {
@@ -20,6 +23,8 @@ export async function GET(request: NextRequest, context: RouteContext) {
 export async function PUT(request: NextRequest, context: RouteContext) {
   try {
     const { sessionId } = await context.params;
+    const auth = await requireRoomMember(request, sessionId);
+    if (!auth.ok) return auth.response;
     const { schedule } = await request.json();
     await saveLiveSchedule(sessionId, schedule);
     return NextResponse.json({ ok: true });

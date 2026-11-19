@@ -1,6 +1,7 @@
 export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { getRoomById, getLivePlaces, getLiveCourseDetails } from '@/lib/db';
+import { requireRoomMember } from '@/lib/session';
 
 export async function GET(
   request: NextRequest,
@@ -8,24 +9,19 @@ export async function GET(
 ) {
   try {
     const { sessionId } = await context.params;
-    const room = await getRoomById(sessionId);
+    const auth = await requireRoomMember(request, sessionId);
+    if (!auth.ok) return auth.response;
 
+    const room = await getRoomById(sessionId);
     if (!room) {
       return NextResponse.json({ error: '방을 찾을 수 없습니다.' }, { status: 404 });
     }
-    
-    const { searchParams } = new URL(request.url);
-    const userId = searchParams.get('userId');
-    
-    if(!userId) {
-      return NextResponse.json({ error: 'userId 쿼리가 필요합니다.' }, { status: 400 });
-    }
 
-    const livePlaces = await getLivePlaces(sessionId, userId);
+    const livePlaces = await getLivePlaces(sessionId, auth.user.id);
     const courseDetails = await getLiveCourseDetails(sessionId);
 
-    return NextResponse.json({ 
-      room, 
+    return NextResponse.json({
+      room,
       coursePlaces: livePlaces,
       courseDetails
     });

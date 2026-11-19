@@ -1,7 +1,11 @@
 import { NextRequest } from 'next/server';
+import { requireUser } from '@/lib/session';
 import { getCache, setCache } from '@/lib/cache';
 
 export async function GET(request: NextRequest) {
+  const auth = await requireUser(request);
+  if (!auth.ok) return auth.response;
+
   const start = request.nextUrl.searchParams.get('start');
   const goal = request.nextUrl.searchParams.get('goal');
   const waypoints = request.nextUrl.searchParams.get('waypoints');

@@ -1,8 +1,12 @@
 import { NextRequest } from 'next/server';
+import { requireUser } from '@/lib/session';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { stripHtml } from '@/lib/utils';
 
 export async function POST(request: NextRequest) {
+  const auth = await requireUser(request);
+  if (!auth.ok) return auth.response;
+
   try {
     const { items, type = 'blog', placeName } = await request.json();
 

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useCallback, useState } from 'react';
-import type { CoursePlace, RoomMember } from './types';
+import { ROOM_EVENT, type CoursePlace, type RoomMember } from './types';
 import { supabase } from './supabaseClient';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 
@@ -61,12 +61,14 @@ export function useSessionSync({
     const channel = supabase.channel(`session-${sessionId}`);
     channelRef.current = channel;
 
+    // Server sends room events via Broadcast (see broadcastRoomEvent in db.ts)
     channel
       .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'events', filter: `room_id=eq.${sessionId}` },
-        (payload) => {
-          const { type, data } = payload.new;
+        'broadcast',
+        { event: ROOM_EVENT },
+        ({ payload }) => {
+          const { type, data } = payload ?? {};
+          if (!type || !data) return;
           const cbs = callbacksRef.current;
 
           switch (type) {

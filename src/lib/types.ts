@@ -242,7 +242,6 @@ export type SessionMode = 'builder';
 export interface User {
   id: string;
   nickname: string;
-  sessionToken?: string;
   createdAt?: string;
 }
 
@@ -271,6 +270,9 @@ export type SSEEventType =
   | 'course_deleted'
   | 'member_joined'
   | 'connected';
+
+/** Supabase Realtime Broadcast event name used on channel `session-<roomId>` */
+export const ROOM_EVENT = 'room_event';
 
 export interface SSEEvent {
   type: SSEEventType;

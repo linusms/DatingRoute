@@ -1,15 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createRoom } from '@/lib/db';
+import { requireUser } from '@/lib/session';
 
 export async function POST(request: NextRequest) {
   try {
-    const { ownerId, expiresInDays } = await request.json();
+    const auth = await requireUser(request);
+    if (!auth.ok) return auth.response;
 
-    if (!ownerId) {
-      return NextResponse.json({ error: 'ownerId가 필요합니다.' }, { status: 400 });
-    }
-
-    const result = await createRoom(ownerId, expiresInDays ?? 30);
+    const { expiresInDays } = await request.json();
+    const result = await createRoom(auth.user.id, expiresInDays ?? 30);
 
     return NextResponse.json({
       room: result.room,

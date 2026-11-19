@@ -1,12 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getRoomByInviteCode, joinRoom, getUserById, broadcastSSE } from '@/lib/db';
+import { getRoomByInviteCode, joinRoom, getUserById, broadcastRoomEvent } from '@/lib/db';
+import { requireUser } from '@/lib/session';
 
 export async function POST(request: NextRequest) {
   try {
-    const { inviteCode, userId } = await request.json();
+    const auth = await requireUser(request);
+    if (!auth.ok) return auth.response;
+    const userId = auth.user.id;
 
-    if (!inviteCode || !userId) {
-      return NextResponse.json({ error: '초대 코드와 유저 ID가 필요합니다.' }, { status: 400 });
+    const { inviteCode } = await request.json();
+
+    if (!inviteCode) {
+      return NextResponse.json({ error: '초대 코드가 필요합니다.' }, { status: 400 });
     }
 
     const room = await getRoomByInviteCode(inviteCode.trim().toUpperCase());
@@ -27,7 +32,7 @@ export async function POST(request: NextRequest) {
         isOwner: false,
         nickname: user.nickname
       };
-      await broadcastSSE(room.id, 'member_joined', { member: newMember }, userId);
+      await broadcastRoomEvent(room.id, 'member_joined', { member: newMember }, userId);
       
       if (!room.members) room.members = [];
       if (!room.members.find((m: any) => m.userId === userId)) {

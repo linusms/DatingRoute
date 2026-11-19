@@ -1,6 +1,10 @@
 import { NextRequest } from 'next/server';
+import { requireUser } from '@/lib/session';
 
 export async function GET(request: NextRequest) {
+  const auth = await requireUser(request);
+  if (!auth.ok) return auth.response;
+
   const coords = request.nextUrl.searchParams.get('coords');
 
   if (!coords) {

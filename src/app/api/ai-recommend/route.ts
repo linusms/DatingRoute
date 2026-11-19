@@ -1,4 +1,5 @@
 import { NextRequest } from 'next/server';
+import { requireUser } from '@/lib/session';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { katechToWgs84, getStraightLineDistance } from '@/lib/utils';
 
@@ -11,6 +12,9 @@ const CATEGORY_LABELS: Record<string, string> = {
 };
 
 export async function POST(request: NextRequest) {
+  const auth = await requireUser(request);
+  if (!auth.ok) return auth.response;
+
   const encoder = new TextEncoder();
 
   let body: any = {};
