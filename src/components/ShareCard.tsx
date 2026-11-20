@@ -1,16 +1,19 @@
 'use client';
 
 import React, { useRef, useCallback } from 'react';
-import { CoursePlace, DirectionResult } from '@/lib/types';
-import { formatDuration, formatDistance, stripHtml } from '@/lib/utils';
+import type { CoursePlace, DateSchedule, DirectionResult, TransitMode } from '@/lib/types';
+import { formatDuration, stripHtml } from '@/lib/utils';
+import { computeDayTimeline, dateOfDay, formatClock, WEEKDAYS_KO } from '@/lib/timeline';
 
 interface ShareCardProps {
   places: CoursePlace[];
   directions: DirectionResult | null;
+  schedule?: DateSchedule | null;
+  transitMode?: TransitMode;
   courseName?: string;
 }
 
-export default function ShareCard({ places, directions, courseName }: ShareCardProps) {
+export default function ShareCard({ places, directions, schedule = null, transitMode = 'driving', courseName }: ShareCardProps) {
   const cardRef = useRef<HTMLDivElement>(null);
 
   const handleDownloadImage = useCallback(async () => {
@@ -33,11 +36,19 @@ export default function ShareCard({ places, directions, courseName }: ShareCardP
     }
   }, []);
 
-  if (places.length === 0) return null;
+  const dayPlaces = places.filter((p) => (p.day ?? 0) > 0);
+  if (dayPlaces.length === 0) return null;
+
+  const grouped = new Map<number, CoursePlace[]>();
+  for (const p of dayPlaces) {
+    const d = p.day as number;
+    (grouped.get(d) ?? grouped.set(d, []).get(d)!).push(p);
+  }
+  const days = Array.from(grouped.keys()).sort((a, b) => a - b);
+  const legs = directions?.legs ?? [];
 
   return (
     <div className="share-card-wrapper">
-      {/* The actual card to be captured */}
       <div ref={cardRef} className="share-card">
         <div className="share-card-header">
           <div className="share-card-logo">💕</div>
@@ -48,42 +59,37 @@ export default function ShareCard({ places, directions, courseName }: ShareCardP
         </div>
 
         <div className="share-card-places">
-          {(() => {
-            const assignedPlaces = places.filter(p => (p.day || 0) > 0);
-            const displayPlaces = assignedPlaces.length > 0 ? assignedPlaces : places;
-            
-            // Group by day
-            const grouped: Record<number, CoursePlace[]> = {};
-            displayPlaces.forEach(p => {
-              const d = p.day || 1;
-              if (!grouped[d]) grouped[d] = [];
-              grouped[d].push(p);
-            });
-            const days = Object.keys(grouped).map(Number).sort((a,b) => a-b);
-            
-            return days.map(day => (
+          {days.map((day) => {
+            const list = grouped.get(day)!;
+            const timeline = computeDayTimeline(list, schedule, transitMode, legs);
+            const iso = dateOfDay(schedule, day);
+            const dateLabel = iso ? (() => {
+              const d = new Date(`${iso}T00:00:00`);
+              return ` · ${d.getMonth() + 1}/${d.getDate()} (${WEEKDAYS_KO[d.getDay()]})`;
+            })() : '';
+            return (
               <div key={`day-${day}`} className="share-card-day-section">
-                {days.length > 1 && (
-                  <div className="share-card-day-header" style={{
-                    fontSize: '14px', fontWeight: 'bold', color: 'var(--color-accent-primary)', 
-                    padding: '8px 0 4px', borderBottom: '1px dashed var(--color-border)',
-                    marginBottom: '8px'
-                  }}>
-                    Day {day}
-                  </div>
+                {(days.length > 1 || dateLabel) && (
+                  <div className="share-card-day-header">Day {day}{dateLabel}</div>
                 )}
-                {grouped[day].map((place, idx) => (
-                  <div key={place.id} className="share-card-place">
-                    <div className="share-card-number">{idx + 1}</div>
-                    <div className="share-card-place-info">
-                      <div className="share-card-place-name">{stripHtml(place.title)}</div>
-                      <div className="share-card-place-addr">{place.roadAddress || place.address}</div>
+                {list.map((place, idx) => {
+                  const t = timeline.get(place.id);
+                  return (
+                    <div key={place.id} className="share-card-place">
+                      <div className="share-card-number">{idx + 1}</div>
+                      <div className="share-card-place-info">
+                        <div className="share-card-place-name">
+                          {stripHtml(place.title)}
+                          {t && <span className="share-card-time">{formatClock(t.arrival)}</span>}
+                        </div>
+                        <div className="share-card-place-addr">{place.roadAddress || place.address}</div>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
-            ));
-          })()}
+            );
+          })}
         </div>
 
         {directions && (
@@ -99,16 +105,10 @@ export default function ShareCard({ places, directions, courseName }: ShareCardP
           </div>
         )}
 
-        <div className="share-card-footer">
-          DatingRoute로 만든 데이트 코스 💕
-        </div>
+        <div className="share-card-footer">DatingRoute로 만든 데이트 코스 💕</div>
       </div>
 
-      {/* Download button */}
-      <button
-        className="btn btn-primary share-download-btn"
-        onClick={handleDownloadImage}
-      >
+      <button className="btn btn-primary share-download-btn" onClick={handleDownloadImage}>
         📷 이미지로 저장
       </button>
     </div>

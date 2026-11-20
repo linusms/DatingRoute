@@ -5,17 +5,24 @@ import { createPortal } from 'react-dom';
 import { CoursePlace, DateSchedule, RecommendedPlace, RegionEvent, Place } from '@/lib/types';
 import { useResizable } from '@/hooks/useResizable';
 import { stripHtml, tourDateToISO, katechToWgs84 } from '@/lib/utils';
+import type { NewPlaceInput } from '@/hooks/useCourseSession';
 import DateSchedulePicker from './DateSchedulePicker';
+import AICourseDraftPanel from './AICourseDraftPanel';
 
 interface AIRecommendPanelProps {
   coursePlaces: CoursePlace[];
   schedule: DateSchedule | null;
   onScheduleChange: (s: DateSchedule | null) => void;
   onAddPlace: (place: Place) => void;
+  onAddPlaces: (inputs: NewPlaceInput[], options?: { day?: number; silent?: boolean }) => number;
+  onOpenDay: (day: number) => void;
   onHighlightPlace?: (place: Place | null) => void;
   onRadiusCircleChange?: (circle: { center: { lat: number; lng: number }; radiusKm: number } | null) => void;
   roomId?: string | null;
 }
+
+/** Base for the search: all course places, one course place, a typed region, or the current location */
+type BaseKind = 'all' | 'region' | 'here' | string;
 
 // 카테고리 정의
 const AI_CATEGORIES = [
@@ -48,10 +55,15 @@ export default function AIRecommendPanel({
   schedule,
   onScheduleChange,
   onAddPlace,
+  onAddPlaces,
+  onOpenDay,
   onHighlightPlace,
   onRadiusCircleChange,
   roomId,
 }: AIRecommendPanelProps) {
+  const [regionText, setRegionText] = useState('');
+  const [here, setHere] = useState<{ lat: number; lng: number } | null>(null);
+  const [locating, setLocating] = useState(false);
   const [searchHistory, setSearchHistory] = useState<SearchHistoryItem[]>([]);
   const [activeHistoryId, setActiveHistoryId] = useState<string | null>(null);
 
@@ -59,15 +71,36 @@ export default function AIRecommendPanel({
   const [events, setEvents] = useState<RegionEvent[]>([]);
   const [summary, setSummary] = useState<string>('');
 
-  // 기준 장소 및 반경
-  const [selectedPlaceId, setSelectedPlaceId] = useState<string>('all');
+  // 기준 장소 및 반경 (코스가 비어 있으면 지역 입력이 기본)
+  const [selectedPlaceIdState, setSelectedPlaceId] = useState<BaseKind>('all');
+  const selectedPlaceId: BaseKind = coursePlaces.length === 0 && selectedPlaceIdState === 'all' ? 'region' : selectedPlaceIdState;
   const [radiusKm, setRadiusKm] = useState<number>(3);
+
+  const useCurrentLocation = () => {
+    if (!navigator.geolocation) {
+      setError('이 브라우저는 위치 정보를 지원하지 않아요.');
+      return;
+    }
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setHere({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        setSelectedPlaceId('here');
+        setLocating(false);
+      },
+      () => {
+        setError('현재 위치를 가져오지 못했어요. 위치 권한을 확인해주세요.');
+        setLocating(false);
+      },
+      { enableHighAccuracy: false, timeout: 8000, maximumAge: 5 * 60 * 1000 }
+    );
+  };
 
   // Sync radius circle to parent/map
   useEffect(() => {
     if (!onRadiusCircleChange) return;
-    if (selectedPlaceId === 'all') {
-      onRadiusCircleChange(null);
+    if (selectedPlaceId === 'here' && here) {
+      onRadiusCircleChange({ center: here, radiusKm });
       return;
     }
     const center = coursePlaces.find(p => p.id === selectedPlaceId);
@@ -80,7 +113,7 @@ export default function AIRecommendPanel({
       center: { lat, lng },
       radiusKm,
     });
-  }, [selectedPlaceId, radiusKm, coursePlaces, onRadiusCircleChange]);
+  }, [selectedPlaceId, radiusKm, coursePlaces, onRadiusCircleChange, here]);
 
   // 카테고리 필터 및 키워드
   const [selectedCategories, setSelectedCategories] = useState<string[]>(['restaurant', 'cafe', 'activity', 'accommodation']);
@@ -250,8 +283,15 @@ export default function AIRecommendPanel({
     );
   };
 
-  const handleAIRecommend = useCallback(async (isLoadMore?: boolean) => {
-    const loadMore = isLoadMore === true;
+  const handleAIRecommend = useCallback(async (options: { loadMore?: boolean; keyword?: string } = {}) => {
+    const loadMore = options.loadMore === true;
+    // Preset chips pass their keyword directly, so the search never uses a stale value
+    const keyword = (options.keyword ?? searchKeyword).trim();
+    if (selectedPlaceId === 'region' && !regionText.trim()) {
+      setError('지역 이름을 입력하거나 현재 위치를 선택해주세요.');
+      setShowConditionPanel(true);
+      return;
+    }
     if (loadMore) {
       setIsLoadingMore(true);
     } else {
@@ -265,9 +305,11 @@ export default function AIRecommendPanel({
     }
 
     // 기준 장소 결정
-    const centerPlace = selectedPlaceId === 'all'
-      ? null
-      : coursePlaces.find(p => p.id === selectedPlaceId) || null;
+    const centerPlace = selectedPlaceId === 'here' && here
+      ? { title: '현재 위치', address: '', mapx: here.lng, mapy: here.lat }
+      : selectedPlaceId === 'all' || selectedPlaceId === 'region'
+        ? null
+        : coursePlaces.find(p => p.id === selectedPlaceId) || null;
 
     const controller = new AbortController();
     abortControllerRef.current = controller;
@@ -293,7 +335,8 @@ export default function AIRecommendPanel({
           } : null,
           radiusKm,
           categories: selectedCategories,
-          searchKeyword: searchKeyword.trim(),
+          searchKeyword: keyword,
+          region: selectedPlaceId === 'region' ? regionText.trim() : '',
           excludePlaces: loadMore ? recommendations.map(r => r.name) : [],
           schedule: schedule ? {
             startDate: schedule.startDate,
@@ -344,7 +387,12 @@ export default function AIRecommendPanel({
 
                   const newId = Date.now().toString();
                   const targetCenterPlace = coursePlaces.find(p => p.id === selectedPlaceId);
-                  const currentPlaceTitle = selectedPlaceId === 'all' ? '전체' : (targetCenterPlace ? stripHtml(targetCenterPlace.title) : '');
+                  const currentPlaceTitle = selectedPlaceId === 'all' ? '전체'
+                    : selectedPlaceId === 'region' ? regionText.trim()
+                    : selectedPlaceId === 'here' ? '현재 위치'
+                    : (targetCenterPlace ? stripHtml(targetCenterPlace.title) : '');
+                  if ((data.events || []).length > 0 && (data.recommendations || []).length === 0) setActiveSection('events');
+                  else setActiveSection('recommend');
 
                   const newItem: SearchHistoryItem = {
                     id: newId,
@@ -355,7 +403,7 @@ export default function AIRecommendPanel({
                       radiusKm,
                       categories: selectedCategories,
                       sortOrder,
-                      searchKeyword: searchKeyword.trim(),
+                      searchKeyword: keyword,
                     },
                     results: {
                       recommendations: data.recommendations || [],
@@ -393,7 +441,8 @@ export default function AIRecommendPanel({
         setIsLoading(false);
       }
     }
-  }, [coursePlaces, schedule, recommendations, selectedPlaceId, radiusKm, selectedCategories]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [coursePlaces, schedule, recommendations, selectedPlaceId, radiusKm, selectedCategories, searchKeyword, sortOrder, regionText, here]);
 
   const handleCancelSearch = () => {
     if (abortControllerRef.current) {
@@ -542,6 +591,14 @@ export default function AIRecommendPanel({
         </div>
       )}
 
+      <AICourseDraftPanel
+        coursePlaces={coursePlaces}
+        schedule={schedule}
+        onAddPlaces={onAddPlaces}
+        onOpenDay={onOpenDay}
+        onHighlightPlace={onHighlightPlace}
+      />
+
       {/* Calendar Date Picker */}
       <div style={{ marginBottom: '16px' }}>
         <DateSchedulePicker
@@ -584,7 +641,7 @@ export default function AIRecommendPanel({
         >
           <span>
             🎛️ 검색 조건 — {selectedCategories.length}/ {AI_CATEGORIES.length} 카테고리
-            {selectedPlaceId !== 'all' ? ` · 반경 ${radiusKm}km` : ''}
+            {selectedPlaceId === 'region' ? (regionText ? ` · ${regionText}` : ' · 지역 미입력') : selectedPlaceId !== 'all' ? ` · 반경 ${radiusKm}km` : ''}
             {searchKeyword ? ` · "​${searchKeyword}"​` : ''}
           </span>
           <span style={{ fontSize: '10px' }}>{showConditionPanel ? '▲' : '▼'}</span>
@@ -606,17 +663,34 @@ export default function AIRecommendPanel({
                 marginBottom: '8px',
               }}
             >
-              <option value="all" style={{ background: 'var(--color-bg-card)' }}>🌏 전체 코스 장소 기준</option>
+              {coursePlaces.length > 0 && <option value="all" style={{ background: 'var(--color-bg-card)' }}>🌏 전체 코스 장소 기준</option>}
+              <option value="region" style={{ background: 'var(--color-bg-card)' }}>✏️ 지역 직접 입력</option>
+              {here && <option value="here" style={{ background: 'var(--color-bg-card)' }}>📡 현재 위치 기준</option>}
               {Array.from(new Map(coursePlaces.map(p => [p.title, p])).values()).map(p => (
                 <option key={p.id} value={p.id} style={{ background: 'var(--color-bg-card)' }}>
                   📍 {stripHtml(p.title)}
                 </option>
               ))}
             </select>
-            <div style={{ marginBottom: '10px', opacity: selectedPlaceId === 'all' ? 0.4 : 1, pointerEvents: selectedPlaceId === 'all' ? 'none' : 'auto' }}>
+            <div className="ai-base-extra">
+              {selectedPlaceId === 'region' && (
+                <input
+                  className="ai-region-input"
+                  value={regionText}
+                  maxLength={30}
+                  onChange={e => setRegionText(e.target.value)}
+                  placeholder="예) 성수동, 해운대, 전주 한옥마을"
+                  onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleAIRecommend(); } }}
+                />
+              )}
+              <button className="cb-chip-btn" onClick={useCurrentLocation} disabled={locating} type="button">
+                {locating ? '위치 확인 중...' : '📡 현재 위치로'}
+              </button>
+            </div>
+            <div style={{ marginBottom: '10px', opacity: selectedPlaceId === 'all' || selectedPlaceId === 'region' ? 0.4 : 1, pointerEvents: selectedPlaceId === 'all' || selectedPlaceId === 'region' ? 'none' : 'auto' }}>
               <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)', marginBottom: '6px' }}>
                 반경: <strong style={{ color: 'var(--color-accent-primary)' }}>{radiusKm}km</strong>
-                {selectedPlaceId === 'all' && <span style={{ marginLeft: '6px', fontSize: '10px' }}>(장소 선택 시 활성화)</span>}
+                {(selectedPlaceId === 'all' || selectedPlaceId === 'region') && <span style={{ marginLeft: '6px', fontSize: '10px' }}>(장소·현재 위치 기준일 때 사용)</span>}
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '4px' }}>
                 {([{ icon: '📍', label: '바로 옆', km: 0.5 }, { icon: '🚶', label: '도보 10분', km: 1 }, { icon: '🚇', label: '2~3정거장', km: 3 }, { icon: '🚗', label: '차 30분', km: 10 }, { icon: '🛣️', label: '차 1시간', km: 25 }] as { icon: string; label: string; km: number }[]).map(preset => (
@@ -693,8 +767,7 @@ export default function AIRecommendPanel({
                   key={preset.label}
                   onClick={() => {
                     setSearchKeyword(preset.keyword);
-                    // Timeout to let state update before fetching
-                    setTimeout(() => handleAIRecommend(), 0);
+                    handleAIRecommend({ keyword: preset.keyword });
                   }}
                   style={{
                     display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0,
@@ -823,12 +896,15 @@ export default function AIRecommendPanel({
 
                   {!error && (
                     <>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                        <div style={{ marginBottom: 0 }}>
-                          <span style={{ fontSize: '15px', fontWeight: 600, color: 'var(--color-text-primary)' }}>✨ AI 추천 핫플/팝업</span>
-                          {recommendations.length > 0 && (
-                            <span className="ai-count-badge" style={{ marginLeft: '8px' }}>{recommendations.length}</span>
-                          )}
+                      {summary && <p className="ai-summary-line">{summary}</p>}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', gap: '8px', flexWrap: 'wrap' }}>
+                        <div className="ai-result-tabs" role="tablist">
+                          <button role="tab" aria-selected={activeSection === 'recommend'} className={activeSection === 'recommend' ? 'active' : ''} onClick={() => setActiveSection('recommend')}>
+                            ✨ 추천 장소 <span className="ai-count-badge">{recommendations.length}</span>
+                          </button>
+                          <button role="tab" aria-selected={activeSection === 'events'} className={activeSection === 'events' ? 'active' : ''} onClick={() => setActiveSection('events')}>
+                            🎪 축제·행사 <span className="ai-count-badge">{events.length}</span>
+                          </button>
                         </div>
                         
                         {activeSection === 'recommend' && (
@@ -936,7 +1012,7 @@ export default function AIRecommendPanel({
                             <button
                               className="btn btn-secondary"
                               style={{ width: '100%', marginTop: '16px', padding: '12px', borderRadius: '8px', background: 'var(--color-border)', color: 'white', border: 'none', cursor: 'pointer' }}
-                              onClick={() => handleAIRecommend(true)}
+                              onClick={() => handleAIRecommend({ loadMore: true })}
                               disabled={isLoadingMore}
                             >
                               {isLoadingMore ? '더 불러오는 중...' : '+ 더 불러오기'}

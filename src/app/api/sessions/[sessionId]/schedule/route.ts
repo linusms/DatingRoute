@@ -1,7 +1,8 @@
 export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
-import { saveLiveSchedule, getLiveCourseDetails } from '@/lib/db';
-import { requireRoomMember } from '@/lib/session';
+import { broadcastRoomEvent, getLiveCourseDetails, saveLiveSchedule } from '@/lib/db';
+import { eventSender, requireRoomMember } from '@/lib/session';
+import type { CourseUpdatedData } from '@/lib/types';
 
 type RouteContext = { params: Promise<{ sessionId: string }> };
 
@@ -13,22 +14,24 @@ export async function GET(request: NextRequest, context: RouteContext) {
     if (!auth.ok) return auth.response;
     const details = await getLiveCourseDetails(sessionId);
     return NextResponse.json({ schedule: details?.schedule ?? null });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Schedule load error:', error);
     return NextResponse.json({ error: '스케줄 로드 실패' }, { status: 500 });
   }
 }
 
-/** PUT /api/sessions/[sessionId]/schedule - save schedule */
+/** PUT /api/sessions/[sessionId]/schedule - save schedule (null clears it) and notify other members */
 export async function PUT(request: NextRequest, context: RouteContext) {
   try {
     const { sessionId } = await context.params;
     const auth = await requireRoomMember(request, sessionId);
     if (!auth.ok) return auth.response;
     const { schedule } = await request.json();
-    await saveLiveSchedule(sessionId, schedule);
-    return NextResponse.json({ ok: true });
-  } catch (error: any) {
+    const saved = await saveLiveSchedule(sessionId, schedule);
+    const data: CourseUpdatedData = { schedule: saved };
+    await broadcastRoomEvent(sessionId, 'course_updated', data, eventSender(request, auth.user));
+    return NextResponse.json({ ok: true, schedule: saved });
+  } catch (error) {
     console.error('Schedule save error:', error);
     return NextResponse.json({ error: '스케줄 저장 실패' }, { status: 500 });
   }

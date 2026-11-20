@@ -1,352 +1,220 @@
 import { NextRequest } from 'next/server';
 import { requireUser } from '@/lib/session';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { generateJson, hasGemini } from '@/lib/gemini';
+import { regionNamesAround, searchBlogText, searchLocal, type NaverPlace } from '@/lib/naver';
+import { hasTourApi, searchFestivals } from '@/lib/tourApi';
+import { describeSchedule, toTourDate } from '@/lib/scheduleText';
 import { katechToWgs84, getStraightLineDistance } from '@/lib/utils';
+import type { DateSchedule, RegionEvent } from '@/lib/types';
 
-// 카테고리 ID → 한국어 라벨 매핑
-const CATEGORY_LABELS: Record<string, string> = {
-  restaurant: '맛집',
-  cafe: '카페',
-  activity: '핫플',
-  accommodation: '펜션',
+interface InputPlace {
+  title?: string;
+  address?: string;
+  roadAddress?: string;
+  mapx?: number | string;
+  mapy?: number | string;
+}
+
+// 더 불러오기를 위한 키워드 확장 (네이버 지역 API는 질의당 5개까지만 주므로 키워드로 우회)
+const EXPANDED_TERMS: Record<string, string[]> = {
+  restaurant: ['맛집', '데이트 맛집', '분위기 좋은 맛집', '점심 맛집', '저녁 맛집', '인스타 맛집', '가성비 맛집', '핫플 맛집', '고기집', '파스타'],
+  cafe: ['카페', '디저트 카페', '예쁜 카페', '감성 카페', '대형 카페', '오션뷰 카페', '인스타 카페', '핫플 카페', '베이커리', '브런치'],
+  activity: ['가볼만한곳', '데이트코스', '전시회', '체험', '소품샵', '공원', '명소', '볼거리', '공방', '산책'],
+  accommodation: ['숙소', '호텔', '펜션', '감성숙소', '게스트하우스', '오션뷰 숙소', '풀빌라', '리조트', '글램핑', '캠핑'],
 };
+
+interface Candidate extends NaverPlace {
+  mentionCount: number;
+  reason?: string;
+  keywords?: string[];
+  sourceType?: string;
+}
+
+function toWgs(place: InputPlace) {
+  return katechToWgs84(place.mapx, place.mapy);
+}
+
+function regionsAround(points: InputPlace[], radiusKm: number): Promise<string[]> {
+  return regionNamesAround(points.map(toWgs), radiusKm);
+}
 
 export async function POST(request: NextRequest) {
   const auth = await requireUser(request);
   if (!auth.ok) return auth.response;
 
   const encoder = new TextEncoder();
+  const body = await request.json().catch(() => ({}));
 
-  let body: any = {};
-  try {
-    body = await request.json();
-  } catch {
-    body = {};
-  }
-
-  const {
-    places = [],
-    centerPlace = null,
-    radiusKm = 5,
-    categories = ['restaurant', 'cafe', 'activity', 'accommodation'],
-    excludePlaces = [],
-    schedule,
-    searchKeyword = '',
-  } = body;
-
-  const radiusMeters = (radiusKm || 5) * 1000;
+  const places: InputPlace[] = Array.isArray(body.places) ? body.places.slice(0, 50) : [];
+  const centerPlace: InputPlace | null = body.centerPlace && body.centerPlace.mapx ? body.centerPlace : null;
+  const radiusKm = Math.min(50, Math.max(0.3, Number(body.radiusKm) || 5));
+  const categories: string[] = Array.isArray(body.categories) && body.categories.length > 0
+    ? body.categories.filter((c: string) => c in EXPANDED_TERMS)
+    : ['restaurant', 'cafe', 'activity'];
+  const excludePlaces: string[] = Array.isArray(body.excludePlaces) ? body.excludePlaces.slice(0, 200) : [];
+  const searchKeyword = typeof body.searchKeyword === 'string' ? body.searchKeyword.trim().slice(0, 50) : '';
+  const regionText = typeof body.region === 'string' ? body.region.trim().slice(0, 30) : '';
+  const schedule: DateSchedule | null = body.schedule && body.schedule.startDate ? body.schedule : null;
+  const isLoadMore = excludePlaces.length > 0;
 
   const stream = new ReadableStream({
     async start(controller) {
-      const sendProgress = (step: number, total: number, message: string) => {
-        controller.enqueue(
-          encoder.encode(`data: ${JSON.stringify({ type: 'progress', step, total, message })}\n\n`)
-        );
-      };
+      const send = (payload: unknown) => controller.enqueue(encoder.encode(`data: ${JSON.stringify(payload)}\n\n`));
+      const sendProgress = (step: number, total: number, message: string) => send({ type: 'progress', step, total, message });
 
       try {
-        const naverClientId = process.env.NAVER_CLIENT_ID;
-        const naverClientSecret = process.env.NAVER_CLIENT_SECRET;
-        const ncpClientId = process.env.NEXT_PUBLIC_NCP_CLIENT_ID;
-        const ncpClientSecret = process.env.NCP_CLIENT_SECRET;
-        const youtubeKey = process.env.YOUTUBE_API_KEY;
-        const tourApiKey = process.env.TOUR_API_KEY;
-        const geminiKey = process.env.GEMINI_API_KEY;
+        // ── Step 1: 기준 지역 ──
+        sendProgress(1, 5, '🔍 기준 지역을 확인하는 중...');
 
-        // ── Step 1: 지역(Region) 추출 및 한국관광공사 행사 ──
-        sendProgress(1, 5, '🔍 기준 지역 탐색 및 축제 정보 조회 중...');
+        let center: { lat: number; lng: number } | null = null;
+        let regions: string[] = [];
+        if (centerPlace) {
+          center = toWgs(centerPlace);
+          regions = await regionsAround([centerPlace], radiusKm);
+        } else if (regionText) {
+          regions = [regionText];
+          const [first] = await searchLocal(regionText);
+          if (first) center = katechToWgs84(first.mapx, first.mapy);
+        } else if (places.length > 0) {
+          center = toWgs(places[0]);
+          regions = await regionsAround(places, radiusKm);
+        }
+        if (regions.length === 0) regions = ['서울'];
 
-        const regions = new Set<string>();
-        const geocodeTargets = centerPlace ? [centerPlace] : places.slice(0, 5);
-
-        if (geocodeTargets.length > 0 && ncpClientId && ncpClientSecret) {
-          const rgPromises = geocodeTargets.map(async (place: any) => {
-            try {
-              const mapx = typeof place.mapx === 'string' ? parseFloat(place.mapx) : place.mapx;
-              const mapy = typeof place.mapy === 'string' ? parseFloat(place.mapy) : place.mapy;
-              const lng = mapx > 1000 ? mapx / 10_000_000 : mapx;
-              const lat = mapy > 1000 ? mapy / 10_000_000 : mapy;
-
-              const rgUrl = `https://maps.apigw.ntruss.com/map-reversegeocode/v2/gc?coords=${lng},${lat}&output=json&orders=admcode`;
-              const rgRes = await fetch(rgUrl, {
-                headers: {
-                  'x-ncp-apigw-api-key-id': ncpClientId,
-                  'x-ncp-apigw-api-key': ncpClientSecret,
-                },
-              });
-              if (rgRes.ok) {
-                const rgData = await rgRes.json();
-                const result = rgData?.results?.[0];
-                if (result?.region) {
-                  const area1 = result.region.area1?.name || '';
-                  const area2 = result.region.area2?.name || '';
-                  return { area1, area2: `${area1} ${area2}` };
-                }
-              }
-            } catch {}
-            return null;
-          });
-
-          const rgResults = await Promise.all(rgPromises);
-          rgResults.forEach(r => {
-            if (r?.area1) regions.add(r.area1);
-            if (r?.area2) regions.add(r.area2);
-          });
+        // 축제·행사 (TourAPI): 일정이 있으면 그 기간, 없으면 오늘부터 2주
+        let events: RegionEvent[] = [];
+        if (!isLoadMore && hasTourApi()) {
+          const today = new Date();
+          const start = schedule ? toTourDate(schedule.startDate) : toTourDate(today.toISOString().slice(0, 10));
+          const end = schedule
+            ? toTourDate(schedule.endDate || schedule.startDate)
+            : toTourDate(new Date(today.getTime() + 14 * 86400000).toISOString().slice(0, 10));
+          events = await searchFestivals({ startDate: start, endDate: end, center, radiusKm: Math.max(15, radiusKm * 3) })
+            .catch(() => []);
         }
 
-        const tourEvents: any[] = [];
+        // ── Step 2: 장소 후보 수집 (Naver Local) ──
+        sendProgress(2, 5, '🗺️ 주변 장소 후보를 모으는 중...');
 
-
-        const regionNames = Array.from(regions).filter(r => r.includes(' ')).map(r => r.split(' ')[1]) || [];
-        if (regionNames.length === 0 && regions.size > 0) {
-          regionNames.push(...Array.from(regions));
-        }
-        const uniqueRegions = Array.from(new Set(regionNames));
-        if (uniqueRegions.length === 0) uniqueRegions.push('서울');
-
-        // ── Step 2: Naver Local API를 통한 장소 대량 확보 (DB First) ──
-        sendProgress(2, 5, '🗺️ 해당 지역의 관련 장소 대량 검색 중...');
-
-        // 더 불러오기를 위한 키워드 확장 (네이버 지역 API는 start 최대값이 1이므로 키워드로 우회)
-        const EXPANDED_TERMS: Record<string, string[]> = {
-          restaurant: ['맛집', '점심 맛집', '데이트 맛집', '인스타 맛집', '분위기 좋은 맛집', '가성비 맛집', '저녁 맛집', '핫플 맛집', '고기집', '파스타'],
-          cafe: ['카페', '디저트 카페', '예쁜 카페', '오션뷰 카페', '대형 카페', '감성 카페', '인스타 카페', '핫플 카페', '베이커리', '브런치'],
-          activity: ['가볼만한곳', '데이트코스', '체험', '전시회', '소품샵', '공원', '명소', '볼거리', '드라이브', '산책'],
-          accommodation: ['숙소', '호텔', '펜션', '게스트하우스', '감성숙소', '오션뷰 숙소', '풀빌라', '리조트', '글램핑', '캠핑'],
-        };
-
-        const offsetMultiplier = Math.floor(excludePlaces.length / 5); 
-        
-        // 카테고리별로 사용할 키워드 3개씩 추출 (offset에 따라 다른 키워드 선택)
-        const categorySearchTerms = categories.flatMap((c: string) => {
-          const terms = EXPANDED_TERMS[c] || [c];
-          const startIndex = (offsetMultiplier * 3) % terms.length;
-          // 배열을 순환하며 3개 선택
-          return [
-            terms[startIndex % terms.length],
-            terms[(startIndex + 1) % terms.length],
-            terms[(startIndex + 2) % terms.length]
-          ];
+        const offset = Math.floor(excludePlaces.length / 5);
+        const terms = categories.flatMap((c) => {
+          const list = EXPANDED_TERMS[c];
+          const startIndex = (offset * 3) % list.length;
+          return [0, 1, 2].map((k) => list[(startIndex + k) % list.length]);
         });
-
-        const searchTargets = uniqueRegions.slice(0, 2).flatMap((r) =>
-          categorySearchTerms.map((term: string) => {
-            if (searchKeyword && searchKeyword.trim() !== '') {
-              return `${r} ${searchKeyword.trim()} ${term}`;
-            }
-            return `${r} ${term}`;
-          })
+        const queries = regions.slice(0, 2).flatMap((r) =>
+          terms.map((term) => (searchKeyword ? `${r} ${searchKeyword} ${term}` : `${r} ${term}`))
         );
 
-        let basePlaces: any[] = [];
-        if (naverClientId && naverClientSecret) {
-          const localPromises = searchTargets.map(async (target: string) => {
-            try {
-              // Naver Local API는 2020년부터 display 최대값이 5로, start 최대값이 1로 제한됨. (다양한 키워드로 우회)
-              const searchUrl = `https://openapi.naver.com/v1/search/local.json?query=${encodeURIComponent(target)}&display=5&start=1&sort=random`;
-              const searchRes = await fetch(searchUrl, {
-                headers: {
-                  'X-Naver-Client-Id': naverClientId,
-                  'X-Naver-Client-Secret': naverClientSecret,
-                },
-              });
-              if (searchRes.ok) {
-                const sData = await searchRes.json();
-                return sData.items || [];
+        const existing = new Set([
+          ...places.map((p) => (p.title || '').replace(/<[^>]+>/g, '')),
+          ...excludePlaces,
+        ]);
+        const found = (await Promise.all(queries.map((q) => searchLocal(q)))).flat();
+        let candidates: Candidate[] = [];
+        for (const item of found) {
+          if (!item.name || existing.has(item.name) || candidates.some((c) => c.name === item.name)) continue;
+          candidates.push({ ...item, mentionCount: 0 });
+        }
+
+        const filterCenters = centerPlace ? [toWgs(centerPlace)] : places.length > 0 ? places.map(toWgs) : center ? [center] : [];
+        if (filterCenters.length > 0) {
+          const radiusMeters = radiusKm * 1000;
+          candidates = candidates.filter((c) => {
+            const { lat, lng } = katechToWgs84(c.mapx, c.mapy);
+            return filterCenters.some((fc) => getStraightLineDistance(lat, lng, fc.lat, fc.lng) <= radiusMeters);
+          });
+        }
+        candidates = candidates.slice(0, 30);
+
+        // ── Step 3: 블로그/유튜브 언급량 ──
+        sendProgress(3, 5, '📱 블로그·유튜브 언급량을 세는 중...');
+
+        const youtubeKey = process.env.YOUTUBE_API_KEY;
+        const ytTexts = youtubeKey && youtubeKey !== 'your_youtube_api_key'
+          ? await Promise.all(regions.slice(0, 2).map(async (r) => {
+              try {
+                const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&maxResults=5&q=${encodeURIComponent(`${r} 데이트 핫플`)}&type=video&key=${youtubeKey}&relevanceLanguage=ko`;
+                const res = await fetch(url, { signal: AbortSignal.timeout(5000) });
+                if (!res.ok) return '';
+                const data = await res.json();
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                return (data.items || []).map((v: any) => `${v.snippet?.title} ${v.snippet?.description}`).join(' ');
+              } catch {
+                return '';
               }
-            } catch {}
-            return [];
-          });
-          const results = await Promise.all(localPromises);
-          
-          results.flat().forEach((item: any) => {
-            const cleanTitle = (item.title || '').replace(/<[^>]+>/g, '');
-            // 중복 제거 및 기존 코스에 있는 장소(excludePlaces 포함) 제거
-            const existingCoursePlaces = places.map((p: any) => p.title.replace(/<[^>]+>/g, ''));
-            const isExcluded = [...existingCoursePlaces, ...excludePlaces].includes(cleanTitle);
-            
-            if (!isExcluded && !basePlaces.some(p => p.name === cleanTitle)) {
-              basePlaces.push({
-                name: cleanTitle,
-                category: item.category || '',
-                address: item.address || '',
-                roadAddress: item.roadAddress || '',
-                mapx: parseInt(item.mapx, 10) || 0,
-                mapy: parseInt(item.mapy, 10) || 0,
-                link: item.link || '',
-                mentionCount: 0,
-              });
-            }
-          });
+            }))
+          : [];
+        const blogTexts = await Promise.all(queries.slice(0, 12).map((q) => searchBlogText(q)));
+        const corpus = `${blogTexts.join(' ')} ${ytTexts.join(' ')}`;
+
+        for (const c of candidates) {
+          const pattern = new RegExp(c.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+          c.mentionCount = (corpus.match(pattern) || []).length;
         }
+        candidates.sort((a, b) => b.mentionCount - a.mentionCount);
+        candidates = candidates.slice(0, 25);
 
-        // 반경 필터링 적용 (basePlaces 추리기)
-        const filterCenter = centerPlace ? [centerPlace] : places;
-        if (filterCenter.length > 0) {
-          basePlaces = basePlaces.filter((recPlace: any) => {
-            const { lng: recLng, lat: recLat } = katechToWgs84(recPlace.mapx, recPlace.mapy);
-            return filterCenter.some((coursePlace: any) => {
-              const { lng: courseLng, lat: courseLat } = katechToWgs84(coursePlace.mapx, coursePlace.mapy);
-              const distance = getStraightLineDistance(recLat, recLng, courseLat, courseLng);
-              return distance <= radiusMeters;
-            });
-          });
-        }
+        // ── Step 4: Gemini 코멘트 ──
+        sendProgress(4, 5, '✨ AI가 장소별 매력 포인트를 정리하는 중...');
 
-        // 최대 30개까지만 추림 (AI API 부하 및 토큰 초과 방지)
-        basePlaces = basePlaces.slice(0, 30);
+        let summary = candidates.length > 0 ? '추천 장소를 찾았어요.' : '조건에 맞는 장소를 찾지 못했어요. 반경을 넓히거나 키워드를 바꿔보세요.';
+        if (hasGemini() && candidates.length > 0) {
+          const list = candidates.map((c, i) => `${i}. ${c.name} (${c.category})`).join('\n');
+          const parsed = await generateJson<{ summary?: string; places?: { index: number; reason?: string; keywords?: string[] }[] }>(
+            `당신은 한국 데이트 코스 전문가입니다.
+네이버 지도에서 찾은 장소 후보 ${candidates.length}곳이 있습니다.
 
-        // ── Step 3: Blog & YouTube 검색으로 SNS 언급량 산출 ──
-        sendProgress(3, 5, '📱 장소별 SNS 및 YouTube 언급량 분석 중...');
+후보 목록 (번호. 상호명 (카테고리)):
+${list}
 
-        let blogTextBlob = '';
-        let ytTextBlob = '';
-
-        const blogPromises = (naverClientId && naverClientSecret) ? searchTargets.map(async (target: string) => {
-          try {
-            const blogUrl = `https://openapi.naver.com/v1/search/blog.json?query=${encodeURIComponent(target)}&display=10&sort=sim`;
-            const res = await fetch(blogUrl, { headers: { 'X-Naver-Client-Id': naverClientId, 'X-Naver-Client-Secret': naverClientSecret } });
-            if (res.ok) {
-              const bd = await res.json();
-              return bd.items.map((b: any) => b.title + ' ' + b.description).join(' ');
-            }
-          } catch {}
-          return '';
-        }) : [];
-
-        const ytTargets = uniqueRegions.slice(0, 2).map((r) => `${r} 데이트 핫플`);
-        const ytPromises = (youtubeKey && youtubeKey !== 'your_youtube_api_key') ? ytTargets.map(async (target: string) => {
-          try {
-            const ytUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&maxResults=5&q=${encodeURIComponent(target)}&type=video&key=${youtubeKey}&relevanceLanguage=ko`;
-            const res = await fetch(ytUrl);
-            if (res.ok) {
-              const yd = await res.json();
-              return yd.items.map((v: any) => v.snippet?.title + ' ' + v.snippet?.description).join(' ');
-            }
-          } catch {}
-          return '';
-        }) : [];
-
-        const [blogContents, ytContents] = await Promise.all([Promise.all(blogPromises), Promise.all(ytPromises)]);
-        blogTextBlob = blogContents.join(' ').replace(/<[^>]+>/g, '');
-        ytTextBlob = ytContents.join(' ').replace(/<[^>]+>/g, '');
-
-        // 언급 횟수 계산 (단순 문자열 포함 횟수)
-        basePlaces.forEach(place => {
-          const nameMatch = new RegExp(place.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
-          const blogHits = (blogTextBlob.match(nameMatch) || []).length;
-          const ytHits = (ytTextBlob.match(nameMatch) || []).length;
-          place.mentionCount = blogHits + ytHits;
-          // 약간의 랜덤 가중치를 주어 동일 카운트일 때 순서 믹스
-          place.mentionCount += Math.floor(Math.random() * 2);
-        });
-
-        // 언급량 기준으로 상위 25개로 제한
-        basePlaces.sort((a, b) => b.mentionCount - a.mentionCount);
-        basePlaces = basePlaces.slice(0, 25);
-
-        // ── Step 4: Gemini AI에게 리스트 검토 및 코멘트 달기 요청 ──
-        sendProgress(4, 5, '✨ AI가 선정된 장소들의 매력 포인트를 작성 중...');
-
-        let recommendations = basePlaces;
-        let summary = '추천 장소 검색이 완료되었습니다!';
-
-        if (geminiKey && geminiKey !== 'your_gemini_api_key' && basePlaces.length > 0) {
-          try {
-            const genAI = new GoogleGenerativeAI(geminiKey);
-            const model = genAI.getGenerativeModel({
-              model: 'gemini-2.5-flash',
-              generationConfig: { responseMimeType: 'application/json' },
-            });
-
-            const placeListText = basePlaces.map(p => `- ${p.name} (카테고리: ${p.category})`).join('\n');
-
-            const prompt = `당신은 한국 데이트 코스 전문가입니다.
-내가 시스템(네이버 지도 API)을 통해 현재 데이트 조건에 맞는 핫플레이스 ${basePlaces.length}곳을 찾았습니다.
-
-찾은 장소 목록:
-${placeListText}
+데이트 정보:
+- 일정: ${describeSchedule(schedule)}
+- 사용자 요청 키워드: ${searchKeyword || '없음'}
 
 작업 지시:
-0. 사용자가 특별히 요청한 키워드: ${searchKeyword ? searchKeyword : '없음'}
-(키워드가 있다면 해당 키워드와 연관된 장소를 우선적으로 추천하고, 추천 이유에 반영해주세요.)
-1. 위 목록에 있는 장소들에 대해서만 응답을 생성하세요. 새로운 장소를 임의로 지어내지 마세요.
-2. 각 장소의 '매력적인 이유'는 정형적이고 뻔한 설명을 피하고, **특이한 시그니처 메뉴나 중요 볼거리, 독특한 체험 등 핵심 특징만 짧게 개조식으로 1~2문장**으로 작성하세요. (예: "- 흑임자 라떼가 유명한 시그니처 카페. - 바다가 한눈에 보이는 루프탑 포토존.")
-3. 각 장소를 표현하는 트렌디한 '해시태그 키워드(2~3개)'를 생성해주세요.
-4. 모든 장소들에 대한 전반적인 데이트 코스 요약 멘트(summary)를 1문장 작성해주세요.
+1. 위 목록의 장소에 대해서만 작성하세요. 목록에 없는 장소를 지어내지 마세요. 각 항목은 번호(index)로 가리킵니다.
+2. reason: 시그니처 메뉴, 볼거리, 독특한 체험 같은 핵심 특징을 1~2문장 개조식으로 짧게. 일정(계절·요일·시간대)과 키워드에 맞는 점이 있으면 반영하세요.
+3. keywords: 장소를 표현하는 해시태그 2~3개.
+4. summary: 전체 후보에 대한 데이트 한 줄 요약.
 
-반드시 아래 JSON 스키마로만 응답하세요:
-{
-  "summary": "전체 요약 멘트",
-  "places": [
-    {
-      "name": "목록에 있는 정확한 상호명",
-      "reason": "추천 이유 1문장",
-      "keywords": ["키워드1", "키워드2"],
-      "sourceType": "blog"
-    }
-  ]
-}`;
-            let text = '';
-            try {
-              const result = await model.generateContent(prompt);
-              text = result.response.text();
-            } catch (error: any) {
-              if (error?.message?.includes('503') || error?.status === 503) {
-                const fallbackModel = genAI.getGenerativeModel({
-                  model: 'gemini-1.5-flash',
-                  generationConfig: { responseMimeType: 'application/json' },
-                });
-                const fallbackResult = await fallbackModel.generateContent(prompt);
-                text = fallbackResult.response.text();
-              } else {
-                throw error;
-              }
-            }
-
-            let parsed: any = {};
-            try {
-              parsed = JSON.parse(text);
-            } catch {
-              parsed = { summary: '', places: [] };
-            }
-
+JSON으로만 응답:
+{"summary":"...","places":[{"index":0,"reason":"...","keywords":["..."]}]}`
+          );
+          if (parsed) {
             summary = parsed.summary || summary;
-
-            // AI가 응답한 이유와 키워드를 기존 basePlaces에 병합
-            if (parsed.places && Array.isArray(parsed.places)) {
-              recommendations = basePlaces.map(bp => {
-                const aiData = parsed.places.find((ap: any) => ap.name === bp.name);
-                if (aiData) {
-                  return {
-                    ...bp,
-                    reason: aiData.reason || '',
-                    keywords: aiData.keywords || [],
-                    sourceType: aiData.sourceType || 'blog',
-                  };
-                }
-                return bp;
-              });
+            for (const p of parsed.places || []) {
+              const c = candidates[p.index];
+              if (!c) continue;
+              c.reason = p.reason || '';
+              c.keywords = Array.isArray(p.keywords) ? p.keywords.slice(0, 3) : [];
+              c.sourceType = 'blog';
             }
-          } catch (err) {
-            console.error('Gemini error:', err);
           }
         }
 
-        sendProgress(5, 5, '🎉 추천 결과 정리 중...');
-
-        controller.enqueue(
-          encoder.encode(`data: ${JSON.stringify({
-            type: 'result',
-            recommendations,
-            events: [],
-            summary,
-          })}\n\n`)
-        );
+        sendProgress(5, 5, '🎉 결과를 정리하는 중...');
+        send({
+          type: 'result',
+          recommendations: candidates.map((c) => ({
+            name: c.name,
+            category: c.category,
+            reason: c.reason || '',
+            keywords: c.keywords || [],
+            sourceType: c.sourceType || 'blog',
+            address: c.address,
+            roadAddress: c.roadAddress,
+            mapx: c.mapx,
+            mapy: c.mapy,
+            link: c.link,
+            mentionCount: c.mentionCount,
+          })),
+          events,
+          summary,
+        });
       } catch (err) {
-        controller.enqueue(
-          encoder.encode(`data: ${JSON.stringify({ type: 'error', message: '추천 생성 중 오류가 발생했습니다.' })}\n\n`)
-        );
+        console.error('AI recommend error:', err);
+        send({ type: 'error', message: '추천 생성 중 오류가 발생했습니다.' });
       } finally {
         controller.close();
       }
@@ -357,7 +225,7 @@ ${placeListText}
     headers: {
       'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-cache, no-transform',
-      'Connection': 'keep-alive',
+      Connection: 'keep-alive',
     },
   });
 }
