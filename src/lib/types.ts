@@ -67,6 +67,8 @@ export interface Course {
   isCollaborative?: boolean;
   isLive?: boolean;       // true = live (auto-saved) course, false = named snapshot
   memberCount?: number;
+  isMine?: boolean;        // the user created this course (room owner)
+  ownerNickname?: string;  // set for courses someone else shared with the user
   createdAt: string;
   updatedAt: string;
 }
@@ -238,7 +240,7 @@ export interface Memory {
 export const ROOM_EVENT = 'room_event';
 
 /** Types sent inside ROOM_EVENT broadcasts */
-export type RoomEventType = 'places_changed' | 'course_updated' | 'member_joined';
+export type RoomEventType = 'places_changed' | 'course_updated' | 'member_joined' | 'member_removed';
 
 export type PlacesChangeAction = 'added' | 'removed' | 'updated' | 'reordered' | 'reacted';
 
@@ -246,6 +248,21 @@ export interface PlacesChangedData {
   action: PlacesChangeAction;
   titles?: string[];
   count?: number;
+}
+
+export interface MemberRemovedData {
+  userId: string;
+  nickname?: string;
+}
+
+/** Someone the user is connected with (함께하는 사람) */
+export interface Connection {
+  userId: string;
+  nickname: string;
+  isGuest: boolean;
+  /** New courses the user creates include this person automatically */
+  autoShare: boolean;
+  connectedAt: string;
 }
 
 export interface CourseUpdatedData {

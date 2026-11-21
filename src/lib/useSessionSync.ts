@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import type { RealtimeChannel } from '@supabase/supabase-js';
-import { ROOM_EVENT, type CourseUpdatedData, type PlacesChangedData, type RoomMember } from './types';
+import { ROOM_EVENT, type CourseUpdatedData, type MemberRemovedData, type PlacesChangedData, type RoomMember } from './types';
 import { supabase } from './supabaseClient';
 import { CLIENT_ID } from './api';
 
@@ -19,6 +19,7 @@ interface UseSessionSyncOptions {
   onPlacesChanged?: (data: PlacesChangedData, meta: RemoteEventMeta) => void;
   onCourseUpdated?: (data: CourseUpdatedData, meta: RemoteEventMeta) => void;
   onMemberJoined?: (member: RoomMember) => void;
+  onMemberRemoved?: (data: MemberRemovedData) => void;
   /** Called on every (re)subscribe; use it to refetch anything missed while disconnected */
   onConnected?: () => void;
 }
@@ -42,14 +43,15 @@ export function useSessionSync({
   onPlacesChanged,
   onCourseUpdated,
   onMemberJoined,
+  onMemberRemoved,
   onConnected,
 }: UseSessionSyncOptions) {
   const [isConnected, setIsConnected] = useState(false);
   const [onlineUserIds, setOnlineUserIds] = useState<string[]>([]);
 
-  const callbacksRef = useRef({ onPlacesChanged, onCourseUpdated, onMemberJoined, onConnected });
+  const callbacksRef = useRef({ onPlacesChanged, onCourseUpdated, onMemberJoined, onMemberRemoved, onConnected });
   useEffect(() => {
-    callbacksRef.current = { onPlacesChanged, onCourseUpdated, onMemberJoined, onConnected };
+    callbacksRef.current = { onPlacesChanged, onCourseUpdated, onMemberJoined, onMemberRemoved, onConnected };
   });
 
   const userId = me?.userId ?? null;
@@ -78,6 +80,11 @@ export function useSessionSync({
           case 'member_joined': {
             const member = (data as { member?: RoomMember } | undefined)?.member;
             if (member) cbs.onMemberJoined?.(member);
+            break;
+          }
+          case 'member_removed': {
+            const removed = data as MemberRemovedData | undefined;
+            if (removed?.userId) cbs.onMemberRemoved?.(removed);
             break;
           }
         }

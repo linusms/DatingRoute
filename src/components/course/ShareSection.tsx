@@ -27,7 +27,7 @@ export default function ShareSection({ places, directions, schedule, transitMode
           <button className="route-share-btn image" onClick={() => setShowCard((v) => !v)}>📷 이미지</button>
         </div>
         {onCopyInviteLink && (
-          <button className="cb-text-btn" onClick={onCopyInviteLink}>✏️ 함께 편집할 사람에게는 초대 링크 보내기</button>
+          <button className="cb-text-btn" onClick={onCopyInviteLink}>✏️ 함께 편집할 새로운 사람 초대 링크 복사</button>
         )}
       </div>
       {showCard && (

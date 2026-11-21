@@ -1,9 +1,11 @@
--- Supabase SQL Schema for DatingRoute (v2: rooms, per-device sessions, guests, share links, memories)
--- 새 프로젝트를 처음 만들 때만 실행하세요. 운영 DB를 바꿀 때는 supabase_migration_v2.sql을 쓰세요.
+-- Supabase SQL Schema for DatingRoute (v3: rooms, per-device sessions, guests, share links, memories, connections)
+-- 새 프로젝트를 처음 만들 때만 실행하세요. 운영 DB를 바꿀 때는 supabase_migration_v2.sql, supabase_migration_v3.sql을 차례로 쓰세요.
 -- ⚠️ 주의: 기존 테이블과 데이터가 모두 삭제됩니다.
 
 DROP PUBLICATION IF EXISTS supabase_realtime;
 DROP TABLE IF EXISTS events CASCADE;
+DROP TABLE IF EXISTS connection_invites CASCADE;
+DROP TABLE IF EXISTS user_connections CASCADE;
 DROP TABLE IF EXISTS course_places CASCADE;
 DROP TABLE IF EXISTS courses CASCADE;
 DROP TABLE IF EXISTS room_members CASCADE;
@@ -94,6 +96,30 @@ CREATE TABLE course_places (
   photo_path TEXT  -- storage 버킷 'memories' 안의 경로
 );
 
+-- 7. 함께하는 사람 (사용자 연결). 한 쌍마다 양방향 두 행
+CREATE TABLE user_connections (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL,
+  friend_id UUID NOT NULL,
+  auto_share BOOLEAN NOT NULL DEFAULT TRUE,  -- user_id가 새 코스를 만들 때 friend_id를 자동으로 참여시킴
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT user_connections_user_fkey FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  CONSTRAINT user_connections_friend_fkey FOREIGN KEY (friend_id) REFERENCES users(id) ON DELETE CASCADE,
+  CONSTRAINT user_connections_pair_key UNIQUE (user_id, friend_id),
+  CONSTRAINT user_connections_not_self CHECK (user_id <> friend_id)
+);
+
+-- 8. 연결용 1회용 초대 링크 (/?invite=<code>, 7일). room_id가 있으면 그 코스에도 참여
+CREATE TABLE connection_invites (
+  code TEXT PRIMARY KEY,
+  inviter_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  room_id TEXT REFERENCES rooms(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  expires_at TIMESTAMPTZ NOT NULL,
+  used_by UUID REFERENCES users(id) ON DELETE SET NULL,
+  used_at TIMESTAMPTZ
+);
+
 -- 인덱스
 CREATE INDEX idx_rooms_invite ON rooms(invite_code);
 CREATE INDEX idx_room_members_room ON room_members(room_id);
@@ -102,6 +128,8 @@ CREATE INDEX idx_courses_room ON courses(room_id);
 CREATE INDEX idx_places_course ON course_places(course_id);
 CREATE INDEX idx_user_sessions_user ON user_sessions(user_id);
 CREATE INDEX idx_users_session_token ON users(session_token);
+CREATE INDEX idx_user_connections_friend ON user_connections(friend_id);
+CREATE INDEX idx_connection_invites_inviter ON connection_invites(inviter_id);
 
 -- 실시간 동기화는 Broadcast 채널(session-<roomId>)을 쓰므로 테이블을 발행하지 않습니다.
 CREATE PUBLICATION supabase_realtime;
@@ -114,6 +142,8 @@ ALTER TABLE rooms         ENABLE ROW LEVEL SECURITY;
 ALTER TABLE room_members  ENABLE ROW LEVEL SECURITY;
 ALTER TABLE courses       ENABLE ROW LEVEL SECURITY;
 ALTER TABLE course_places ENABLE ROW LEVEL SECURITY;
+ALTER TABLE user_connections   ENABLE ROW LEVEL SECURITY;
+ALTER TABLE connection_invites ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON ALL TABLES IN SCHEMA public FROM anon, authenticated;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON TABLES FROM anon, authenticated;
 

@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import { createHash, randomBytes, randomUUID, scrypt, timingSafeEqual } from 'crypto';
 import {
   ROOM_EVENT,
+  type Connection,
   type Course,
   type CoursePlace,
   type DateSchedule,
@@ -392,7 +393,18 @@ export async function createRoom(ownerId: string, expiresInDays = 30, content: N
   });
   if (roomError) throw new Error(`Room create failed: ${roomError.message}`);
 
-  await supabase.from('room_members').insert({ room_id: roomId, user_id: ownerId, is_owner: true });
+  // The owner plus everyone they share new courses with automatically (함께하는 사람)
+  const { data: autoShare } = await supabase
+    .from('user_connections')
+    .select('friend_id')
+    .eq('user_id', ownerId)
+    .eq('auto_share', true);
+  const memberRows = [
+    { room_id: roomId, user_id: ownerId, is_owner: true },
+    ...(autoShare || []).map((c) => ({ room_id: roomId, user_id: c.friend_id as string, is_owner: false })),
+  ];
+  const { error: memberError } = await supabase.from('room_members').insert(memberRows);
+  if (memberError) throw new Error(`Room members insert failed: ${memberError.message}`);
 
   const liveCourseId = randomUUID();
   await supabase.from('courses').insert({
@@ -453,6 +465,215 @@ export async function joinRoom(roomId: string, userId: string): Promise<boolean>
   // 23505: (room_id, user_id) 유니크 제약 — 동시에 두 번 참여한 경우라 무시합니다.
   if (error && error.code !== '23505') throw new Error(`Join failed: ${error.message}`);
   return !error;
+}
+
+/** Removes a non-owner member. Returns true when someone was removed. */
+export async function removeRoomMember(roomId: string, userId: string): Promise<boolean> {
+  const { data, error } = await supabase
+    .from('room_members')
+    .delete()
+    .eq('room_id', roomId)
+    .eq('user_id', userId)
+    .eq('is_owner', false)
+    .select('id');
+  if (error) throw new Error(`Member remove failed: ${error.message}`);
+  return !!data && data.length > 0;
+}
+
+/* ─────────── Connections (함께하는 사람) ─────────── */
+
+const CONNECTION_INVITE_TTL_DAYS = 7;
+
+export async function listConnections(userId: string): Promise<Connection[]> {
+  const { data, error } = await supabase
+    .from('user_connections')
+    .select('friend_id, auto_share, created_at, friend:users!user_connections_friend_fkey(nickname, is_guest)')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: true });
+  if (error) throw new Error(`Connections fetch failed: ${error.message}`);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (data || []).map((r: any) => {
+    const friend = Array.isArray(r.friend) ? r.friend[0] : r.friend;
+    return {
+      userId: r.friend_id,
+      nickname: friend?.nickname || 'Unknown',
+      isGuest: !!friend?.is_guest,
+      autoShare: !!r.auto_share,
+      connectedAt: r.created_at,
+    };
+  });
+}
+
+export async function areConnected(userId: string, friendId: string): Promise<boolean> {
+  const { data } = await supabase
+    .from('user_connections')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('friend_id', friendId)
+    .limit(1);
+  return !!data && data.length > 0;
+}
+
+/** Connects two users both ways. Existing connections keep their settings. */
+async function connectUsers(a: string, b: string, autoShare: boolean): Promise<void> {
+  if (a === b) return;
+  const { error } = await supabase.from('user_connections').upsert(
+    [
+      { user_id: a, friend_id: b, auto_share: autoShare },
+      { user_id: b, friend_id: a, auto_share: autoShare },
+    ],
+    { onConflict: 'user_id,friend_id', ignoreDuplicates: true }
+  );
+  if (error) throw new Error(`Connect failed: ${error.message}`);
+}
+
+export async function setConnectionAutoShare(userId: string, friendId: string, autoShare: boolean): Promise<boolean> {
+  const { data } = await supabase
+    .from('user_connections')
+    .update({ auto_share: autoShare })
+    .eq('user_id', userId)
+    .eq('friend_id', friendId)
+    .select('id');
+  return !!data && data.length > 0;
+}
+
+/**
+ * Removes the connection both ways and takes the other person out of every course the user owns.
+ * Returns the affected room ids so the caller can notify open clients.
+ */
+export async function disconnectUsers(userId: string, friendId: string): Promise<string[]> {
+  if (!isUuid(userId) || !isUuid(friendId)) return [];
+  await supabase
+    .from('user_connections')
+    .delete()
+    .or(`and(user_id.eq.${userId},friend_id.eq.${friendId}),and(user_id.eq.${friendId},friend_id.eq.${userId})`);
+
+  const { data: owned } = await supabase.from('rooms').select('id').eq('owner_id', userId);
+  const ownedIds = (owned || []).map((r) => r.id as string);
+  if (ownedIds.length === 0) return [];
+  const { data: removed } = await supabase
+    .from('room_members')
+    .delete()
+    .eq('user_id', friendId)
+    .eq('is_owner', false)
+    .in('room_id', ownedIds)
+    .select('room_id');
+  return Array.from(new Set((removed || []).map((r) => r.room_id as string)));
+}
+
+/** A one-time invite link (7 days). With roomId, accepting it also joins that course. */
+export async function createConnectionInvite(inviterId: string, roomId: string | null): Promise<{ code: string; expiresAt: string }> {
+  await supabase.from('connection_invites').delete().eq('inviter_id', inviterId).lt('expires_at', new Date().toISOString());
+
+  let code = '';
+  for (let attempt = 0; attempt < 10; attempt++) {
+    code = generateInviteCode();
+    // Course codes and invite codes share one input box, so a code must be unique across both
+    const [{ data: invite }, { data: room }] = await Promise.all([
+      supabase.from('connection_invites').select('code').eq('code', code).maybeSingle(),
+      supabase.from('rooms').select('id').eq('invite_code', code).maybeSingle(),
+    ]);
+    if (!invite && !room) break;
+  }
+  const expiresAt = new Date(Date.now() + CONNECTION_INVITE_TTL_DAYS * 24 * 60 * 60 * 1000).toISOString();
+  const { error } = await supabase.from('connection_invites').insert({
+    code,
+    inviter_id: inviterId,
+    room_id: roomId,
+    expires_at: expiresAt,
+  });
+  if (error) throw new Error(`Invite create failed: ${error.message}`);
+  return { code, expiresAt };
+}
+
+/** Whether a code can still be redeemed (used to allow guest sign-up from an invite link). */
+export async function isInviteUsable(code: string): Promise<boolean> {
+  const { data: invite } = await supabase
+    .from('connection_invites')
+    .select('used_by, expires_at')
+    .eq('code', code)
+    .maybeSingle();
+  if (invite) return !invite.used_by && Date.parse(invite.expires_at) > Date.now();
+  const { data: room } = await supabase.from('rooms').select('expires_at').eq('invite_code', code).maybeSingle();
+  return !!room && (!room.expires_at || Date.parse(room.expires_at) > Date.now());
+}
+
+export type AcceptInviteResult =
+  | {
+      ok: true;
+      /** The inviter (or the course owner for an old per-course code); null when it was the user's own link */
+      friend: { userId: string; nickname: string } | null;
+      roomId: string | null;
+      joinedRoom: boolean;
+      ownInvite: boolean;
+    }
+  | { ok: false; status: number; error: string };
+
+/**
+ * Redeems an invite code: a one-time connection invite (connects both users and, when the invite
+ * carries a course, joins it), or an old per-course code (joins the course and connects with its
+ * owner with automatic sharing off, because those codes could be passed around).
+ */
+export async function acceptInvite(code: string, userId: string): Promise<AcceptInviteResult> {
+  const { data: invite } = await supabase.from('connection_invites').select('*').eq('code', code).maybeSingle();
+  if (invite) {
+    if (invite.inviter_id === userId) {
+      return { ok: true, friend: null, roomId: invite.room_id, joinedRoom: false, ownInvite: true };
+    }
+    if (invite.used_by && invite.used_by !== userId) {
+      return { ok: false, status: 410, error: '이미 사용된 초대 링크예요. 새 링크를 받아주세요.' };
+    }
+    if (!invite.used_by) {
+      if (Date.parse(invite.expires_at) < Date.now()) {
+        return { ok: false, status: 410, error: '만료된 초대 링크예요. 새 링크를 받아주세요.' };
+      }
+      // Claim it in one conditional update so two people can't both use it
+      const { data: claimed } = await supabase
+        .from('connection_invites')
+        .update({ used_by: userId, used_at: new Date().toISOString() })
+        .eq('code', code)
+        .is('used_by', null)
+        .select('code');
+      if (!claimed || claimed.length === 0) {
+        return { ok: false, status: 410, error: '이미 사용된 초대 링크예요. 새 링크를 받아주세요.' };
+      }
+    }
+    await connectUsers(invite.inviter_id, userId, true);
+    const inviter = await getUserById(invite.inviter_id);
+    let roomId: string | null = null;
+    let joinedRoom = false;
+    if (invite.room_id && (await isRoomMember(invite.room_id, invite.inviter_id))) {
+      roomId = invite.room_id;
+      joinedRoom = await joinRoom(invite.room_id, userId);
+    }
+    return {
+      ok: true,
+      friend: inviter ? { userId: inviter.id, nickname: inviter.nickname } : null,
+      roomId,
+      joinedRoom,
+      ownInvite: false,
+    };
+  }
+
+  const { data: room } = await supabase.from('rooms').select('id, owner_id, expires_at').eq('invite_code', code).maybeSingle();
+  if (!room) return { ok: false, status: 404, error: '유효하지 않은 초대코드예요.' };
+  if (room.expires_at && Date.parse(room.expires_at) < Date.now()) {
+    return { ok: false, status: 410, error: '만료된 초대코드예요.' };
+  }
+  const joinedRoom = await joinRoom(room.id, userId);
+  const own = room.owner_id === userId;
+  if (!own) {
+    // Joining the course is what matters here; a failed connection shouldn't undo it
+    await connectUsers(room.owner_id, userId, false).catch((err) => console.error('Connect after join failed:', err));
+  }
+  const owner = own ? null : await getUserById(room.owner_id);
+  return {
+    ok: true,
+    friend: owner ? { userId: owner.id, nickname: owner.nickname } : null,
+    roomId: room.id,
+    joinedRoom,
+    ownInvite: own,
+  };
 }
 
 /* ─────────── Live Courses (Room-based, shared) ─────────── */
@@ -830,8 +1051,16 @@ export async function getUserCoursesWithCollaborative(userId: string): Promise<C
     updatedAt: c.updated_at,
   }));
 
+  const otherOwnerIds = Array.from(new Set(liveCourses.map((c) => c.owner_id).filter((id) => id && id !== userId)));
+  const ownerNicknames = new Map<string, string>();
+  if (otherOwnerIds.length > 0) {
+    const { data: owners } = await supabase.from('users').select('id, nickname').in('id', otherOwnerIds);
+    for (const o of owners || []) ownerNicknames.set(o.id, o.nickname);
+  }
+
   for (const c of liveCourses) {
     const memberCount = memberCountByRoom[c.room_id] || 1;
+    const isMine = c.owner_id === userId;
     result.push({
       id: c.id,
       name: '저장되지 않은 경로',
@@ -843,6 +1072,8 @@ export async function getUserCoursesWithCollaborative(userId: string): Promise<C
       isLive: true,
       isCollaborative: memberCount > 1,
       memberCount,
+      isMine,
+      ownerNickname: isMine ? undefined : ownerNicknames.get(c.owner_id),
       createdAt: c.created_at,
       updatedAt: c.updated_at,
     });
@@ -876,30 +1107,44 @@ export async function getOwnedSavedCourse(userId: string, courseId: string): Pro
 }
 
 /**
- * Removes a course from the user's dashboard. Saved courses are deleted;
- * for a live (collaborative) course the user leaves the room, and the room is deleted
- * when nobody is left.
+ * Removes a course from the user's dashboard.
+ * - Saved snapshots are deleted.
+ * - A live course deleted by the person who created it is deleted for everyone.
+ * - Anyone else just leaves it (and it is deleted once nobody is left).
+ * Returns the room and the members who lost access, so open clients can be told.
  */
-export async function deleteCourse(courseId: string, userId: string): Promise<void> {
+export async function deleteCourse(courseId: string, userId: string): Promise<{ roomId: string; removedUserIds: string[] } | null> {
   const { data: course } = await supabase.from('courses').select('id, name, room_id, owner_id').eq('id', courseId).maybeSingle();
-  if (!course) return;
+  if (!course) return null;
 
   if (course.name !== LIVE_COURSE_NAME) {
     if (course.owner_id === userId) await supabase.from('courses').delete().eq('id', courseId);
-    return;
+    return null;
   }
-  if (!course.room_id) return;
-  await supabase.from('room_members').delete().eq('room_id', course.room_id).eq('user_id', userId);
-  const { count } = await supabase
-    .from('room_members')
-    .select('id', { count: 'exact', head: true })
-    .eq('room_id', course.room_id);
-  if ((count ?? 0) === 0) {
+  if (!course.room_id) return null;
+  const roomId = course.room_id as string;
+
+  const deleteRoom = async () => {
     const { data: photos } = await supabase.from('course_places').select('photo_path').eq('course_id', courseId).not('photo_path', 'is', null);
     const paths = (photos || []).map((p) => p.photo_path).filter(Boolean) as string[];
     if (paths.length > 0) await supabase.storage.from(PHOTO_BUCKET).remove(paths);
-    await supabase.from('rooms').delete().eq('id', course.room_id);
+    await supabase.from('rooms').delete().eq('id', roomId);
+  };
+
+  const { data: room } = await supabase.from('rooms').select('owner_id').eq('id', roomId).maybeSingle();
+  if (room?.owner_id === userId) {
+    const { data: others } = await supabase.from('room_members').select('user_id').eq('room_id', roomId).neq('user_id', userId);
+    await deleteRoom();
+    return { roomId, removedUserIds: Array.from(new Set((others || []).map((m) => m.user_id as string))) };
   }
+
+  await supabase.from('room_members').delete().eq('room_id', roomId).eq('user_id', userId);
+  const { count } = await supabase
+    .from('room_members')
+    .select('id', { count: 'exact', head: true })
+    .eq('room_id', roomId);
+  if ((count ?? 0) === 0) await deleteRoom();
+  return null;
 }
 
 export async function updateCourse(courseId: string, userId: string, name: string, description: string): Promise<boolean> {

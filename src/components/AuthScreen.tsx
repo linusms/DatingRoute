@@ -51,7 +51,7 @@ export default function AuthScreen({ onLogin, inviteCode, importName }: AuthScre
   };
 
   const subtitle = inviteCode
-    ? '초대받은 데이트 코스에 참여해요.'
+    ? '초대를 받았어요! 닉네임만 정하면 바로 함께할 수 있어요.'
     : importName
       ? `'${importName}' 코스를 내 코스로 가져오려면 로그인하세요.`
       : mode === 'register' ? '새로운 계정을 생성하고 시작하세요.' : '계정에 로그인하고 계속 진행하세요.';
@@ -96,7 +96,7 @@ export default function AuthScreen({ onLogin, inviteCode, importName }: AuthScre
             />
           )}
           {mode === 'guest' && (
-            <p className="auth-hint">가입 없이 참여해요. 나중에 대시보드에서 비밀번호를 설정하면 다른 기기에서도 이어서 볼 수 있어요.</p>
+            <p className="auth-hint">가입 없이 참여해요. 이미 계정이 있다면 &lsquo;계정으로 로그인&rsquo;을 눌러주세요. 나중에 대시보드에서 비밀번호를 정하면 다른 기기에서도 이어서 볼 수 있어요.</p>
           )}
           {error && <p className="auth-error" role="alert">{error}</p>}
           <button type="submit" disabled={isLoading} className="auth-submit">

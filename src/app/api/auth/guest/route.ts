@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createGuestUser, getRoomByInviteCode } from '@/lib/db';
+import { createGuestUser, isInviteUsable } from '@/lib/db';
 import { getUserAgent, setSessionCookie } from '@/lib/session';
 import { validateNickname } from '@/lib/validation';
 
@@ -12,8 +12,8 @@ export async function POST(request: NextRequest) {
     const { nickname, inviteCode } = await request.json();
     const nicknameError = validateNickname(nickname);
     if (nicknameError) return NextResponse.json({ error: nicknameError }, { status: 400 });
-    if (typeof inviteCode !== 'string' || !(await getRoomByInviteCode(inviteCode.trim().toUpperCase()))) {
-      return NextResponse.json({ error: '유효한 초대 링크로만 게스트 참여가 가능합니다.' }, { status: 400 });
+    if (typeof inviteCode !== 'string' || !(await isInviteUsable(inviteCode.trim().toUpperCase()))) {
+      return NextResponse.json({ error: '초대 링크가 만료됐거나 이미 사용됐어요. 새 링크를 받아주세요.' }, { status: 400 });
     }
 
     const result = await createGuestUser(nickname.trim(), getUserAgent(request));

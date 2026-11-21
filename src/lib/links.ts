@@ -34,3 +34,32 @@ export function kakaoDirectionsToUrl(to: LinkPlace): string {
 export function naverSearchUrl(title: string): string {
   return `https://map.naver.com/p/search/${encodeURIComponent(stripHtml(title))}`;
 }
+
+/**
+ * Opens a place search in the Naver Map app on phones (URL scheme nmap://search?query=..&appname=..),
+ * falling back to the mobile web when the app isn't installed. On desktop the link's own href
+ * (naverSearchUrl) opens in a new tab.
+ */
+export function openNaverMap(event: { preventDefault: () => void }, title: string) {
+  if (typeof navigator === 'undefined') return;
+  const ua = navigator.userAgent;
+  const isAndroid = /Android/i.test(ua);
+  const isIOS = /iPhone|iPad|iPod/i.test(ua) || (/Macintosh/i.test(ua) && navigator.maxTouchPoints > 1);
+  if (!isAndroid && !isIOS) return;
+
+  event.preventDefault();
+  const query = encodeURIComponent(stripHtml(title));
+  const appname = encodeURIComponent(window.location.hostname || 'datingroute');
+  const web = `https://m.map.naver.com/search2/search.naver?query=${query}`;
+  if (isAndroid) {
+    // Chrome opens the app, or the fallback URL when it isn't installed
+    window.location.href = `intent://search?query=${query}&appname=${appname}#Intent;scheme=nmap;action=android.intent.action.VIEW;category=android.intent.category.BROWSABLE;package=com.nhn.android.nmap;S.browser_fallback_url=${encodeURIComponent(web)};end`;
+    return;
+  }
+  const startedAt = Date.now();
+  window.location.href = `nmap://search?query=${query}&appname=${appname}`;
+  setTimeout(() => {
+    // Still here (the app didn't take over): open the mobile web instead
+    if (document.visibilityState === 'visible' && Date.now() - startedAt < 3000) window.location.href = web;
+  }, 1500);
+}
