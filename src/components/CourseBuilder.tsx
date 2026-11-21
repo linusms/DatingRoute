@@ -11,6 +11,7 @@ import type {
   TransitMode,
 } from '@/lib/types';
 import type { NewPlaceInput } from '@/hooks/useCourseSession';
+import type { ReviewMode } from './ReviewPanel';
 import { autoDistributePlaces, optimizeRouteTSP, stripHtml } from '@/lib/utils';
 import { computeDayTimeline, dateOfDay, todayDayNumber, WEEKDAYS_KO, type TimelineEntry } from '@/lib/timeline';
 import { useDragAndDrop } from '@/lib/useDragAndDrop';
@@ -40,7 +41,7 @@ interface CourseBuilderProps {
   onReact: (id: string, emoji: string | null) => void;
   onReplacePlace: (id: string, input: NewPlaceInput) => void;
   onUploadPhoto: (id: string, file: Blob | null) => Promise<void>;
-  onShowReview: (placeName: string) => void;
+  onShowReview: (placeName: string, mode?: ReviewMode) => void;
   onHighlightPlace: (place: CoursePlace | null) => void;
   onShareKakao: () => void;
   onCopyShareLink: () => void;
@@ -190,6 +191,20 @@ export default function CourseBuilder(props: CourseBuilderProps) {
     }
     next.sort((a, b) => (a.day ?? 0) - (b.day ?? 0));
     onApplyPlaces(next);
+  };
+
+  /** Moves a card one step within its day (the touch alternative to drag & drop). */
+  const moveBy = (idx: number, delta: -1 | 1) => {
+    const target = idx + delta;
+    const list = [...filteredPlaces];
+    if (target < 0 || target >= list.length) return;
+    if ((list[idx].day ?? 0) !== (list[target].day ?? 0)) return;
+    [list[idx], list[target]] = [list[target], list[idx]];
+    reorderFiltered(list);
+  };
+  const canMove = (idx: number, delta: -1 | 1) => {
+    const other = filteredPlaces[idx + delta];
+    return !!other && (other.day ?? 0) === (filteredPlaces[idx].day ?? 0);
   };
 
   const optimizeDay = () => {
@@ -389,7 +404,8 @@ export default function CourseBuilder(props: CourseBuilderProps) {
                         if (nextSet.has(place.id)) nextSet.delete(place.id); else nextSet.add(place.id);
                         return nextSet;
                       })}
-                      onShowReview={() => props.onShowReview(stripHtml(place.title))}
+                      getDayLabel={getDayLabel}
+                      onShowReview={(mode) => props.onShowReview(stripHtml(place.title), mode)}
                       onHighlight={(on) => props.onHighlightPlace(on ? place : null)}
                       onChangeDay={(day) => changePlaceDay(place.id, day)}
                       onToggleDayCopy={(day) => toggleDayCopy(place, day)}
@@ -398,6 +414,8 @@ export default function CourseBuilder(props: CourseBuilderProps) {
                       onReact={(emoji) => props.onReact(place.id, emoji)}
                       onOpenSimilar={() => setSimilarFor(place)}
                       onUploadPhoto={(file) => props.onUploadPhoto(place.id, file)}
+                      onMoveUp={draggable && !isStorageTab && canMove(idx, -1) ? () => moveBy(idx, -1) : undefined}
+                      onMoveDown={draggable && !isStorageTab && canMove(idx, 1) ? () => moveBy(idx, 1) : undefined}
                     />
                     {connectsToNext && (
                       <LegConnector

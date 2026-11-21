@@ -69,7 +69,7 @@ export default function NaverMap({
   }, []);
 
   const initMap = useCallback(() => {
-    if (!mapRef.current || !window.naver) return;
+    if (!mapRef.current || !window.naver?.maps) return;
     if (mapObjRef.current) return;
 
     const map = new window.naver.maps.Map(mapRef.current, {
@@ -95,7 +95,7 @@ export default function NaverMap({
   // Update course markers + polyline
   useEffect(() => {
     const map = mapObjRef.current;
-    if (!map || !window.naver) return;
+    if (!map || !window.naver?.maps) return;
 
     clearMarkers();
     clearPolyline();
@@ -248,7 +248,7 @@ export default function NaverMap({
   // Highlight place on hover from search results
   useEffect(() => {
     const map = mapObjRef.current;
-    if (!map || !window.naver) return;
+    if (!map || !window.naver?.maps) return;
 
     clearHighlight();
 
@@ -283,7 +283,7 @@ export default function NaverMap({
   // Radius circle overlay for AI recommend location
   useEffect(() => {
     const map = mapObjRef.current;
-    if (!map || !window.naver) return;
+    if (!map || !window.naver?.maps) return;
 
     clearCircle();
 

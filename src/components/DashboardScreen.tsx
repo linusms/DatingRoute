@@ -1,9 +1,11 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import type { Course, Memory, User } from '@/lib/types';
+import type { Connection, Course, Memory, User } from '@/lib/types';
 import { todayISO } from '@/lib/timeline';
+import { useConnections } from '@/hooks/useConnections';
 import ChangePasswordModal from './ChangePasswordModal';
+import PeopleSection from './PeopleSection';
 
 interface DashboardScreenProps {
   currentUser: User;
@@ -11,7 +13,9 @@ interface DashboardScreenProps {
   onCreateNew: () => void;
   onLoadCourse: (course: Course) => void;
   onLogout: () => void;
-  onJoinByInviteCode: (code: string) => Promise<void>;
+  onRedeemInvite: (code: string) => Promise<void>;
+  connectionsVersion: number;
+  onCopy: (text: string, message: string) => void;
 }
 
 interface EditState {
@@ -31,16 +35,16 @@ function dDayLabel(course: Course): { text: string; tone: 'today' | 'soon' | 'pa
   return { text: `D-${days}`, tone: 'soon' };
 }
 
-export default function DashboardScreen({ currentUser, onUserChange, onCreateNew, onLoadCourse, onLogout, onJoinByInviteCode }: DashboardScreenProps) {
-  const [view, setView] = useState<'courses' | 'memories'>('courses');
+export default function DashboardScreen({ currentUser, onUserChange, onCreateNew, onLoadCourse, onLogout, onRedeemInvite, connectionsVersion, onCopy }: DashboardScreenProps) {
+  const [view, setView] = useState<'courses' | 'memories' | 'people'>('courses');
   const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
   const [memories, setMemories] = useState<Memory[] | null>(null);
   const [editState, setEditState] = useState<EditState | null>(null);
   const [editSaving, setEditSaving] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
-  const [joinCode, setJoinCode] = useState('');
-  const [joining, setJoining] = useState(false);
+  const [coursesVersion, setCoursesVersion] = useState(0);
+  const { connections, setAutoShare, disconnect } = useConnections(true, connectionsVersion);
 
   useEffect(() => {
     let alive = true;
@@ -50,7 +54,13 @@ export default function DashboardScreen({ currentUser, onUserChange, onCreateNew
       .catch(() => { if (alive) setCourses([]); })
       .finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
-  }, [currentUser.id]);
+  }, [currentUser.id, coursesVersion]);
+
+  const handleDisconnect = async (friend: Connection) => {
+    if (!confirm(`${friend.nickname}님과 연결을 끊을까요?\n내가 만든 코스에서도 ${friend.nickname}님이 빠져요.`)) return;
+    await disconnect(friend.userId);
+    setCoursesVersion((v) => v + 1);
+  };
 
   useEffect(() => {
     if (view !== 'memories' || memories !== null) return;
@@ -64,9 +74,12 @@ export default function DashboardScreen({ currentUser, onUserChange, onCreateNew
 
   const handleDelete = async (e: React.MouseEvent, course: Course) => {
     e.stopPropagation();
-    const message = course.isLive && (course.memberCount ?? 1) > 1
-      ? '이 코스에서 나가시겠어요? 다른 참여자에게는 코스가 그대로 남아요.'
-      : '이 코스를 삭제하시겠어요? 되돌릴 수 없어요.';
+    const shared = course.isLive && (course.memberCount ?? 1) > 1;
+    const message = course.isLive && course.isMine === false
+      ? `이 코스에서 나갈까요? 다시 들어오려면 ${course.ownerNickname ? `${course.ownerNickname}님이` : '코스를 만든 사람이'} 다시 공유해야 해요.`
+      : shared
+        ? '이 코스를 삭제할까요? 함께 편집하던 사람에게서도 사라지고, 되돌릴 수 없어요.'
+        : '이 코스를 삭제하시겠어요? 되돌릴 수 없어요.';
     if (!confirm(message)) return;
     try {
       const res = await fetch(`/api/users/${currentUser.id}/courses/delete?id=${encodeURIComponent(course.id)}`, { method: 'DELETE' });
@@ -99,18 +112,6 @@ export default function DashboardScreen({ currentUser, onUserChange, onCreateNew
       }
     } catch { /* ignore */ } finally {
       setEditSaving(false);
-    }
-  };
-
-  const handleJoin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const code = joinCode.trim().toUpperCase();
-    if (code.length !== 6) return;
-    setJoining(true);
-    try {
-      await onJoinByInviteCode(code);
-    } catch { /* toast shown by the hook */ } finally {
-      setJoining(false);
     }
   };
 
@@ -162,19 +163,16 @@ export default function DashboardScreen({ currentUser, onUserChange, onCreateNew
           <span className="dashboard-create-arrow">→</span>
         </button>
 
-        <form className="join-form" onSubmit={handleJoin}>
-          <input
-            className="input"
-            value={joinCode}
-            maxLength={6}
-            placeholder="초대코드 6자리"
-            onChange={(e) => setJoinCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))}
-            aria-label="초대코드"
-          />
-          <button className="btn btn-secondary" type="submit" disabled={joinCode.length !== 6 || joining}>
-            {joining ? '참여 중...' : '코드로 참여'}
+        {connections !== null && connections.length === 0 && view !== 'people' && (
+          <button type="button" className="people-cta" onClick={() => setView('people')}>
+            <span className="people-cta-icon">🤝</span>
+            <span className="people-cta-text">
+              <strong>함께 코스를 짤 사람을 연결해보세요</strong>
+              <span>한 번 연결하면 코스마다 초대할 필요가 없어요. 받은 초대코드도 여기서 입력해요.</span>
+            </span>
+            <span className="dashboard-create-arrow">→</span>
           </button>
-        </form>
+        )}
 
         <div className="dashboard-view-tabs" role="tablist">
           <button role="tab" aria-selected={view === 'courses'} className={view === 'courses' ? 'active' : ''} onClick={() => setView('courses')}>
@@ -183,7 +181,20 @@ export default function DashboardScreen({ currentUser, onUserChange, onCreateNew
           <button role="tab" aria-selected={view === 'memories'} className={view === 'memories' ? 'active' : ''} onClick={() => setView('memories')}>
             📸 추억
           </button>
+          <button role="tab" aria-selected={view === 'people'} className={view === 'people' ? 'active' : ''} onClick={() => setView('people')}>
+            🤝 함께하는 사람{connections && connections.length > 0 ? <span className="dashboard-section-count">{connections.length}</span> : null}
+          </button>
         </div>
+
+        {view === 'people' && (
+          <PeopleSection
+            connections={connections}
+            onSetAutoShare={setAutoShare}
+            onDisconnect={handleDisconnect}
+            onRedeemInvite={onRedeemInvite}
+            onCopy={onCopy}
+          />
+        )}
 
         {view === 'courses' && (
           <div className="dashboard-section">
@@ -196,7 +207,7 @@ export default function DashboardScreen({ currentUser, onUserChange, onCreateNew
               <div className="dashboard-empty">
                 <div className="dashboard-empty-icon">🗺️</div>
                 <p>아직 코스가 없어요</p>
-                <p className="dashboard-empty-hint">새 경로를 만들거나 초대코드로 참여해보세요!</p>
+                <p className="dashboard-empty-hint">새 경로를 만들거나, 함께하는 사람이 공유한 코스가 여기에 보여요.</p>
               </div>
             ) : (
               <div className="dashboard-course-list">
@@ -251,7 +262,10 @@ export default function DashboardScreen({ currentUser, onUserChange, onCreateNew
                                 <span className="dashboard-course-name">{title}</span>
                                 {dDay && <span className={`dday-badge ${dDay.tone}`}>{dDay.text}</span>}
                                 {course.memberCount && course.memberCount > 1 && (
-                                  <span className="dashboard-member-count">{course.memberCount}명 참여</span>
+                                  <span className="dashboard-member-count">{course.memberCount}명 함께</span>
+                                )}
+                                {course.ownerNickname && (
+                                  <span className="dashboard-member-count owner">{course.ownerNickname}님의 코스</span>
                                 )}
                                 {!course.isLive && <span className="dashboard-member-count">저장본</span>}
                               </div>
@@ -263,6 +277,7 @@ export default function DashboardScreen({ currentUser, onUserChange, onCreateNew
                         {!isEditing && (
                           <div className="dashboard-course-actions">
                             <button
+                              aria-label="이름/설명 편집"
                               className="dashboard-course-edit"
                               onClick={(e) => {
                                 e.stopPropagation();
@@ -272,7 +287,7 @@ export default function DashboardScreen({ currentUser, onUserChange, onCreateNew
                             >
                               ✏️
                             </button>
-                            <button className="dashboard-course-delete" onClick={(e) => handleDelete(e, course)} title={course.isLive && (course.memberCount ?? 1) > 1 ? '나가기' : '삭제'}>
+                            <button className="dashboard-course-delete" onClick={(e) => handleDelete(e, course)} title={course.isLive && course.isMine === false ? '나가기' : '삭제'} aria-label={course.isLive && course.isMine === false ? '코스에서 나가기' : '코스 삭제'}>
                               🗑️
                             </button>
                           </div>

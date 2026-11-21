@@ -1,14 +1,15 @@
 'use client';
 
 import React, { useState, useCallback, useMemo } from 'react';
-import { Place, CoursePlace } from '@/lib/types';
+import type { Place, CoursePlace } from '@/lib/types';
 import { stripHtml, katechToWgs84 } from '@/lib/utils';
-
+import type { ReviewMode } from './ReviewPanel';
+import PlaceLinks from './PlaceLinks';
 
 interface SearchPanelProps {
   coursePlaces?: CoursePlace[];
   onAddPlace: (place: Place) => void;
-  onShowReview: (placeName: string) => void;
+  onShowReview: (placeName: string, mode?: ReviewMode) => void;
   onHighlightPlace?: (place: Place | null) => void;
 }
 
@@ -68,8 +69,8 @@ export default function SearchPanel({
         const data = await res.json();
         const r = data.items || [];
         setResults(r);
-      } catch (err: any) {
-        setError(err.message || '오류가 발생했습니다.');
+      } catch (err) {
+        setError((err as Error).message || '오류가 발생했습니다.');
         setResults([]);
       } finally {
         setIsLoading(false);
@@ -89,19 +90,21 @@ export default function SearchPanel({
   return (
     <div className="search-panel">
       {/* Search box */}
-      <div className="search-box">
+      <form className="search-box" role="search" onSubmit={(e) => { e.preventDefault(); handleSearch(query); }}>
         <input
-          type="text"
+          type="search"
+          enterKeyHint="search"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={onKeyDown}
           placeholder="장소 검색 (예: 홍대 카페, 이태원 맛집)"
           className="input"
+          aria-label="장소 검색"
         />
-        <div className="search-icon" onClick={() => handleSearch(query)} style={{ cursor: 'pointer' }}>
+        <button type="submit" className="search-icon" aria-label="검색">
           🔍
-        </div>
-      </div>
+        </button>
+      </form>
 
       {/* Filter toggle — accordion */}
       <div style={{ marginBottom: '8px' }}>
@@ -206,31 +209,29 @@ export default function SearchPanel({
                   <h3 className="place-card-title">{stripHtml(place.title)}</h3>
                   <span className="place-card-category">{place.category}</span>
                 </div>
-                <div className="place-card-address" style={{ marginBottom: '8px', WebkitLineClamp: 1 } as any}>
+                <div className="place-card-address" style={{ marginBottom: '8px' }}>
                   {place.roadAddress || place.address}
                 </div>
-                <div className="place-card-actions">
-                  <button
-                    className="btn btn-ghost"
-                    style={{ fontSize: '12px', padding: '4px 8px' }}
-                    onClick={() => onShowReview(stripHtml(place.title))}
-                  >
-                    후기
-                  </button>
-                {(() => {
-                  const isAlreadyAdded = coursePlaces.some(p => stripHtml(p.title) === stripHtml(place.title) && (p.day ?? 0) === 0);
-                  return (
-                    <button
-                      className="btn btn-primary"
-                      style={{ fontSize: '12px', padding: '4px 10px', opacity: isAlreadyAdded ? 0.5 : 1, cursor: isAlreadyAdded ? 'default' : 'pointer' }}
-                      onClick={() => !isAlreadyAdded && onAddPlace(place)}
-                      disabled={isAlreadyAdded}
-                    >
-                      {isAlreadyAdded ? '추가됨' : '+ 추가'}
-                    </button>
-                  );
-                })()}
-              </div>
+                <div className="search-result-actions">
+                  <PlaceLinks
+                    title={place.title}
+                    homepage={place.link}
+                    onShowReview={() => onShowReview(stripHtml(place.title), 'reviews')}
+                    onShowSummary={() => onShowReview(stripHtml(place.title), 'summary')}
+                  />
+                  {(() => {
+                    const isAlreadyAdded = coursePlaces.some(p => stripHtml(p.title) === stripHtml(place.title) && (p.day ?? 0) === 0);
+                    return (
+                      <button
+                        className="btn btn-primary search-add-btn"
+                        onClick={() => !isAlreadyAdded && onAddPlace(place)}
+                        disabled={isAlreadyAdded}
+                      >
+                        {isAlreadyAdded ? '담음' : '+ 담기'}
+                      </button>
+                    );
+                  })()}
+                </div>
             </div>
             </div>
           </div>

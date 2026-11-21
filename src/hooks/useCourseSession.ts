@@ -33,6 +33,13 @@ interface UseCourseSessionProps {
   setIsRouteCreated: (val: boolean) => void;
 }
 
+interface InviteAcceptResponse {
+  friend: { userId: string; nickname: string } | null;
+  roomId: string | null;
+  joinedRoom: boolean;
+  ownInvite: boolean;
+}
+
 interface RoomResponse {
   room: { id: string; inviteCode: string; ownerId: string; members?: RoomMember[] };
   coursePlaces: CoursePlace[];
@@ -81,7 +88,6 @@ export function useCourseSession({ setActiveTab, showToastMsg, clearDirections, 
 
   const [sessionMode, setSessionMode] = useState<SessionMode>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
-  const [inviteCode, setInviteCode] = useState<string | null>(null);
   const [members, setMembers] = useState<RoomMember[]>([]);
   const [isOwner, setIsOwner] = useState(false);
   const [launch] = useState(readLaunchParams);
@@ -89,6 +95,10 @@ export function useCourseSession({ setActiveTab, showToastMsg, clearDirections, 
   const [pendingImport, setPendingImport] = useState<PendingImport | null>(launch.pendingImport);
   const [sessionInvalidated, setSessionInvalidated] = useState(false);
   const [isEntering, setIsEntering] = useState(false);
+  /** Bumped when a connection is added so lists of 함께하는 사람 reload */
+  const [connectionsVersion, setConnectionsVersion] = useState(0);
+  /** Leaves the open course when the host stops sharing it with this user (set below) */
+  const removedFromRoomRef = useRef<() => void>(() => {});
 
   // Refs always hold the latest values for async callbacks (avoids stale closures)
   const coursePlacesRef = useRef<CoursePlace[]>([]);
@@ -173,6 +183,7 @@ export function useCourseSession({ setActiveTab, showToastMsg, clearDirections, 
     } catch (err) {
       const status = (err as { status?: number }).status;
       if (status === 401) setSessionInvalidated(true);
+      else if (status === 403) removedFromRoomRef.current();
     }
   }, [commitPlaces, setIsRouteCreated]);
 
@@ -208,8 +219,13 @@ export function useCourseSession({ setActiveTab, showToastMsg, clearDirections, 
       .then(task)
       .catch((err) => {
         console.error('Place sync failed:', err);
-        if ((err as { status?: number }).status === 401) {
+        const status = (err as { status?: number }).status;
+        if (status === 401) {
           setSessionInvalidated(true);
+          return;
+        }
+        if (status === 403) {
+          removedFromRoomRef.current();
           return;
         }
         remoteDirtyRef.current = true;
@@ -377,6 +393,14 @@ export function useCourseSession({ setActiveTab, showToastMsg, clearDirections, 
       setMembers((prev) => (prev.some((m) => m.userId === member.userId) ? prev : [...prev, member]));
       showToastMsg(`🎉 ${member.nickname}님이 참여했어요!`);
     },
+    onMemberRemoved: (data) => {
+      if (data.userId === currentUserRef.current?.id) {
+        removedFromRoomRef.current();
+        return;
+      }
+      setMembers((prev) => prev.filter((m) => m.userId !== data.userId));
+      if (data.nickname) showToastMsg(`${data.nickname}님이 이 코스에서 빠졌어요`);
+    },
     onConnected: () => scheduleRefetch(),
   });
 
@@ -394,7 +418,6 @@ export function useCourseSession({ setActiveTab, showToastMsg, clearDirections, 
     setSessionMode(null);
     setSessionId(null);
     sessionIdRef.current = null;
-    setInviteCode(null);
     setMembers([]);
     setIsOwner(false);
     commitPlaces([]);
@@ -405,6 +428,14 @@ export function useCourseSession({ setActiveTab, showToastMsg, clearDirections, 
     setIsRouteCreated(false);
   }, [clearDirections, commitPlaces, setIsRouteCreated]);
 
+  useEffect(() => {
+    removedFromRoomRef.current = () => {
+      if (!sessionIdRef.current) return;
+      resetRoomState();
+      showToastMsg('코스 공유가 해제됐거나 코스가 삭제되어 대시보드로 돌아왔어요.');
+    };
+  }, [resetRoomState, showToastMsg]);
+
   /** Loads a room the user belongs to and switches to the builder. */
   const enterRoom = useCallback(async (roomId: string): Promise<boolean> => {
     const user = currentUserRef.current;
@@ -414,7 +445,6 @@ export function useCourseSession({ setActiveTab, showToastMsg, clearDirections, 
       sessionIdRef.current = roomId;
       setSessionId(roomId);
       setSessionMode('builder');
-      setInviteCode(data.room.inviteCode || null);
       setMembers(data.room.members || []);
       setIsOwner(data.room.ownerId === user.id);
       setCourseName(data.courseDetails?.displayName || '');
@@ -459,23 +489,44 @@ export function useCourseSession({ setActiveTab, showToastMsg, clearDirections, 
     if (await createRoomAndEnter({ fromCourseId: course.id })) setActiveTab('route');
   }, [createRoomAndEnter, enterRoom, setActiveTab]);
 
-  const handleJoinByInviteCode = useCallback(async (code: string) => {
+  /** Redeems an invite link / code: connects with the inviter and, if it carries a course, opens it. */
+  const handleRedeemInvite = useCallback(async (code: string) => {
     setIsEntering(true);
     try {
-      const data = await apiFetch<{ room: { id: string } }>('/api/sessions/join', { method: 'POST', json: { inviteCode: code } });
+      const data = await apiFetch<InviteAcceptResponse>('/api/invites/accept', { method: 'POST', json: { code } });
       setPendingInviteCode(null);
-      if (await enterRoom(data.room.id)) {
-        setActiveTab('route');
-        showToastMsg('🎉 경로에 참여했어요!');
+      if (data.friend) setConnectionsVersion((v) => v + 1);
+      if (data.roomId) {
+        if (await enterRoom(data.roomId)) {
+          setActiveTab('route');
+          if (data.ownInvite) showToastMsg('내가 만든 초대 링크예요. 함께할 사람에게 보내주세요.');
+          else if (data.joinedRoom) showToastMsg(data.friend ? `🎉 ${data.friend.nickname}님의 코스에 함께해요!` : '🎉 코스에 참여했어요!');
+        }
+      } else if (data.ownInvite) {
+        showToastMsg('내가 만든 초대 링크예요. 함께할 사람에게 보내주세요.');
+      } else if (data.friend) {
+        showToastMsg(`🤝 ${data.friend.nickname}님과 연결됐어요! 앞으로 만드는 코스는 자동으로 함께 편집해요.`);
       }
     } catch (err) {
       setPendingInviteCode(null);
-      showToastMsg((err as Error).message || '유효하지 않은 초대코드입니다.');
+      showToastMsg((err as Error).message || '유효하지 않은 초대코드예요.');
       throw err;
     } finally {
       setIsEntering(false);
     }
   }, [enterRoom, setActiveTab, showToastMsg]);
+
+  /** Host only: share the open course with a connected person, or take someone out of it. */
+  const setMemberEnabled = useCallback(async (userId: string, enabled: boolean) => {
+    const sid = sessionIdRef.current;
+    if (!sid) return;
+    try {
+      const data = await apiFetch<{ members: RoomMember[] }>(`/api/sessions/${sid}/members`, { method: 'PUT', json: { userId, enabled } });
+      setMembers(data.members);
+    } catch (err) {
+      showToastMsg((err as Error).message || '함께할 사람을 바꾸지 못했어요.');
+    }
+  }, [showToastMsg]);
 
   // Invite links and shared courses continue automatically once the user is signed in
   const autoActionRef = useRef(false);
@@ -486,7 +537,7 @@ export function useCourseSession({ setActiveTab, showToastMsg, clearDirections, 
       const code = pendingInviteCode;
       // Started from a microtask so the effect itself doesn't set state synchronously
       Promise.resolve()
-        .then(() => handleJoinByInviteCode(code))
+        .then(() => handleRedeemInvite(code))
         .catch(() => { /* toast shown */ })
         .finally(() => { autoActionRef.current = false; });
     } else if (pendingImport) {
@@ -505,7 +556,7 @@ export function useCourseSession({ setActiveTab, showToastMsg, clearDirections, 
         })
         .finally(() => { autoActionRef.current = false; });
     }
-  }, [currentUser, sessionMode, pendingInviteCode, pendingImport, handleJoinByInviteCode, createRoomAndEnter, setActiveTab, showToastMsg]);
+  }, [currentUser, sessionMode, pendingInviteCode, pendingImport, handleRedeemInvite, createRoomAndEnter, setActiveTab, showToastMsg]);
 
   const handleUpdateCourseName = useCallback(async (displayName: string, description: string) => {
     const sid = sessionIdRef.current;
@@ -559,10 +610,10 @@ export function useCourseSession({ setActiveTab, showToastMsg, clearDirections, 
     courseDescription,
     sessionMode,
     sessionId,
-    inviteCode,
     members,
     onlineUserIds,
     isOwner,
+    connectionsVersion,
     pendingInviteCode,
     pendingImport,
     sessionInvalidated,
@@ -578,7 +629,8 @@ export function useCourseSession({ setActiveTab, showToastMsg, clearDirections, 
     handleCreateNewRoute,
     handleUpdateCourseName,
     handleLoadCourseFromDashboard,
-    handleJoinByInviteCode,
+    handleRedeemInvite,
+    setMemberEnabled,
     handleGoToDashboard,
     handleLogout,
     handleSessionInvalidatedLogout,

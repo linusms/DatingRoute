@@ -6,15 +6,17 @@ import SearchPanel from '@/components/SearchPanel';
 import AIRecommendPanel from '@/components/AIRecommendPanel';
 import CourseBuilder from '@/components/CourseBuilder';
 import NaverMap from '@/components/NaverMap';
-import ReviewPanel from '@/components/ReviewPanel';
+import ReviewPanel, { type ReviewMode } from '@/components/ReviewPanel';
 import DashboardScreen from '@/components/DashboardScreen';
 import AuthScreen from '@/components/AuthScreen';
+import MembersPanel from '@/components/course/MembersPanel';
 import type { Place, TransitMode } from '@/lib/types';
 import { apiFetch } from '@/lib/api';
 import { stripHtml } from '@/lib/utils';
 import { useCourseSession } from '@/hooks/useCourseSession';
 import { useResizable } from '@/hooks/useResizable';
 import { useDirections } from '@/hooks/useDirections';
+import { createInviteLink, useConnections } from '@/hooks/useConnections';
 
 export default function HomePage() {
   const [activeTab, setActiveTab] = useState<'search' | 'ai' | 'route'>('search');
@@ -26,7 +28,8 @@ export default function HomePage() {
   const [activeDayTab, setActiveDayTab] = useState<'all' | number>('all');
 
   const [highlightPlace, setHighlightPlace] = useState<Place | null>(null);
-  const [reviewPlace, setReviewPlace] = useState<string | null>(null);
+  const [reviewPlace, setReviewPlace] = useState<{ name: string; mode: ReviewMode } | null>(null);
+  const showReview = useCallback((name: string, mode: ReviewMode = 'reviews') => setReviewPlace({ name, mode }), []);
   const [toast, setToast] = useState<string | null>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -56,15 +59,18 @@ export default function HomePage() {
     courseDescription,
     sessionMode,
     sessionId,
-    inviteCode,
     members,
     onlineUserIds,
+    isOwner,
     pendingInviteCode,
     pendingImport,
     sessionInvalidated,
     isConnected,
     addPlaces,
   } = session;
+
+  // The host's connections, for switching sharing on/off per person in the open course
+  const { connections: hostConnections } = useConnections(sessionMode === 'builder' && isOwner, session.connectionsVersion);
 
   // ──── Resize Panel State ────
   const appMainRef = useRef<HTMLDivElement>(null);
@@ -158,13 +164,16 @@ export default function HomePage() {
     });
   }, [coursePlaces, courseName, getShareUrl, showToastMsg]);
 
-  const handleCopyInviteCode = useCallback(() => {
-    if (inviteCode) copyText(inviteCode, `초대코드 "${inviteCode}" 복사됨!`);
-  }, [inviteCode, copyText]);
-
-  const handleCopyInviteLink = useCallback(() => {
-    if (inviteCode) copyText(`${window.location.origin}?invite=${inviteCode}`, '초대 링크를 복사했어요! 받은 사람은 닉네임만으로 참여할 수 있어요.');
-  }, [inviteCode, copyText]);
+  /** Host only: a one-time link that connects the invitee and opens this course for them */
+  const handleCopyCourseInvite = useCallback(async () => {
+    if (!sessionId) return;
+    try {
+      const link = await createInviteLink(sessionId);
+      copyText(link.url, '초대 링크를 복사했어요! 받은 사람은 닉네임만으로 바로 참여할 수 있어요. (7일, 1회)');
+    } catch (err) {
+      showToastMsg((err as Error).message || '초대 링크를 만들지 못했어요.');
+    }
+  }, [sessionId, copyText, showToastMsg]);
 
   // ──── Render: Session Invalidated ────
   if (sessionInvalidated) {
@@ -202,7 +211,9 @@ export default function HomePage() {
           onCreateNew={session.handleCreateNewRoute}
           onLoadCourse={session.handleLoadCourseFromDashboard}
           onLogout={session.handleLogout}
-          onJoinByInviteCode={session.handleJoinByInviteCode}
+          onRedeemInvite={session.handleRedeemInvite}
+          connectionsVersion={session.connectionsVersion}
+          onCopy={copyText}
         />
         {isEntering && (
           <div className="entering-overlay" role="status" aria-live="polite">
@@ -223,12 +234,21 @@ export default function HomePage() {
         onGoToDashboard={session.handleGoToDashboard}
         currentUser={currentUser}
         onLogout={session.handleLogout}
-        inviteCode={inviteCode}
         members={members}
         onlineUserIds={onlineUserIds}
         isConnected={isConnected}
-        onCopyInviteLink={handleCopyInviteLink}
-        onCopyInviteCode={handleCopyInviteCode}
+        membersPanel={sessionId ? (
+          <MembersPanel
+            roomId={sessionId}
+            members={members}
+            onlineUserIds={onlineUserIds}
+            currentUserId={currentUser.id}
+            isHost={isOwner}
+            connections={hostConnections}
+            onToggle={session.setMemberEnabled}
+            onCopy={copyText}
+          />
+        ) : null}
       />
 
       <div className="app-main" ref={appMainRef}>
@@ -258,7 +278,7 @@ export default function HomePage() {
               <SearchPanel
                 coursePlaces={coursePlaces}
                 onAddPlace={handleAddPlace}
-                onShowReview={(name) => setReviewPlace(name)}
+                onShowReview={showReview}
                 onHighlightPlace={setHighlightPlace}
               />
             </div>
@@ -269,6 +289,7 @@ export default function HomePage() {
                 onScheduleChange={session.handleScheduleChange}
                 onAddPlace={handleAddPlace}
                 onAddPlaces={addPlaces}
+                onShowReview={showReview}
                 onHighlightPlace={setHighlightPlace}
                 onRadiusCircleChange={setAiRadiusCircle}
                 onOpenDay={(day) => { setActiveTab('route'); setActiveDayTab(day); }}
@@ -290,11 +311,11 @@ export default function HomePage() {
                 onReact={session.setReaction}
                 onReplacePlace={session.replacePlace}
                 onUploadPhoto={session.uploadPhoto}
-                onShowReview={(name) => setReviewPlace(name)}
+                onShowReview={showReview}
                 onHighlightPlace={setHighlightPlace}
                 onShareKakao={handleShareKakao}
                 onCopyShareLink={handleCopyShareLink}
-                onCopyInviteLink={inviteCode ? handleCopyInviteLink : undefined}
+                onCopyInviteLink={isOwner ? handleCopyCourseInvite : undefined}
                 members={members}
                 currentUserId={currentUser.id}
                 schedule={schedule}
@@ -330,7 +351,15 @@ export default function HomePage() {
           searchRadiusCircle={activeTab === 'ai' ? aiRadiusCircle : null}
         />
 
-        {reviewPlace && <ReviewPanel placeName={reviewPlace} onClose={() => setReviewPlace(null)} />}
+        {reviewPlace && (
+          <ReviewPanel
+            key={reviewPlace.name}
+            placeName={reviewPlace.name}
+            mode={reviewPlace.mode}
+            onModeChange={(mode) => setReviewPlace((prev) => (prev ? { ...prev, mode } : prev))}
+            onClose={() => setReviewPlace(null)}
+          />
+        )}
       </div>
 
       {toast && (

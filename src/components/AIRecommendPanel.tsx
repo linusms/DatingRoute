@@ -9,6 +9,9 @@ import type { NewPlaceInput } from '@/hooks/useCourseSession';
 import DateSchedulePicker from './DateSchedulePicker';
 import AICourseDraftPanel from './AICourseDraftPanel';
 
+import type { ReviewMode } from './ReviewPanel';
+import PlaceLinks from './PlaceLinks';
+
 interface AIRecommendPanelProps {
   coursePlaces: CoursePlace[];
   schedule: DateSchedule | null;
@@ -16,6 +19,7 @@ interface AIRecommendPanelProps {
   onAddPlace: (place: Place) => void;
   onAddPlaces: (inputs: NewPlaceInput[], options?: { day?: number; silent?: boolean }) => number;
   onOpenDay: (day: number) => void;
+  onShowReview?: (placeName: string, mode?: ReviewMode) => void;
   onHighlightPlace?: (place: Place | null) => void;
   onRadiusCircleChange?: (circle: { center: { lat: number; lng: number }; radiusKm: number } | null) => void;
   roomId?: string | null;
@@ -58,6 +62,7 @@ export default function AIRecommendPanel({
   onAddPlaces,
   onOpenDay,
   onHighlightPlace,
+  onShowReview,
   onRadiusCircleChange,
   roomId,
 }: AIRecommendPanelProps) {
@@ -834,13 +839,14 @@ export default function AIRecommendPanel({
 
       {/* Search Results Popup Overlay */}
       {showPopup && typeof document !== 'undefined' && createPortal(
-        <div style={{
+        <div className="ai-results-overlay" style={{
           position: 'fixed', top: 0, left: 0, width: '100%', height: '100%',
           background: 'var(--color-bg-tertiary)', zIndex: 9999,
           display: 'flex', alignItems: 'center', justifyContent: 'center'
         }} onClick={() => setShowPopup(false)}>
           <div
             ref={panelRef}
+            className="ai-results-panel"
             onClick={e => e.stopPropagation()}
             style={{
               position: 'relative',
@@ -975,16 +981,12 @@ export default function AIRecommendPanel({
                                     {getSourceIcon((rec as any).sourceType)}
                                   </span>
 
-                                  <a
-                                    href={`https://map.naver.com/v5/search/${encodeURIComponent(rec.name)}`}
-                                    target="_blank" rel="noreferrer"
-                                    onClick={e => e.stopPropagation()}
-                                    style={{
-                                      fontSize: '11px', padding: '2px 6px', borderRadius: '4px',
-                                      background: 'var(--color-bg-secondary)', color: 'var(--color-text-secondary)',
-                                      textDecoration: 'none', border: '1px solid var(--color-border)',
-                                    }}
-                                  >🗺️ 네이버맵</a>
+                                  <PlaceLinks
+                                    className="place-links inline"
+                                    title={rec.name}
+                                    onShowReview={onShowReview ? () => onShowReview(rec.name, 'reviews') : undefined}
+                                    onShowSummary={onShowReview ? () => onShowReview(rec.name, 'summary') : undefined}
+                                  />
                                 </div>
                                 <p className="ai-rec-reason">{rec.reason}</p>
                                 {rec.keywords && rec.keywords.length > 0 && (

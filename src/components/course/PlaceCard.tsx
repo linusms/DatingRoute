@@ -4,8 +4,10 @@ import { useState, type DragEvent } from 'react';
 import { FACILITY_ICONS, FACILITY_LABELS, type CoursePlace, type PlaceUpdatableFields, type RoomMember } from '@/lib/types';
 import { parseCategoryToFacility, stripHtml } from '@/lib/utils';
 import { formatClock, formatWon, isLikelyClosed, stayMinutesOf, type TimelineEntry } from '@/lib/timeline';
-import { kakaoDirectionsToUrl, naverSearchUrl } from '@/lib/links';
+import { kakaoDirectionsToUrl } from '@/lib/links';
 import { usePlaceInfo } from '@/hooks/usePlaceInfo';
+import type { ReviewMode } from '../ReviewPanel';
+import PlaceLinks from '../PlaceLinks';
 import ReactionBar from './ReactionBar';
 import MemoryEditor from './MemoryEditor';
 
@@ -37,8 +39,9 @@ interface PlaceCardProps {
   currentUserId: string;
   members: RoomMember[];
   drag: DragHandlers | null;
+  getDayLabel: (day: number) => string;
   onToggleSelect: () => void;
-  onShowReview: () => void;
+  onShowReview: (mode: ReviewMode) => void;
   onHighlight: (on: boolean) => void;
   onChangeDay: (day: number) => void;
   onToggleDayCopy: (day: number) => void;
@@ -47,6 +50,9 @@ interface PlaceCardProps {
   onReact: (emoji: string | null) => void;
   onOpenSimilar: () => void;
   onUploadPhoto: (file: Blob | null) => Promise<void>;
+  /** Reorder without drag & drop (touch screens). Undefined when that direction isn't possible. */
+  onMoveUp?: () => void;
+  onMoveDown?: () => void;
 }
 
 export default function PlaceCard(props: PlaceCardProps) {
@@ -106,7 +112,7 @@ export default function PlaceCard(props: PlaceCardProps) {
           <div className="cb-place-title-row">
             <button
               className="cb-place-title"
-              onClick={(e) => { e.stopPropagation(); if (!isSelectMode) props.onShowReview(); }}
+              onClick={(e) => { e.stopPropagation(); if (!isSelectMode) props.onShowReview('reviews'); }}
               title="후기 보기"
             >
               {title}
@@ -118,7 +124,7 @@ export default function PlaceCard(props: PlaceCardProps) {
           <div className="cb-badges">
             {isConfirmed && <span className="cb-badge love">💖 모두 찜</span>}
             {place.isHold && <span className="cb-badge hold">보류됨</span>}
-            {isStorageTab && assignedDays.length > 0 && <span className="cb-badge assigned">Day {assignedDays.join(', ')} 포함됨</span>}
+            {isStorageTab && isRouteCreated && assignedDays.length > 0 && <span className="cb-badge assigned">Day {assignedDays.join(', ')} 포함됨</span>}
             {closed && <span className="cb-badge warn">⚠️ 휴무일일 수 있어요</span>}
           </div>
 
@@ -152,44 +158,77 @@ export default function PlaceCard(props: PlaceCardProps) {
 
           {!expanded && place.memo && <div className="cb-place-memo-preview">📝 {place.memo}</div>}
           {!expanded && (place.cost ?? 0) > 0 && <div className="cb-place-memo-preview">💰 {formatWon(place.cost ?? 0)}</div>}
+        </div>
 
-          <div className="cb-place-links" onClick={(e) => e.stopPropagation()}>
-            {place.link && (
-              <a href={place.link} target="_blank" rel="noreferrer" className="cb-link-chip blue">🌐 홈페이지</a>
-            )}
-            <a href={naverSearchUrl(title)} target="_blank" rel="noreferrer" className="cb-link-chip green">🗺️ 네이버맵</a>
+        {!isRouteCreated && !isSelectMode && (
+          <div className="cb-place-side">
+            <button
+              className="cb-remove-btn"
+              onClick={(e) => { e.stopPropagation(); props.onRemove(); }}
+              title={inDay ? '보관함으로 되돌리기' : '완전 삭제'}
+              aria-label={inDay ? '보관함으로 되돌리기' : '완전 삭제'}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+          </div>
+        )}
+      </div>
+
+      <div className={`cb-place-footer ${inDay || (isSelectMode && isStorageTab) ? 'indented' : ''}`}>
+          <PlaceLinks
+            className="cb-place-links"
+            title={title}
+            homepage={place.link}
+            onShowReview={isSelectMode ? undefined : () => props.onShowReview('reviews')}
+            onShowSummary={isSelectMode ? undefined : () => props.onShowReview('summary')}
+          >
             {isToday && inDay && (
               <a href={kakaoDirectionsToUrl(place)} target="_blank" rel="noreferrer" className="cb-link-chip">🧭 여기로 길찾기</a>
             )}
+          </PlaceLinks>
 
-            {isMultiDay && !isRouteCreated && isStorageTab && (
-              <span className="cb-day-chips">
-                {Array.from({ length: dayCount }, (_, i) => i + 1).map((d) => (
-                  <button
-                    key={d}
-                    className={`cb-day-chip ${assignedDays.includes(d) ? 'on' : ''}`}
-                    onClick={() => props.onToggleDayCopy(d)}
-                    title={assignedDays.includes(d) ? `Day ${d}에서 빼기` : `Day ${d}에 추가하기`}
-                  >
-                    {assignedDays.includes(d) ? `✅ D${d}` : `D${d}`}
-                  </button>
-                ))}
-              </span>
-            )}
-            {isMultiDay && !isRouteCreated && !isStorageTab && (
-              <select className="cb-day-select" value={placeDay} onChange={(e) => props.onChangeDay(Number(e.target.value))} aria-label="일차 변경">
-                <option value={0}>보관함</option>
-                {Array.from({ length: dayCount }, (_, i) => i + 1).map((d) => (
-                  <option key={d} value={d}>Day {d}</option>
-                ))}
-              </select>
-            )}
-            {!isSelectMode && (
+          {!isSelectMode && (
+            <div className="cb-place-controls" onClick={(e) => e.stopPropagation()}>
+              {!isRouteCreated && isStorageTab && (
+                // One control for all days: a native picker works well on phones
+                <select
+                  className={`cb-day-picker ${assignedDays.length > 0 ? 'on' : ''}`}
+                  value=""
+                  onChange={(e) => { const d = Number(e.target.value); if (d > 0) props.onToggleDayCopy(d); }}
+                  aria-label="일정에 추가하거나 빼기"
+                >
+                  <option value="" disabled>
+                    {assignedDays.length > 0 ? `📅 Day ${assignedDays.join(', ')}에 담김` : '📅 일정에 추가'}
+                  </option>
+                  {Array.from({ length: dayCount }, (_, i) => i + 1).map((d) => (
+                    <option key={d} value={d}>
+                      {assignedDays.includes(d) ? `✓ ${props.getDayLabel(d)} — 빼기` : `${props.getDayLabel(d)}에 추가`}
+                    </option>
+                  ))}
+                </select>
+              )}
+              {isMultiDay && !isRouteCreated && !isStorageTab && (
+                <select className="cb-day-picker" value={placeDay} onChange={(e) => props.onChangeDay(Number(e.target.value))} aria-label="일차 변경">
+                  <option value={0}>보관함으로</option>
+                  {Array.from({ length: dayCount }, (_, i) => i + 1).map((d) => (
+                    <option key={d} value={d}>{props.getDayLabel(d)}</option>
+                  ))}
+                </select>
+              )}
               <button className={`cb-link-chip ${expanded ? 'active' : ''}`} onClick={() => setExpanded((v) => !v)} aria-expanded={expanded}>
                 {expanded ? '접기 ▲' : '메모·비용·추억 ▼'}
               </button>
-            )}
-          </div>
+              {(props.onMoveUp || props.onMoveDown) && (
+                <span className="cb-move-btns">
+                  <button type="button" onClick={() => props.onMoveUp?.()} disabled={!props.onMoveUp} aria-label="위로 옮기기">▲</button>
+                  <button type="button" onClick={() => props.onMoveDown?.()} disabled={!props.onMoveDown} aria-label="아래로 옮기기">▼</button>
+                </span>
+              )}
+            </div>
+          )}
 
           {currentUserId && !isSelectMode && (
             <ReactionBar reactions={place.reactions || {}} currentUserId={currentUserId} members={members} onReact={props.onReact} />
@@ -235,21 +274,6 @@ export default function PlaceCard(props: PlaceCardProps) {
               {inDay && <MemoryEditor place={place} onUpdate={props.onUpdate} onUploadPhoto={props.onUploadPhoto} />}
             </div>
           )}
-        </div>
-
-        {!isRouteCreated && !isSelectMode && (
-          <button
-            className="cb-remove-btn"
-            onClick={(e) => { e.stopPropagation(); props.onRemove(); }}
-            title={inDay ? '보관함으로 되돌리기' : '완전 삭제'}
-            aria-label={inDay ? '보관함으로 되돌리기' : '완전 삭제'}
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="18" y1="6" x2="6" y2="18" />
-              <line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
-          </button>
-        )}
       </div>
     </div>
   );
