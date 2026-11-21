@@ -13,16 +13,31 @@ export interface Place {
 export interface CoursePlace extends Place {
   order: number;
   memo: string;
+  /** 0 = 보관함, 1..N = Day N */
   day?: number;
   isHold?: boolean;
   reactions?: Record<string, string>; // userId -> emoji
+  addedBy?: string;
+  /** 머무는 시간(분). 비어 있으면 시설 종류별 기본값을 씁니다. */
+  stayMinutes?: number | null;
+  /** 1인 기준이 아닌, 이 장소의 예상 총비용(원) */
+  cost?: number | null;
+  visitedAt?: string | null;
+  rating?: number | null;
+  review?: string;
+  photoUrl?: string | null; // 서버가 발급한 서명 URL (읽기 전용)
 }
+
+/** PATCH로 바꿀 수 있는 장소 필드 */
+export type PlaceUpdatableFields = Partial<Pick<CoursePlace, 'memo' | 'isHold' | 'stayMinutes' | 'cost' | 'visitedAt' | 'rating' | 'review'>>;
 
 export interface DirectionLeg {
   index: number;
   distance: number; // meters
   duration: number; // milliseconds
   name: string;
+  fromId?: string;
+  toId?: string;
 }
 
 export interface DirectionResult {
@@ -34,13 +49,9 @@ export interface DirectionResult {
 
 export type TransitMode = 'driving' | 'walking';
 
-export interface RouteOption {
-  mode: TransitMode;
-  result: DirectionResult;
-}
-
 declare global {
   interface Window {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     Kakao: any;
   }
 }
@@ -58,94 +69,6 @@ export interface Course {
   memberCount?: number;
   createdAt: string;
   updatedAt: string;
-}
-
-export interface YouTubeVideo {
-  id: string;
-  title: string;
-  thumbnail: string;
-  channelTitle: string;
-  publishedAt: string;
-  url: string;
-}
-
-export interface BlogPost {
-  title: string;
-  description: string;
-  link: string;
-  bloggername: string;
-  postdate: string;
-}
-
-export interface ReviewData {
-  videos: YouTubeVideo[];
-  blogs: BlogPost[];
-}
-
-export type PlaceCategory =
-  | 'all'
-  | 'cafe'
-  | 'restaurant'
-  | 'movie'
-  | 'walk'
-  | 'shopping'
-  | 'bar'
-  | 'activity';
-
-export const CATEGORY_LABELS: Record<PlaceCategory, string> = {
-  all: '전체',
-  cafe: '카페',
-  restaurant: '레스토랑',
-  movie: '영화관',
-  walk: '산책',
-  shopping: '쇼핑',
-  bar: '바/펍',
-  activity: '액티비티',
-};
-
-export const CATEGORY_ICONS: Record<PlaceCategory, string> = {
-  all: '🔍',
-  cafe: '☕',
-  restaurant: '🍽️',
-  movie: '🎬',
-  walk: '🌳',
-  shopping: '🛍️',
-  bar: '🍷',
-  activity: '🎯',
-};
-
-/* ---- Date Schedule ---- */
-export interface DateSchedule {
-  startDate: string; // YYYY-MM-DD
-  endDate: string;   // YYYY-MM-DD
-  startTime: string; // HH:mm
-  endTime: string;   // HH:mm
-}
-
-/* ---- Festival/Event from TourAPI ---- */
-export interface FestivalEvent {
-  contentId: string;
-  title: string;
-  address: string;
-  imageUrl: string;
-  startDate: string; // YYYYMMDD
-  endDate: string;   // YYYYMMDD
-  tel: string;
-  mapx: number;
-  mapy: number;
-  category: string;
-}
-
-/* ---- Trend Place from Gemini ---- */
-export interface TrendPlace {
-  title: string;
-  reason: string;
-  category: string;
-  address: string;
-  roadAddress: string;
-  mapx: number;
-  mapy: number;
-  link: string;
 }
 
 /* ---- Facility Type Badge ---- */
@@ -184,7 +107,28 @@ export const FACILITY_LABELS: Record<FacilityType, string> = {
   other: '기타',
 };
 
-/* ---- Review types (existing, used by ReviewPanel) ---- */
+/** 시설 종류별 기본 체류 시간(분) */
+export const DEFAULT_STAY_MINUTES: Record<FacilityType, number> = {
+  restaurant: 90,
+  cafe: 60,
+  culture: 90,
+  park: 60,
+  shopping: 60,
+  bar: 90,
+  entertainment: 90,
+  accommodation: 0,
+  other: 60,
+};
+
+/* ---- Date Schedule ---- */
+export interface DateSchedule {
+  startDate: string; // YYYY-MM-DD
+  endDate: string;   // YYYY-MM-DD
+  startTime: string; // HH:mm
+  endTime: string;   // HH:mm
+}
+
+/* ---- Review types (ReviewPanel) ---- */
 export interface ReviewItem {
   title: string;
   description: string;
@@ -230,19 +174,33 @@ export interface RegionEvent {
   category: string;
 }
 
-export interface AIRecommendResult {
-  recommendations: RecommendedPlace[];
-  events: RegionEvent[];
+/* ---- AI course draft ---- */
+export interface AICourseItem {
+  place: Place;
+  stayMinutes: number;
+  reason: string;
+}
+
+export interface AICourseDraft {
+  title: string;
   summary: string;
+  items: AICourseItem[];
+}
+
+/* ---- Opening hours (TourAPI) ---- */
+export interface PlaceInfo {
+  found: boolean;
+  hours?: string;
+  restDate?: string;
+  source?: string;
 }
 
 /* ---- Users & Collaboration ---- */
-export type SessionMode = 'builder';
-
 export interface User {
   id: string;
   nickname: string;
   createdAt?: string;
+  isGuest?: boolean;
 }
 
 export interface Room {
@@ -262,21 +220,36 @@ export interface RoomMember {
   nickname?: string;
 }
 
-export type SSEEventType =
-  | 'place_added'
-  | 'place_removed'
-  | 'places_reordered'
-  | 'course_saved'
-  | 'course_deleted'
-  | 'member_joined'
-  | 'connected';
+/** Memories view: one visited place with a rating, review or photo */
+export interface Memory {
+  roomId: string;
+  courseName: string;
+  placeId: string;
+  title: string;
+  address: string;
+  day: number;
+  visitedAt: string | null;
+  rating: number | null;
+  review: string;
+  photoUrl: string | null;
+}
 
 /** Supabase Realtime Broadcast event name used on channel `session-<roomId>` */
 export const ROOM_EVENT = 'room_event';
 
-export interface SSEEvent {
-  type: SSEEventType;
-  data: unknown;
-  timestamp: string;
-  sender: string; // nickname of whoever triggered
+/** Types sent inside ROOM_EVENT broadcasts */
+export type RoomEventType = 'places_changed' | 'course_updated' | 'member_joined';
+
+export type PlacesChangeAction = 'added' | 'removed' | 'updated' | 'reordered' | 'reacted';
+
+export interface PlacesChangedData {
+  action: PlacesChangeAction;
+  titles?: string[];
+  count?: number;
+}
+
+export interface CourseUpdatedData {
+  displayName?: string;
+  description?: string;
+  schedule?: DateSchedule | null;
 }

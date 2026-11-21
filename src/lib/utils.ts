@@ -1,4 +1,4 @@
-import { CoursePlace } from '@/lib/types';
+import type { CoursePlace } from '@/lib/types';
 
 /**
  * Format meters to a human-readable distance string.
@@ -74,27 +74,6 @@ export function katechToWgs84(mapx: any, mapy: any): { lng: number; lat: number 
 }
 
 /**
- * Generate a unique ID for places.
- */
-export function generatePlaceId(): string {
-  return `place_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-}
-
-/**
- * Debounce function.
- */
-export function debounce<T extends (...args: unknown[]) => void>(
-  fn: T,
-  delay: number
-): (...args: Parameters<T>) => void {
-  let timer: ReturnType<typeof setTimeout>;
-  return (...args: Parameters<T>) => {
-    clearTimeout(timer);
-    timer = setTimeout(() => fn(...args), delay);
-  };
-}
-
-/**
  * Parse Naver local search category string into a FacilityType.
  * e.g. "한식>갈비" → 'restaurant', "카페,디저트" → 'cafe'
  */
@@ -112,14 +91,6 @@ export function parseCategoryToFacility(category: string): import('@/lib/types')
   if (/(호텔|모텔|숙박|펜션|리조트|게스트)/.test(c)) return 'accommodation';
 
   return 'other';
-}
-
-/**
- * Format a Date to Korean format: YYYY년 M월 D일
- */
-export function formatDateKR(dateStr: string): string {
-  const d = new Date(dateStr);
-  return `${d.getFullYear()}년 ${d.getMonth() + 1}월 ${d.getDate()}일`;
 }
 
 /**
@@ -290,10 +261,12 @@ export function autoDistributePlaces(places: CoursePlace[], dayCount: number): C
   const resultPlaces: CoursePlace[] = [];
   for (let d = 1; d <= dayCount; d++) {
     const currentDayAssigned = assigned.filter(p => p.day === d);
-    const currentDayDistributed = storage.filter(p => assignments[p.id] === d).map(p => ({ 
-      ...p, 
-      day: d, 
-      id: Math.random().toString(36).substring(2, 9) 
+    const currentDayDistributed = storage.filter(p => assignments[p.id] === d).map(p => ({
+      ...p,
+      day: d,
+      id: crypto.randomUUID(),
+      reactions: {},
+      memo: '',
     }));
     
     let combined = [...currentDayAssigned, ...currentDayDistributed];

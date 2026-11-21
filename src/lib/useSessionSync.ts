@@ -1,121 +1,106 @@
 'use client';
 
-import { useEffect, useRef, useCallback, useState } from 'react';
-import { ROOM_EVENT, type CoursePlace, type RoomMember } from './types';
-import { supabase } from './supabaseClient';
+import { useEffect, useRef, useState } from 'react';
 import type { RealtimeChannel } from '@supabase/supabase-js';
+import { ROOM_EVENT, type CourseUpdatedData, type PlacesChangedData, type RoomMember } from './types';
+import { supabase } from './supabaseClient';
+import { CLIENT_ID } from './api';
+
+export interface RemoteEventMeta {
+  sender: string;   // nickname
+  senderId: string;
+}
 
 interface UseSessionSyncOptions {
   sessionId: string | null;
   enabled: boolean;
-  onPlaceAdded?: (place: CoursePlace, allPlaces: CoursePlace[]) => void;
-  onPlaceRemoved?: (placeId: string, allPlaces: CoursePlace[]) => void;
-  onPlacesReordered?: (allPlaces: CoursePlace[]) => void;
-  onCourseSaved?: (course: any) => void;
-  onCourseDeleted?: (courseId: string) => void;
+  /** Presence identity; tracked so other members can see who is online */
+  me: { userId: string; nickname: string } | null;
+  onPlacesChanged?: (data: PlacesChangedData, meta: RemoteEventMeta) => void;
+  onCourseUpdated?: (data: CourseUpdatedData, meta: RemoteEventMeta) => void;
   onMemberJoined?: (member: RoomMember) => void;
-  onConnected?: (data: any) => void;
+  /** Called on every (re)subscribe; use it to refetch anything missed while disconnected */
+  onConnected?: () => void;
 }
 
+interface BroadcastPayload {
+  type?: string;
+  data?: unknown;
+  sender?: string;
+  senderId?: string;
+  clientId?: string | null;
+}
+
+/**
+ * Subscribes to the room's Supabase Realtime channel `session-<roomId>`:
+ * broadcast events from the server (see broadcastRoomEvent in db.ts) and presence for online members.
+ */
 export function useSessionSync({
   sessionId,
   enabled,
-  onPlaceAdded,
-  onPlaceRemoved,
-  onPlacesReordered,
-  onCourseSaved,
-  onCourseDeleted,
+  me,
+  onPlacesChanged,
+  onCourseUpdated,
   onMemberJoined,
   onConnected,
 }: UseSessionSyncOptions) {
-  const channelRef = useRef<RealtimeChannel | null>(null);
   const [isConnected, setIsConnected] = useState(false);
+  const [onlineUserIds, setOnlineUserIds] = useState<string[]>([]);
 
-  const callbacksRef = useRef({
-    onPlaceAdded,
-    onPlaceRemoved,
-    onPlacesReordered,
-    onCourseSaved,
-    onCourseDeleted,
-    onMemberJoined,
-    onConnected,
+  const callbacksRef = useRef({ onPlacesChanged, onCourseUpdated, onMemberJoined, onConnected });
+  useEffect(() => {
+    callbacksRef.current = { onPlacesChanged, onCourseUpdated, onMemberJoined, onConnected };
   });
-  
-  callbacksRef.current = {
-    onPlaceAdded,
-    onPlaceRemoved,
-    onPlacesReordered,
-    onCourseSaved,
-    onCourseDeleted,
-    onMemberJoined,
-    onConnected,
-  };
 
-  const connect = useCallback(() => {
+  const userId = me?.userId ?? null;
+  const nickname = me?.nickname ?? '';
+
+  useEffect(() => {
     if (!sessionId || !enabled) return;
 
-    if (channelRef.current) {
-      supabase.removeChannel(channelRef.current);
-    }
+    const channel: RealtimeChannel = supabase.channel(`session-${sessionId}`, {
+      config: { presence: { key: userId || CLIENT_ID } },
+    });
 
-    const channel = supabase.channel(`session-${sessionId}`);
-    channelRef.current = channel;
-
-    // Server sends room events via Broadcast (see broadcastRoomEvent in db.ts)
     channel
-      .on(
-        'broadcast',
-        { event: ROOM_EVENT },
-        ({ payload }) => {
-          const { type, data } = payload ?? {};
-          if (!type || !data) return;
-          const cbs = callbacksRef.current;
-
-          switch (type) {
-            case 'place_added':
-              cbs.onPlaceAdded?.(data.place, data.places);
-              break;
-            case 'place_removed':
-              cbs.onPlaceRemoved?.(data.id, data.places);
-              break;
-            case 'places_reordered':
-              cbs.onPlacesReordered?.(data.places);
-              break;
-            case 'course_saved':
-              cbs.onCourseSaved?.(data.course);
-              break;
-            case 'course_deleted':
-              cbs.onCourseDeleted?.(data.courseId);
-              break;
-            case 'member_joined':
-              cbs.onMemberJoined?.(data.member);
-              break;
+      .on('broadcast', { event: ROOM_EVENT }, ({ payload }) => {
+        const { type, data, sender, senderId, clientId } = (payload ?? {}) as BroadcastPayload;
+        if (!type || clientId === CLIENT_ID) return;
+        const meta: RemoteEventMeta = { sender: sender || '', senderId: senderId || '' };
+        const cbs = callbacksRef.current;
+        switch (type) {
+          case 'places_changed':
+            cbs.onPlacesChanged?.((data ?? {}) as PlacesChangedData, meta);
+            break;
+          case 'course_updated':
+            cbs.onCourseUpdated?.((data ?? {}) as CourseUpdatedData, meta);
+            break;
+          case 'member_joined': {
+            const member = (data as { member?: RoomMember } | undefined)?.member;
+            if (member) cbs.onMemberJoined?.(member);
+            break;
           }
         }
-      )
+      })
+      .on('presence', { event: 'sync' }, () => {
+        setOnlineUserIds(Object.keys(channel.presenceState()));
+      })
       .subscribe((status) => {
         if (status === 'SUBSCRIBED') {
           setIsConnected(true);
-          callbacksRef.current.onConnected?.(null);
-        } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
+          if (userId) channel.track({ userId, nickname }).catch(() => { /* presence is best-effort */ });
+          callbacksRef.current.onConnected?.();
+        } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
           setIsConnected(false);
         }
       });
-  }, [sessionId, enabled]);
-
-  useEffect(() => {
-    if (sessionId && enabled) {
-      connect();
-    }
 
     return () => {
-      if (channelRef.current) {
-        supabase.removeChannel(channelRef.current);
-        channelRef.current = null;
-      }
+      supabase.removeChannel(channel);
       setIsConnected(false);
+      setOnlineUserIds([]);
     };
-  }, [sessionId, enabled, connect]);
+  }, [sessionId, enabled, userId, nickname]);
 
-  return { isConnected };
+  return { isConnected, onlineUserIds };
 }

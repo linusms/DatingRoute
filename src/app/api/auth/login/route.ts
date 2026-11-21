@@ -1,15 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { loginUser } from '@/lib/db';
-import { setSessionCookie } from '@/lib/session';
+import { getUserAgent, setSessionCookie } from '@/lib/session';
 
 export async function POST(request: NextRequest) {
   try {
     const { nickname, password } = await request.json();
-    if (!nickname || !password) {
+    if (typeof nickname !== 'string' || typeof password !== 'string' || !nickname || !password) {
       return NextResponse.json({ error: '닉네임과 비밀번호를 입력해주세요.' }, { status: 400 });
     }
 
-    const result = await loginUser(nickname, password);
+    const result = await loginUser(nickname, password, getUserAgent(request));
     if (!result) {
       return NextResponse.json({ error: '잘못된 닉네임이거나 비밀번호가 틀렸습니다.' }, { status: 401 });
     }

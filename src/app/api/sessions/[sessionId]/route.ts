@@ -17,15 +17,13 @@ export async function GET(
       return NextResponse.json({ error: '방을 찾을 수 없습니다.' }, { status: 404 });
     }
 
-    const livePlaces = await getLivePlaces(sessionId, auth.user.id);
-    const courseDetails = await getLiveCourseDetails(sessionId);
+    const [coursePlaces, courseDetails] = await Promise.all([
+      getLivePlaces(sessionId),
+      getLiveCourseDetails(sessionId),
+    ]);
 
-    return NextResponse.json({
-      room,
-      coursePlaces: livePlaces,
-      courseDetails
-    });
-  } catch (error: any) {
+    return NextResponse.json({ room, coursePlaces, courseDetails });
+  } catch (error) {
     console.error('Room fetch error:', error);
     return NextResponse.json({ error: '서버 에러' }, { status: 500 });
   }

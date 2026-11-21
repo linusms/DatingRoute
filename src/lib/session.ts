@@ -1,10 +1,10 @@
 import 'server-only';
 import { NextRequest, NextResponse } from 'next/server';
-import { getUserBySessionToken, isRoomMember } from './db';
-import { SESSION_COOKIE } from './sessionCookie';
+import { getUserBySessionToken, isRoomMember, SESSION_MAX_AGE_DAYS, type EventSender } from './db';
+import { SESSION_COOKIE, CLIENT_ID_HEADER } from './sessionCookie';
 import type { User } from './types';
 
-const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 30; // 30일
+const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * SESSION_MAX_AGE_DAYS;
 
 export function setSessionCookie(response: NextResponse, token: string) {
   response.cookies.set(SESSION_COOKIE, token, {
@@ -20,8 +20,16 @@ export function clearSessionCookie(response: NextResponse) {
   response.cookies.delete(SESSION_COOKIE);
 }
 
+export function getSessionToken(request: NextRequest): string | null {
+  return request.cookies.get(SESSION_COOKIE)?.value || null;
+}
+
+export function getUserAgent(request: NextRequest): string {
+  return request.headers.get('user-agent') || '';
+}
+
 export async function getSessionUser(request: NextRequest): Promise<User | null> {
-  const token = request.cookies.get(SESSION_COOKIE)?.value;
+  const token = getSessionToken(request);
   if (!token) return null;
   return getUserBySessionToken(token);
 }
@@ -55,4 +63,14 @@ export async function requireSelf(request: NextRequest, userId: string): Promise
     return { ok: false, response: NextResponse.json({ error: '권한이 없습니다.' }, { status: 403 }) };
   }
   return auth;
+}
+
+/** Who triggered a room event; clientId lets the sending tab skip its own echo. */
+export function eventSender(request: NextRequest, user: User): EventSender {
+  const clientId = request.headers.get(CLIENT_ID_HEADER);
+  return {
+    userId: user.id,
+    nickname: user.nickname,
+    clientId: clientId && clientId.length <= 64 ? clientId : null,
+  };
 }

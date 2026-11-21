@@ -1,12 +1,15 @@
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
+import './features.css';
 import Script from 'next/script';
 
 export const metadata: Metadata = {
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || 'https://datingroute.vercel.app'),
   title: 'DatingRoute - 데이트 코스 플래너',
   description:
     '나만의 데이트 코스를 계획하고 경로를 확인하세요. 장소 검색, 코스 생성, 경로 안내, YouTube/블로그 후기까지 한 곳에서.',
   keywords: ['데이트', '코스', '플래너', '맛집', '카페', '서울', '데이트코스'],
+  appleWebApp: { capable: true, title: 'DatingRoute', statusBarStyle: 'default' },
 };
 
 export const viewport: Viewport = {
@@ -15,6 +18,7 @@ export const viewport: Viewport = {
   maximumScale: 1,
   userScalable: false,
   viewportFit: 'cover',
+  themeColor: '#D96C5C',
 };
 
 export default function RootLayout({

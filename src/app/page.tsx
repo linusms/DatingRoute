@@ -1,31 +1,17 @@
 'use client';
 
-import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import Header from '@/components/Header';
 import SearchPanel from '@/components/SearchPanel';
 import AIRecommendPanel from '@/components/AIRecommendPanel';
 import CourseBuilder from '@/components/CourseBuilder';
 import NaverMap from '@/components/NaverMap';
 import ReviewPanel from '@/components/ReviewPanel';
-import CourseManager from '@/components/CourseManager';
 import DashboardScreen from '@/components/DashboardScreen';
 import AuthScreen from '@/components/AuthScreen';
-import {
-  User,
-  Place,
-  CoursePlace,
-  Course,
-  DirectionResult,
-  TransitMode,
-  SessionMode,
-  RoomMember,
-  DateSchedule,
-} from '@/lib/types';
-import {
-  encodeCourseToUrl,
-  decodeCourseFromUrl,
-} from '@/lib/courseStorage';
-import { katechToWgs84, getStraightLineDistance, calculateFallbackDirections, stripHtml } from '@/lib/utils';
+import type { Place, TransitMode } from '@/lib/types';
+import { apiFetch } from '@/lib/api';
+import { stripHtml } from '@/lib/utils';
 import { useCourseSession } from '@/hooks/useCourseSession';
 import { useResizable } from '@/hooks/useResizable';
 import { useDirections } from '@/hooks/useDirections';
@@ -33,392 +19,216 @@ import { useDirections } from '@/hooks/useDirections';
 export default function HomePage() {
   const [activeTab, setActiveTab] = useState<'search' | 'ai' | 'route'>('search');
 
-  // Directions state
-  const { directions, setDirections, routePath, setRoutePath, fetchDirections, clearDirections } = useDirections();
+  const { directions, routePath, fetchDirections, clearDirections } = useDirections();
 
-  // Route features state
   const [isRouteCreated, setIsRouteCreated] = useState(false);
   const [transitMode, setTransitMode] = useState<TransitMode>('driving');
   const [activeDayTab, setActiveDayTab] = useState<'all' | number>('all');
 
   const [highlightPlace, setHighlightPlace] = useState<Place | null>(null);
   const [reviewPlace, setReviewPlace] = useState<string | null>(null);
-  const [showSaveModal, setShowSaveModal] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
-  
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const showToastMsg = useCallback((msg: string) => {
     setToast(msg);
-    setTimeout(() => setToast(null), 2500);
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = setTimeout(() => setToast(null), 2800);
   }, []);
 
   const [showStoragePins, setShowStoragePins] = useState(false);
   const [aiRadiusCircle, setAiRadiusCircle] = useState<{ center: { lat: number; lng: number }; radiusKm: number } | null>(null);
 
-  const {
-    currentUser,
-    setCurrentUser,
-    isInitializing,
-    coursePlaces,
-    setCoursePlaces,
-    schedule,
-    setSchedule,
-    courseName,
-    setCourseName,
-    courseDescription,
-    setCourseDescription,
-    sessionMode,
-    sessionId,
-    inviteCode,
-    nickname,
-    members,
-    isOwner,
-    pendingInviteCode,
-    setPendingInviteCode,
-    sessionInvalidated,
-    isConnected,
-    skipNextSSERef,
-    handleCreateNewRoute,
-    handleUpdateCourseName,
-    handleLoadCourseFromDashboard,
-    handleJoinByInviteCode,
-    handleCreateInviteCode,
-    handleGoToDashboard,
-    handleLogout,
-    handleSessionInvalidatedLogout,
-  } = useCourseSession({
+  const session = useCourseSession({
     setActiveTab,
     showToastMsg,
     clearDirections,
     setIsRouteCreated,
   });
+  const {
+    currentUser,
+    setCurrentUser,
+    isInitializing,
+    isEntering,
+    coursePlaces,
+    schedule,
+    courseName,
+    courseDescription,
+    sessionMode,
+    sessionId,
+    inviteCode,
+    members,
+    onlineUserIds,
+    pendingInviteCode,
+    pendingImport,
+    sessionInvalidated,
+    isConnected,
+    addPlaces,
+  } = session;
 
   // ──── Resize Panel State ────
   const appMainRef = useRef<HTMLDivElement>(null);
   const isMobile = typeof window !== 'undefined' && window.innerWidth <= 768;
 
-  const {
-    size: hookSidebarSize,
-    handleResizeStart,
-    isResizing
-  } = useResizable({
+  const { size: hookSidebarSize, handleResizeStart, isResizing } = useResizable({
     mode: 'percentage',
     direction: isMobile ? 'vertical' : 'horizontal',
-    initialWidth: 50, // These will be ignored if sidebarSize is overridden, but required by hook initial state
+    initialWidth: 50,
     initialHeight: 50,
     minWidth: 15,
     maxWidth: 70,
     minHeight: 20,
     maxHeight: 80,
-    containerRef: appMainRef
+    containerRef: appMainRef,
   });
 
-  const [sidebarSize, setSidebarSize] = useState<number | null>(null);
-
-  useEffect(() => {
-    // Synchronize hook state with local state (sidebarSize uses width for desktop, height for mobile)
-    if (isMobile) {
-      if (hookSidebarSize.height !== 50) setSidebarSize(hookSidebarSize.height);
-    } else {
-      if (hookSidebarSize.width !== 50) setSidebarSize(hookSidebarSize.width);
-    }
-  }, [hookSidebarSize.width, hookSidebarSize.height, isMobile]);
-
+  // Until the user drags the handle (hook still at its 50% default), keep the CSS layout
+  const draggedSize = isMobile ? hookSidebarSize.height : hookSidebarSize.width;
+  const sidebarSize = draggedSize !== 50 ? draggedSize : null;
 
   // Initialize Kakao SDK
   useEffect(() => {
-    if (typeof window !== 'undefined' && window.Kakao) {
-      if (!window.Kakao.isInitialized()) {
-        const key = process.env.NEXT_PUBLIC_KAKAO_JS_KEY;
-        if (key && key !== 'your_kakao_js_key') {
-          window.Kakao.init(key);
-        }
-      }
-    }
+    const init = () => {
+      if (!window.Kakao || window.Kakao.isInitialized()) return;
+      const key = process.env.NEXT_PUBLIC_KAKAO_JS_KEY;
+      if (key && key !== 'your_kakao_js_key') window.Kakao.init(key);
+    };
+    init();
+    const timer = setTimeout(init, 1500); // the SDK script loads after hydration
+    return () => clearTimeout(timer);
   }, []);
 
-
-
-  const handleClearRoute = useCallback(() => {
-    clearDirections();
-    setSchedule(null);
-  }, [clearDirections, setSchedule]);
-
   // ──── Directions ────
-
   const handleCreateRoute = useCallback(() => {
-    if (coursePlaces.length < 2) {
-      showToastMsg('경로를 만들려면 장소가 2개 이상 필요합니다.');
+    if (coursePlaces.filter((p) => (p.day ?? 0) > 0).length < 2) {
+      showToastMsg('경로를 만들려면 날짜에 담긴 장소가 2개 이상 필요합니다.');
       return;
     }
     fetchDirections(coursePlaces);
     setIsRouteCreated(true);
   }, [coursePlaces, fetchDirections, showToastMsg]);
 
-  // ──── Place Actions (with server sync) ────
-  const handleAddPlace = useCallback(
-    async (place: Place & { day?: number }) => {
-      const cleanTitle = stripHtml(place.title);
-      const targetDay = place.day ?? 0;
-
-      if (coursePlaces.some((p) => stripHtml(p.title) === cleanTitle && (p.day ?? 0) === targetDay)) {
-        showToastMsg('이미 코스에 추가된 장소입니다');
-        return;
-      }
-
-      const newPlace: CoursePlace = {
-        ...place,
-        id: Math.random().toString(36).substring(2, 9),
-        order: coursePlaces.length,
-        memo: '',
-        day: targetDay,
-      };
-
-      setCoursePlaces((prev) => [...prev, newPlace]);
-
-
-
-      setIsRouteCreated(false);
-      showToastMsg(`"${cleanTitle}" 추가됨`);
-
-      // Sync to server
-      if (sessionId && newPlace) {
-        skipNextSSERef.current = true;
-        try {
-          const res = await fetch(`/api/sessions/${sessionId}/places`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ place: newPlace }),
-          });
-          if (res.ok) {
-            const data = await res.json();
-            if (data.place && data.place.id) {
-              setCoursePlaces((prev) =>
-                prev.map((p) => (p.id === newPlace!.id ? { ...p, id: data.place.id } : p))
-              );
-            }
-          }
-        } catch { /* ignore */ }
-      }
-    },
-    [coursePlaces, showToastMsg, sessionId]
-  );
-
-  const handleRemovePlace = useCallback(
-    async (id: string) => {
-      const updated = coursePlaces.filter((p) => p.id !== id).map((p, i) => ({ ...p, order: i }));
-      setCoursePlaces(updated);
-      setIsRouteCreated(false);
-
-      // Sync to server
-      if (sessionId) {
-        skipNextSSERef.current = true;
-        try {
-          await fetch(`/api/sessions/${sessionId}/places?id=${encodeURIComponent(id)}`, {
-            method: 'DELETE',
-          });
-        } catch { /* ignore */ }
-      }
-    },
-    [coursePlaces, sessionId]
-  );
-
-  const handleReorderPlaces = useCallback(
-    async (newPlaces: CoursePlace[]) => {
-      setCoursePlaces(newPlaces);
-      if (isRouteCreated) {
-        setIsRouteCreated(false);
-        setRoutePath(null);
-        setDirections(null);
-      }
-
-      // Sync to server
-      if (sessionId) {
-        skipNextSSERef.current = true;
-        try {
-          await fetch(`/api/sessions/${sessionId}/places`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              action: 'set',
-              places: newPlaces,
-            }),
-          });
-        } catch { /* ignore */ }
-      }
-    },
-    [isRouteCreated, sessionId]
-  );
-
-  // ──── Course Save ────
-  const handleSaveCourse = useCallback(
-    async (name: string, description: string) => {
-      if (sessionId) {
-        try {
-          const res = await fetch(`/api/sessions/${sessionId}/courses`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name, description, schedule }),
-          });
-          if (!res.ok) {
-            throw new Error('Save failed');
-          }
-          showToastMsg(`"${name}" 저장되었습니다!`);
-        } catch {
-          showToastMsg('경로 저장에 실패했습니다. (저장되지 않음)');
-        }
-      }
-    },
-    [showToastMsg, sessionId, schedule]
-  );
+  const handleAddPlace = useCallback((place: Place & { day?: number }) => {
+    addPlaces([place]);
+  }, [addPlaces]);
 
   // ──── Share ────
-  const handleShareCourseUrl = useCallback(() => {
-    if (coursePlaces.length === 0) return;
-
-    if (inviteCode) {
-      const url = `${window.location.origin}?invite=${inviteCode}`;
-      navigator.clipboard.writeText(url).then(() => {
-        showToastMsg('초대 링크가 클립보드에 복사되었습니다!');
-      });
-    } else {
-      const course: Course = {
-        id: '', name: '공유 코스', description: '', places: coursePlaces, createdAt: '', updatedAt: '',
-      };
-      const url = encodeCourseToUrl(course);
-      navigator.clipboard.writeText(url).then(() => {
-        showToastMsg('공유 링크가 클립보드에 복사되었습니다!');
-      });
+  const getShareUrl = useCallback(async (): Promise<string | null> => {
+    if (!sessionId) return null;
+    try {
+      const data = await apiFetch<{ path: string }>(`/api/sessions/${sessionId}/share`, { method: 'POST' });
+      return `${window.location.origin}${data.path}`;
+    } catch (err) {
+      showToastMsg((err as Error).message || '공유 링크를 만들지 못했어요.');
+      return null;
     }
-  }, [coursePlaces, showToastMsg, inviteCode]);
+  }, [sessionId, showToastMsg]);
 
-  const handleShareKakao = useCallback(() => {
-    if (coursePlaces.length === 0) return;
+  const copyText = useCallback(async (text: string, message: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      showToastMsg(message);
+    } catch {
+      window.prompt('아래 링크를 복사하세요', text);
+    }
+  }, [showToastMsg]);
+
+  const handleCopyShareLink = useCallback(async () => {
+    const url = await getShareUrl();
+    if (url) copyText(url, '읽기 전용 공유 링크를 복사했어요!');
+  }, [getShareUrl, copyText]);
+
+  const handleShareKakao = useCallback(async () => {
     if (!window.Kakao || !window.Kakao.isInitialized()) {
       showToastMsg('카카오톡 공유가 설정되지 않았습니다. API 키를 확인해주세요.');
       return;
     }
-
-    let url: string;
-    if (inviteCode) {
-      url = `${window.location.origin}?invite=${inviteCode}`;
-    } else {
-      const course: Course = {
-        id: '', name: '우리의 데이트 코스 💖', description: '', places: coursePlaces, createdAt: '', updatedAt: '',
-      };
-      url = encodeCourseToUrl(course);
-    }
-
+    const url = await getShareUrl();
+    if (!url) return;
+    const dayPlaces = coursePlaces.filter((p) => (p.day ?? 0) > 0);
     window.Kakao.Share.sendDefault({
       objectType: 'feed',
       content: {
-        title: 'DatingRoute - 데이트 코스 제안',
-        description: coursePlaces.map((p) => p.title.replace(/<[^>]+>/g, '')).join(' ➔ '),
-        imageUrl: 'https://cdn-icons-png.flaticon.com/512/3238/3238002.png',
+        title: courseName || 'DatingRoute 데이트 코스',
+        description: (dayPlaces.length > 0 ? dayPlaces : coursePlaces).map((p) => stripHtml(p.title)).join(' → ').slice(0, 200),
+        imageUrl: `${url}/opengraph-image`,
         link: { mobileWebUrl: url, webUrl: url },
       },
-      buttons: [{ title: '코스 확인하기', link: { mobileWebUrl: url, webUrl: url } }],
+      buttons: [{ title: '코스 보기', link: { mobileWebUrl: url, webUrl: url } }],
     });
-  }, [coursePlaces, showToastMsg, inviteCode]);
+  }, [coursePlaces, courseName, getShareUrl, showToastMsg]);
 
   const handleCopyInviteCode = useCallback(() => {
-    if (inviteCode) {
-      navigator.clipboard.writeText(inviteCode).then(() => {
-        showToastMsg(`초대코드 "${inviteCode}" 복사됨!`);
-      });
-    }
-  }, [inviteCode, showToastMsg]);
+    if (inviteCode) copyText(inviteCode, `초대코드 "${inviteCode}" 복사됨!`);
+  }, [inviteCode, copyText]);
 
   const handleCopyInviteLink = useCallback(() => {
-    if (inviteCode) {
-      const url = `${window.location.origin}?invite=${inviteCode}`;
-      navigator.clipboard.writeText(url).then(() => {
-        showToastMsg('초대 링크가 복사되었습니다!');
-      });
-    }
-  }, [inviteCode, showToastMsg]);
+    if (inviteCode) copyText(`${window.location.origin}?invite=${inviteCode}`, '초대 링크를 복사했어요! 받은 사람은 닉네임만으로 참여할 수 있어요.');
+  }, [inviteCode, copyText]);
 
   // ──── Render: Session Invalidated ────
   if (sessionInvalidated) {
     return (
-      <div style={{
-        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-        height: '100dvh', width: '100%', background: 'var(--color-bg-primary)',
-        position: 'fixed', top: 0, left: 0, zIndex: 9999, padding: '24px', boxSizing: 'border-box'
-      }}>
-        <div style={{
-          background: 'var(--color-bg-card)', padding: '32px', borderRadius: '12px',
-          width: '100%', maxWidth: '360px', textAlign: 'center',
-          border: '1px solid var(--color-border)', boxShadow: '0 4px 12px rgba(0, 0, 0, 0.05)'
-        }}>
-          <h2 style={{
-            fontSize: '18px', color: 'var(--color-text-primary)', fontWeight: '700',
-            margin: '0 0 12px 0', letterSpacing: '-0.3px'
-          }}>
-            세션이 종료됨
-          </h2>
-          <p style={{
-            fontSize: '14px', color: 'var(--color-text-secondary)',
-            lineHeight: 1.6, margin: '0 0 24px 0', wordBreak: 'keep-all'
-          }}>
-            같은 계정으로 다른 기기에서 로그인했거나 로그아웃해서<br />현재 세션이 종료되었습니다.
-          </p>
-          <button
-            onClick={handleSessionInvalidatedLogout}
-            style={{
-              padding: '12px 16px', borderRadius: '8px', border: 'none',
-              background: 'var(--color-text-primary)', color: 'var(--color-bg-primary)', fontSize: '14px',
-              fontWeight: '600', cursor: 'pointer', width: '100%', transition: 'background 0.2s'
-            }}
-            onMouseOver={(e) => e.currentTarget.style.background = '#000'}
-            onMouseOut={(e) => e.currentTarget.style.background = 'var(--color-text-primary)'}
-          >
-            확인
-          </button>
+      <div className="fullscreen-center">
+        <div className="notice-card">
+          <h2>로그인이 필요해요</h2>
+          <p>로그아웃했거나 로그인한 지 오래되어 세션이 끝났습니다.<br />다시 로그인해주세요.</p>
+          <button className="notice-card-btn" onClick={session.handleSessionInvalidatedLogout}>확인</button>
         </div>
       </div>
     );
   }
 
-  // ──── Render: Restoring session from cookie ────
   if (isInitializing) {
     return <div style={{ height: '100dvh', background: 'var(--color-bg-primary)' }} />;
   }
 
-  // ──── Render: Auth Screen ────
   if (!currentUser) {
-    return <AuthScreen onLogin={setCurrentUser} />;
-  }
-
-  // ──── Render: Dashboard (no session mode selected) ────
-  if (sessionMode === null) {
     return (
-      <DashboardScreen
-        currentUser={currentUser}
-        onCreateNew={handleCreateNewRoute}
-        onLoadCourse={handleLoadCourseFromDashboard}
-        onLogout={handleLogout}
-        pendingInviteCode={pendingInviteCode}
-        onJoinByInviteCode={handleJoinByInviteCode}
+      <AuthScreen
+        onLogin={setCurrentUser}
+        inviteCode={pendingInviteCode}
+        importName={pendingImport ? (pendingImport.kind === 'legacy' ? pendingImport.name : '공유받은 코스') : null}
       />
     );
   }
 
-  // ──── Render: Main App (Builder) ────
+  if (sessionMode === null) {
+    return (
+      <>
+        <DashboardScreen
+          currentUser={currentUser}
+          onUserChange={setCurrentUser}
+          onCreateNew={session.handleCreateNewRoute}
+          onLoadCourse={session.handleLoadCourseFromDashboard}
+          onLogout={session.handleLogout}
+          onJoinByInviteCode={session.handleJoinByInviteCode}
+        />
+        {isEntering && (
+          <div className="entering-overlay" role="status" aria-live="polite">
+            <div className="dashboard-loading-spinner" />
+            <span>경로를 여는 중...</span>
+          </div>
+        )}
+        {toast && <div className="toast toast-success"><span>✅</span> {toast}</div>}
+      </>
+    );
+  }
+
+  const dayPlaceCount = coursePlaces.filter((p) => (p.day || 0) > 0).length;
+
   return (
     <div className="app-layout">
       <Header
-        onGoToDashboard={handleGoToDashboard}
-        courseCount={coursePlaces.length}
+        onGoToDashboard={session.handleGoToDashboard}
         currentUser={currentUser}
-        onLogout={handleLogout}
+        onLogout={session.handleLogout}
         inviteCode={inviteCode}
-        nickname={nickname}
         members={members}
+        onlineUserIds={onlineUserIds}
         isConnected={isConnected}
-        courseName={courseName}
-        onUpdateCourseName={(name) => handleUpdateCourseName(name, courseDescription)}
-        onCopyInviteCode={handleCopyInviteCode}
         onCopyInviteLink={handleCopyInviteLink}
+        onCopyInviteCode={handleCopyInviteCode}
       />
 
       <div className="app-main" ref={appMainRef}>
@@ -431,29 +241,15 @@ export default function HomePage() {
           ) : undefined}
         >
           <div className="sidebar-tabs">
-            <button
-              className={`sidebar-tab ${activeTab === 'search' ? 'active' : ''}`}
-              onClick={() => setActiveTab('search')}
-            >
+            <button className={`sidebar-tab ${activeTab === 'search' ? 'active' : ''}`} onClick={() => setActiveTab('search')}>
               🔍 장소검색
             </button>
-            <button
-              className={`sidebar-tab ${activeTab === 'ai' ? 'active' : ''}`}
-              onClick={() => setActiveTab('ai')}
-            >
+            <button className={`sidebar-tab ${activeTab === 'ai' ? 'active' : ''}`} onClick={() => setActiveTab('ai')}>
               ✨ AI 추천
             </button>
-            <button
-              className={`sidebar-tab ${activeTab === 'route' ? 'active' : ''}`}
-              onClick={() => setActiveTab('route')}
-            >
-              🗺️ 경로 생성
-              {(() => {
-                const totalCount = coursePlaces.filter(p => (p.day || 0) > 0).length;
-                return totalCount > 0 ? (
-                  <span className="sidebar-tab-badge">{totalCount}</span>
-                ) : null;
-              })()}
+            <button className={`sidebar-tab ${activeTab === 'route' ? 'active' : ''}`} onClick={() => setActiveTab('route')}>
+              🗺️ 코스
+              {dayPlaceCount > 0 && <span className="sidebar-tab-badge">{dayPlaceCount}</span>}
             </button>
           </div>
 
@@ -470,10 +266,12 @@ export default function HomePage() {
               <AIRecommendPanel
                 coursePlaces={coursePlaces}
                 schedule={schedule}
-                onScheduleChange={setSchedule}
+                onScheduleChange={session.handleScheduleChange}
                 onAddPlace={handleAddPlace}
+                onAddPlaces={addPlaces}
                 onHighlightPlace={setHighlightPlace}
                 onRadiusCircleChange={setAiRadiusCircle}
+                onOpenDay={(day) => { setActiveTab('route'); setActiveDayTab(day); }}
                 roomId={sessionId}
               />
             </div>
@@ -481,29 +279,29 @@ export default function HomePage() {
               <CourseBuilder
                 places={coursePlaces}
                 directions={directions}
-                onRemovePlace={handleRemovePlace}
-                onAddPlace={handleAddPlace}
-                onReorderPlaces={handleReorderPlaces}
-                onShowReview={(name) => setReviewPlace(name)}
-                onHighlightPlace={setHighlightPlace}
-                onCreateRoute={handleCreateRoute}
                 isRouteCreated={isRouteCreated}
                 transitMode={transitMode}
                 onChangeTransitMode={setTransitMode}
-                onShareCourseUrl={handleShareCourseUrl}
+                onCreateRoute={handleCreateRoute}
+                onApplyPlaces={session.applyPlaces}
+                onAddPlaces={addPlaces}
+                onRemovePlace={session.removePlace}
+                onUpdatePlace={session.updatePlace}
+                onReact={session.setReaction}
+                onReplacePlace={session.replacePlace}
+                onUploadPhoto={session.uploadPhoto}
+                onShowReview={(name) => setReviewPlace(name)}
+                onHighlightPlace={setHighlightPlace}
                 onShareKakao={handleShareKakao}
-                inviteCode={inviteCode}
-                onCreateInviteCode={handleCreateInviteCode}
-                onJoinByInviteCode={handleJoinByInviteCode}
-                onCopyInviteCode={handleCopyInviteCode}
-                onCopyInviteLink={handleCopyInviteLink}
+                onCopyShareLink={handleCopyShareLink}
+                onCopyInviteLink={inviteCode ? handleCopyInviteLink : undefined}
                 members={members}
-                currentUserId={currentUser?.id}
+                currentUserId={currentUser.id}
                 schedule={schedule}
-                onScheduleChange={setSchedule}
+                onScheduleChange={session.handleScheduleChange}
                 courseName={courseName}
                 courseDescription={courseDescription}
-                onUpdateCourseName={handleUpdateCourseName}
+                onUpdateCourseName={session.handleUpdateCourseName}
                 activeDayTab={activeDayTab}
                 setActiveDayTab={setActiveDayTab}
                 showStoragePins={showStoragePins}
@@ -514,7 +312,6 @@ export default function HomePage() {
           </div>
         </aside>
 
-        {/* Resize Handle */}
         <div
           className={`resize-handle ${isResizing ? 'dragging' : ''}`}
           onMouseDown={handleResizeStart}
@@ -526,28 +323,15 @@ export default function HomePage() {
         <NaverMap
           coursePlaces={coursePlaces}
           highlightPlace={highlightPlace}
-          routePath={isRouteCreated ? (routePath as any) : null}
+          routePath={isRouteCreated ? routePath : null}
           transitMode={transitMode}
           activeDayTab={activeDayTab}
           showStoragePins={showStoragePins}
           searchRadiusCircle={activeTab === 'ai' ? aiRadiusCircle : null}
         />
 
-        {reviewPlace && (
-          <ReviewPanel
-            placeName={reviewPlace}
-            onClose={() => setReviewPlace(null)}
-          />
-        )}
+        {reviewPlace && <ReviewPanel placeName={reviewPlace} onClose={() => setReviewPlace(null)} />}
       </div>
-
-      {showSaveModal && (
-        <CourseManager
-          onClose={() => setShowSaveModal(false)}
-          onSaveCourse={handleSaveCourse}
-          hasPlaces={coursePlaces.length > 0}
-        />
-      )}
 
       {toast && (
         <div className="toast toast-success">
