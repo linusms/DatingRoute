@@ -40,8 +40,11 @@ export async function POST(request: NextRequest) {
 데이터:
 ${textContent}`;
 
+    // A short summary needs no reasoning: the light model with thinking off is ~20x cheaper and ~8x faster
     const text = await generateText(prompt, {
       systemInstruction: '너는 데이트 코스를 계획하는 커플들에게 맛집이나 명소의 핵심 정보를 친절하고 직관적으로 요약해 주는 데이트 플래너야.',
+      tier: 'light',
+      maxOutputTokens: 600,
     });
     if (!text) {
       return Response.json({ summary: '지금은 요약을 만들 수 없습니다. 잠시 후 다시 시도해주세요.' }, { status: 503 });

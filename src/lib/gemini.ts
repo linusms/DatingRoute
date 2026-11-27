@@ -1,9 +1,16 @@
 import 'server-only';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { GoogleGenerativeAI, type GenerationConfig } from '@google/generative-ai';
 
 /** Primary model; override with GEMINI_MODEL. Falls back to GEMINI_FALLBACK_MODEL on any error. */
 export const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-3.5-flash';
-export const GEMINI_FALLBACK_MODEL = process.env.GEMINI_FALLBACK_MODEL || 'gemini-2.5-flash';
+/**
+ * Cheap, fast model for short summaries (tier: 'light'); override with GEMINI_LIGHT_MODEL.
+ * Measured on a review summary: gemini-3.5-flash spent ~740 thinking tokens and 6.6s,
+ * gemini-3.5-flash-lite with minimal thinking 0 thinking tokens and 0.8s.
+ */
+export const GEMINI_LIGHT_MODEL = process.env.GEMINI_LIGHT_MODEL || 'gemini-3.5-flash-lite';
+// gemini-2.5-flash is deprecated (Google routes it to 3.5 Flash-Lite from 2026-12-01)
+export const GEMINI_FALLBACK_MODEL = process.env.GEMINI_FALLBACK_MODEL || 'gemini-3.5-flash-lite';
 
 function getApiKey(): string | null {
   const key = process.env.GEMINI_API_KEY;
@@ -17,6 +24,20 @@ export function hasGemini(): boolean {
 interface GenerateOptions {
   json?: boolean;
   systemInstruction?: string;
+  /** 'light': the cheap model with thinking (near) off, for short summaries that need no reasoning */
+  tier?: 'default' | 'light';
+  /** Upper bound on output tokens (thinking tokens count toward it), to cap the cost of one call */
+  maxOutputTokens?: number;
+}
+
+/**
+ * Thinking switched (near) off for Flash models: Gemini 3+ take a level, 2.5 a token budget.
+ * Other models (e.g. Pro, which can't go this low) keep their default thinking.
+ */
+function minimalThinking(model: string): Record<string, unknown> | null {
+  if (/^gemini-2\.5-flash/.test(model)) return { thinkingBudget: 0 };
+  if (/^gemini-(?:[3-9]|\d{2,})[\d.]*-flash/.test(model)) return { thinkingLevel: 'minimal' };
+  return null;
 }
 
 /** Generates text with the primary model, retrying once on the fallback model. Returns null when unavailable. */
@@ -24,17 +45,26 @@ export async function generateText(prompt: string, options: GenerateOptions = {}
   const key = getApiKey();
   if (!key) return null;
   const genAI = new GoogleGenerativeAI(key);
-  const models = GEMINI_FALLBACK_MODEL && GEMINI_FALLBACK_MODEL !== GEMINI_MODEL
-    ? [GEMINI_MODEL, GEMINI_FALLBACK_MODEL]
-    : [GEMINI_MODEL];
+  const light = options.tier === 'light';
+  const primary = light ? GEMINI_LIGHT_MODEL : GEMINI_MODEL;
+  const models = GEMINI_FALLBACK_MODEL && GEMINI_FALLBACK_MODEL !== primary
+    ? [primary, GEMINI_FALLBACK_MODEL]
+    : [primary];
 
   let lastError: unknown = null;
   for (const name of models) {
     try {
+      const thinking = light ? minimalThinking(name) : null;
+      const config: Record<string, unknown> = {
+        ...(options.json ? { responseMimeType: 'application/json' } : {}),
+        ...(options.maxOutputTokens ? { maxOutputTokens: options.maxOutputTokens } : {}),
+        // thinkingConfig is passed through as-is; this SDK version's types don't list it yet
+        ...(thinking ? { thinkingConfig: thinking } : {}),
+      };
       const model = genAI.getGenerativeModel({
         model: name,
         ...(options.systemInstruction ? { systemInstruction: options.systemInstruction } : {}),
-        ...(options.json ? { generationConfig: { responseMimeType: 'application/json' } } : {}),
+        ...(Object.keys(config).length > 0 ? { generationConfig: config as GenerationConfig } : {}),
       });
       const result = await model.generateContent(prompt);
       return result.response.text();
